@@ -47,6 +47,28 @@ if [ -f "$MEMORY_FILE" ]; then
   echo "---"
 fi
 
+# --- Always-active entries from topic files (ctx: always) ---
+TOPICS_DIR="$HOME/.claude/projects/$ENCODED_PATH/memory/topics"
+GLOBAL_TOPICS_DIR="$HOME/.claude/projects/-Users-Lewis/memory/topics"
+
+for dir in "$TOPICS_DIR" "$GLOBAL_TOPICS_DIR"; do
+  if [ -d "$dir" ]; then
+    ALWAYS_ENTRIES=$(awk '
+      /^## .*\| ctx: always/ { found=1; print; next }
+      /^## / { found=0 }
+      found { print }
+    ' "$dir"/*.md 2>/dev/null)
+    if [ -n "$ALWAYS_ENTRIES" ]; then
+      echo "## Always-Active Memory"
+      echo ""
+      echo "$ALWAYS_ENTRIES"
+      echo ""
+      echo "---"
+      break
+    fi
+  fi
+done
+
 # --- Previous session (only if it has content beyond template) ---
 LATEST=$(find "$SESSIONS_DIR" -name "*.tmp" -mtime -7 2>/dev/null | sort -r | head -1)
 

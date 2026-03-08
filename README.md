@@ -173,12 +173,29 @@ Automated behaviors wired to lifecycle events in `settings.json`:
     ├── projects.md    ← Per-project blocks
     ├── hooks.md       ← Hook config and fixes
     ├── scaffold.md    ← Scaffold workflow decisions
-    └── agents.md      ← Agent patterns, model selection
+    ├── agents.md      ← Agent patterns, model selection
+    └── archived.md    ← Decayed or contradicted entries (never deleted)
 ```
 
 MEMORY.md is a lean index. Topic files load only when the domain matches the current task. Memory is compressed by `/consolidate-memory` using a Haiku agent (cost-efficient).
 
-Every `##` section is tagged `| importance:high/medium/low`. Low-importance content is pruned first.
+**Entry schema** — every `##` header carries four tags:
+```
+## Section Name | importance:high | updated: 2026-03-07 | ctx: always
+```
+
+| Tag | Values | Purpose |
+|---|---|---|
+| `importance` | `high/medium/low` | Prune priority — low pruned first |
+| `updated` | `YYYY-MM-DD` | Decay tracking — entries not updated in 90+ days and tagged `low` are archived |
+| `ctx` | `always`, `agent`, `debug`, `scaffold`, `hook`, `pattern`, `project` | Projection scope |
+
+**Context projection** — entries tagged `ctx: always` are injected at session start without loading their full topic file. All other entries load only when the domain is active. This means critical preferences and patterns are always in context at near-zero token cost.
+
+**Decay and deduplication** — `/consolidate-memory` runs the Haiku agent with three additional passes:
+- **Decay prune**: archives entries that are `importance:low` and `updated:` older than 90 days
+- **Dedup merge**: finds semantically similar entries across files and merges them into the more recent one
+- **Contradiction archive**: when conflicting information is found, keeps the newer version and moves the old to `archived.md` with a timestamp — nothing is silently deleted
 
 ### Slash Commands
 
