@@ -273,7 +273,7 @@ MEMORY.md is a lean index. Topic files load only when the domain matches the cur
 ### mem0 — Structured Fact Extraction
 
 **File:** `memory/mem0.py`
-**Requires:** `ANTHROPIC_API_KEY` set in your shell environment
+**Requires:** API key stored in `~/.config/anthropic/key` (preferred) or `ANTHROPIC_API_KEY` in your shell environment
 
 mem0 is a lightweight memory extraction script that runs at session end. It reads the session transcript, uses the Anthropic API (Haiku model) to extract memorable facts, deduplicates them against existing memory, and writes them to `facts.json`. At next session start, those facts are injected into context automatically.
 
@@ -299,14 +299,22 @@ Facts live in `~/.claude/projects/[encoded-project-path]/memory/facts.json` — 
 
 **Setup — required for mem0 to work:**
 
+Preferred — store the key in a secure file so it stays out of your shell environment:
+
 ```bash
-# Add to ~/.zshrc or ~/.bashrc
-export ANTHROPIC_API_KEY="sk-ant-..."
+mkdir -p ~/.config/anthropic
+echo "sk-ant-..." > ~/.config/anthropic/key
+chmod 600 ~/.config/anthropic/key
 ```
 
-Then reload: `source ~/.zshrc`
+Alternative — export from your shell config (all processes will inherit it):
 
-Without `ANTHROPIC_API_KEY`, mem0 silently skips extraction (you'll see `[mem0] Set ANTHROPIC_API_KEY in ~/.zshrc to enable extraction` in stderr). The rest of the system works fine without it — only automated fact extraction is disabled.
+```bash
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Without either, mem0 silently skips extraction (you'll see `[mem0] Set ANTHROPIC_API_KEY in ~/.zshrc to enable extraction` in stderr). The rest of the system works fine without it — only automated fact extraction is disabled.
 
 **Cost:** mem0 uses `claude-haiku-4-5` — the cheapest available model. Extraction runs on the last 80 messages, capped at 600 chars each. Typical cost per session: fractions of a cent.
 
@@ -495,8 +503,17 @@ chmod +x ~/.claude/skills/continuous-learning/evaluate-session.sh
 
 mem0 fact extraction calls the Anthropic API directly using Haiku. Without this key, fact extraction is silently skipped — everything else works fine.
 
+Preferred — store in a secure file, keeps it out of your shell environment:
+
 ```bash
-# Add to your shell config
+mkdir -p ~/.config/anthropic
+echo "sk-ant-..." > ~/.config/anthropic/key
+chmod 600 ~/.config/anthropic/key
+```
+
+Alternative — export from shell config:
+
+```bash
 echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
 source ~/.zshrc
 ```
@@ -703,6 +720,16 @@ Save and exit (`Ctrl+X`, then `Y`, then `Enter`).
 > Requires `sudo apt install -y libnotify-bin`.
 
 ### Step 8 — Set your ANTHROPIC_API_KEY (for mem0)
+
+Preferred — store in a secure file:
+
+```bash
+mkdir -p ~/.config/anthropic
+echo "sk-ant-..." > ~/.config/anthropic/key
+chmod 600 ~/.config/anthropic/key
+```
+
+Alternative — export from shell config:
 
 ```bash
 echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
