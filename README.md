@@ -364,60 +364,418 @@ Security incidents get appended to `rules/security.md`. Bug fixes go to `topics/
 
 ## Setup
 
-### Prerequisites
+Choose your platform:
+- [macOS](#macos-setup)
+- [Windows (via WSL2)](#windows-setup-via-wsl2)
 
-- [Claude Code CLI](https://claude.ai/code)
-- Node.js (for prettier, tsc)
-- Python 3 (for mem0 scripts)
-- `jq` — `brew install jq`
-- `gh` CLI — `brew install gh`
+> **Note:** Claude Code has no native Windows binary. Windows users must run it inside WSL2 (Ubuntu). All bash hooks and scripts work inside WSL.
 
-### Install
+---
+
+## macOS Setup
+
+### Step 1 — Install Claude Code CLI
+
+Go to [claude.ai/code](https://claude.ai/code) and follow the install instructions for macOS.
+
+Verify it works:
+```bash
+claude --version
+```
+
+### Step 2 — Install prerequisites
 
 ```bash
-# Clone into ~/.claude
-git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.claude
+# Homebrew (if not installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Make hooks executable
+# Required tools
+brew install jq          # JSON parsing used by all hooks
+brew install gh          # GitHub CLI (for /pr, /review-pr workflows)
+brew install node        # Node.js — for prettier + tsc
+brew install python3     # Python 3 — for mem0 fact extraction
+```
+
+Verify:
+```bash
+jq --version && gh --version && node --version && python3 --version
+```
+
+### Step 3 — Back up your existing ~/.claude (if any)
+
+```bash
+[ -d ~/.claude ] && mv ~/.claude ~/.claude.backup && echo "Backed up to ~/.claude.backup"
+```
+
+Skip this step if `~/.claude` doesn't exist yet.
+
+### Step 4 — Clone this repo into ~/.claude
+
+```bash
+git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.claude
+```
+
+### Step 5 — Make hooks executable
+
+```bash
 chmod +x ~/.claude/hooks/memory-persistence/*.sh
 chmod +x ~/.claude/skills/continuous-learning/evaluate-session.sh
+```
 
-# Initialize your global memory
+### Step 6 — Set your ANTHROPIC_API_KEY (for mem0)
+
+mem0 fact extraction calls the Anthropic API directly using Haiku. Without this key, fact extraction is silently skipped — everything else works fine.
+
+```bash
+# Add to your shell config
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Replace `sk-ant-...` with your actual key from [console.anthropic.com](https://console.anthropic.com).
+
+### Step 7 — Initialize your global memory
+
+```bash
 mkdir -p ~/.claude/projects/-Users-$(whoami)/memory/topics
 ```
 
-Create `~/.claude/projects/-Users-$(whoami)/memory/MEMORY.md`:
-
-```markdown
+Create the memory index file:
+```bash
+cat > ~/.claude/projects/-Users-$(whoami)/memory/MEMORY.md << 'EOF'
 # Memory Index
 
+Always loaded at session start. Read the Topic Index and load relevant files before starting work.
+
 ## User Preferences | importance:high
-- [your preferences here]
+- [Add your preferences here — e.g. "Prefers pnpm over npm"]
+
+## Active Context | importance:high
+- Setup complete
+
+## Topic Index | importance:high
+Load with Read tool when task domain matches:
+
+| When... | Load |
+|---|---|
+| Hitting errors, non-obvious fixes | topics/debugging.md |
+| Architecture or API decisions | topics/patterns.md |
+EOF
+```
+
+Create empty topic files:
+```bash
+cat > ~/.claude/projects/-Users-$(whoami)/memory/topics/debugging.md << 'EOF'
+# Debugging
+
+## Format
+`[context] Problem → Cause → Fix`
+
+## Entries
+<!-- Populated as non-obvious bugs are solved -->
+EOF
+
+cat > ~/.claude/projects/-Users-$(whoami)/memory/topics/patterns.md << 'EOF'
+# Patterns
+
+## Architecture Decisions
+<!-- Populated as decisions are made -->
+
+## What Works
+<!-- Confirmed patterns -->
+
+## Known Gotchas
+<!-- Non-obvious behaviour -->
+EOF
+```
+
+### Step 8 — Install Claude Code plugins
+
+Open Claude Code and run:
+```
+/plugins
+```
+
+Install these plugins:
+- `hookify@claude-plugins-official`
+- `context7@claude-plugins-official`
+- `mgrep@Mixedbread-Grep`
+- `pyright-lsp@claude-plugins-official` (if you use Python)
+
+The `settings.json` already has these configured — installing them activates them.
+
+### Step 9 — Verify hooks are wired
+
+Open Claude Code. You should see in the session start output:
+```
+## Project Memory
+...
+```
+
+If you see that block, the session-start hook is running correctly.
+
+### Step 10 — First session
+
+Run your first command:
+```
+/fork
+```
+
+Claude loads all context (global CLAUDE.md + memory + any recent session) and asks what you want to work on. You're live.
+
+---
+
+## Windows Setup (via WSL2)
+
+Claude Code runs inside WSL2 on Windows. All bash hooks, scripts, and tools run in the Linux environment.
+
+### Step 1 — Enable WSL2
+
+Open PowerShell as Administrator and run:
+```powershell
+wsl --install
+```
+
+This installs WSL2 with Ubuntu by default. Restart your machine when prompted.
+
+Open the Ubuntu app from the Start menu and complete the Ubuntu setup (create a username and password).
+
+Verify:
+```bash
+wsl --version
+```
+
+### Step 2 — Install Claude Code CLI inside WSL
+
+Open your Ubuntu terminal and follow the Linux install instructions at [claude.ai/code](https://claude.ai/code).
+
+Verify:
+```bash
+claude --version
+```
+
+> All remaining steps run **inside the Ubuntu/WSL terminal**, not in PowerShell or CMD.
+
+### Step 3 — Install prerequisites inside WSL
+
+```bash
+# Update package list
+sudo apt update && sudo apt upgrade -y
+
+# jq — JSON parsing used by all hooks
+sudo apt install -y jq
+
+# Python 3 — for mem0 fact extraction
+sudo apt install -y python3 python3-pip
+
+# Node.js — for prettier + tsc
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# GitHub CLI
+sudo apt install -y gh
+gh auth login
+```
+
+Verify:
+```bash
+jq --version && gh --version && node --version && python3 --version
+```
+
+### Step 4 — Back up your existing ~/.claude (if any)
+
+```bash
+[ -d ~/.claude ] && mv ~/.claude ~/.claude.backup && echo "Backed up to ~/.claude.backup"
+```
+
+### Step 5 — Clone this repo into ~/.claude
+
+```bash
+git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.claude
+```
+
+### Step 6 — Make hooks executable
+
+```bash
+chmod +x ~/.claude/hooks/memory-persistence/*.sh
+chmod +x ~/.claude/skills/continuous-learning/evaluate-session.sh
+```
+
+### Step 7 — Disable the macOS notification hook
+
+The `Notification` hook in `settings.json` uses `osascript`, which is macOS-only. On WSL you need to remove it or it will throw errors silently.
+
+Open the settings file:
+```bash
+nano ~/.claude/settings.json
+```
+
+Find and delete this entire block:
+```json
+"Notification": [
+  {
+    "matcher": "",
+    "hooks": [
+      {
+        "type": "command",
+        "command": "osascript -e 'display notification \"Claude needs your attention\" with title \"Claude Code\"' 2>/dev/null || true"
+      }
+    ]
+  }
+],
+```
+
+Save and exit (`Ctrl+X`, then `Y`, then `Enter`).
+
+> Optional: replace it with a WSL-compatible notification using `notify-send` if you want alerts:
+> ```bash
+> "command": "notify-send 'Claude Code' 'Claude needs your attention' 2>/dev/null || true"
+> ```
+> Requires `sudo apt install -y libnotify-bin`.
+
+### Step 8 — Set your ANTHROPIC_API_KEY (for mem0)
+
+```bash
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Replace `sk-ant-...` with your actual key from [console.anthropic.com](https://console.anthropic.com).
+
+### Step 9 — Initialize your global memory
+
+On WSL/Linux, your home path is `/home/username` — the encoded memory path uses `-home-` not `-Users-`.
+
+```bash
+mkdir -p ~/.claude/projects/-home-$(whoami)/memory/topics
+```
+
+Create the memory index file:
+```bash
+cat > ~/.claude/projects/-home-$(whoami)/memory/MEMORY.md << 'EOF'
+# Memory Index
+
+Always loaded at session start. Read the Topic Index and load relevant files before starting work.
+
+## User Preferences | importance:high
+- [Add your preferences here]
+
+## Active Context | importance:high
+- Setup complete
 
 ## Topic Index | importance:high
 | When... | Load |
 |---|---|
-| Hitting errors | topics/debugging.md |
-| Architecture decisions | topics/patterns.md |
+| Hitting errors, non-obvious fixes | topics/debugging.md |
+| Architecture or API decisions | topics/patterns.md |
+EOF
 ```
 
-### First Session
+Create empty topic files:
+```bash
+cat > ~/.claude/projects/-home-$(whoami)/memory/topics/debugging.md << 'EOF'
+# Debugging
 
-Open Claude Code. Run:
+## Format
+`[context] Problem → Cause → Fix`
 
+## Entries
+<!-- Populated as non-obvious bugs are solved -->
+EOF
+
+cat > ~/.claude/projects/-home-$(whoami)/memory/topics/patterns.md << 'EOF'
+# Patterns
+
+## Architecture Decisions
+<!-- Populated as decisions are made -->
+
+## What Works
+<!-- Confirmed patterns -->
+
+## Known Gotchas
+<!-- Non-obvious behaviour -->
+EOF
+```
+
+### Step 10 — Fix the session-start memory path
+
+The `session-start.sh` hook reads global facts from a hardcoded path pattern. On Linux/WSL it will encode your home as `-home-username`, which the script handles automatically — no change needed.
+
+Verify the hook runs correctly after setup:
+```bash
+bash ~/.claude/hooks/memory-persistence/session-start.sh
+```
+
+You should see `## Project Memory` in the output with no errors.
+
+### Step 11 — Install Claude Code plugins
+
+Open Claude Code (inside WSL) and run:
+```
+/plugins
+```
+
+Install:
+- `hookify@claude-plugins-official`
+- `context7@claude-plugins-official`
+- `mgrep@Mixedbread-Grep`
+- `pyright-lsp@claude-plugins-official` (if you use Python)
+
+### Step 12 — First session
+
+Run:
 ```
 /fork
 ```
 
 Claude loads all context and asks what you want to work on.
 
-### First Project
+---
 
-```
-/scaffold-project
+## Verify Your Installation
+
+Run this checklist after setup on either platform:
+
+```bash
+# 1. Hooks are executable
+ls -la ~/.claude/hooks/memory-persistence/
+# All .sh files should show -rwxr-xr-x
+
+# 2. Memory directory exists
+ls ~/.claude/projects/
+# Should show your encoded home path directory
+
+# 3. MEMORY.md is readable
+cat ~/.claude/projects/*/memory/MEMORY.md
+# Should show the Memory Index content
+
+# 4. ANTHROPIC_API_KEY is set (optional but recommended)
+echo $ANTHROPIC_API_KEY
+# Should show your key (sk-ant-...)
+
+# 5. Prerequisites installed
+jq --version && node --version && python3 --version
 ```
 
-Answers 4 questions, generates full monorepo with memory initialized at the correct path.
+---
+
+## Keeping Your Config Up to Date
+
+This repo evolves. Pull updates without losing your personal memory:
+
+```bash
+cd ~/.claude
+git pull origin main
+```
+
+Your `projects/` directory (personal memory and sessions) is gitignored — it will never be touched by a pull.
+
+If you've customized `settings.json` or `CLAUDE.md`, review the diff before pulling:
+```bash
+cd ~/.claude
+git fetch origin
+git diff origin/main -- settings.json CLAUDE.md
+```
 
 ---
 
