@@ -22,6 +22,53 @@ The result: Claude behaves like a developer who has worked in your codebase for 
 
 ---
 
+## Memory Layer — How It Works
+
+> The memory system is the core of this configuration. Everything else enforces standards; memory is what makes Claude *continuous*.
+
+```
+Session Start
+│
+├── MEMORY.md (index, always loaded, <80 lines)
+│   └── Topic Index → load topic files on demand
+│
+├── ctx: always entries (injected inline, zero extra file load)
+│   └── model selection, API shapes, error handling, preferences
+│
+├── Topic files (load only when domain matches)
+│   ├── agents.md, hooks.md, patterns.md, scaffold.md, debugging.md
+│   └── archived.md  ← decay/contradiction graveyard — nothing deleted
+│
+├── facts.json (structured facts extracted from transcripts via Haiku)
+│
+└── Previous session notes (last 7 days)
+```
+
+| Component | What it does | Benefit |
+|---|---|---|
+| **MEMORY.md index** | Lean index with Topic Index routing table | Claude knows what exists without loading everything |
+| **Topic files** | Domain-specific memory, loaded on demand | Token cost proportional to task, not total knowledge |
+| **ctx: always injection** | Critical entries injected at session start without a file load | Always-relevant knowledge in context at near-zero cost |
+| **Entry schema** (`importance`, `updated`, `ctx`) | Every entry tagged with priority, age, and scope | Enables automated decay and targeted projection |
+| **Decay pruning** | `importance:low` + >90 days → archived, not deleted | Memory stays lean; history is preserved |
+| **Dedup + contradiction archiving** | Consolidation merges duplicates, moves contradicted entries to `archived.md` | No silent overwrites; memory stays coherent over time |
+| **mem0 fact extraction** | Haiku reads session transcript at end, extracts and deduplicates facts | Structured facts persist without manual writes |
+| **Session hooks** | Start injects full context; end persists state and warns on size | Every session starts warm; nothing is lost between sessions |
+| **/consolidate-memory** | Haiku agent merges, prunes, archives, and surfaces cross-topic insights | Routine maintenance is automated and cheap |
+| **Continuous learning** | Pattern extraction at session end + `/learn` for immediate capture | Non-trivial solutions accumulate as reusable skills |
+
+**Entry schema** — every `##` header in every topic file carries four tags:
+
+```
+## Section Name | importance:high | updated: 2026-03-07 | ctx: always
+```
+
+`ctx` values: `always` · `agent` · `debug` · `scaffold` · `hook` · `pattern` · `project`
+
+Entries tagged `ctx: always` are extracted and injected at session start by `session-start.sh` — no full file load required. All other entries load only when their domain is active.
+
+---
+
 ## Directory Structure
 
 ```
