@@ -108,6 +108,30 @@ Seven domain files, loaded on demand:
 | `patterns.md` | `{ data, error, meta }` API shape, async/await, import ordering |
 | `agents.md` | Delegation protocol, model selection per task type |
 
+### Context Modes
+
+**Directory:** `~/.claude/contexts/`
+Loaded by CLAUDE.md when the work type changes. Each file sets Claude's priorities and constraints for that mode.
+
+| Mode | File | Loaded when |
+|---|---|---|
+| Development | `dev.md` | implementing or building |
+| Review | `review.md` | reviewing code or a PR |
+| Research | `research.md` | exploring, investigating, planning |
+
+**dev.md** enforces: tests before implementation, no files outside task scope, no skipping tests, TDD order always.
+
+**review.md** enforces structured output:
+```
+🚨 Blockers  — [file:line] must fix before merge
+⚠️  Suggestions — [file:line] should fix
+✅  Looks Good  — call out what's done well
+```
+
+**research.md** enforces: no file modifications during research phase, saves findings to `sessions/research-[topic].md`, ends every research session with a structured summary (known / unknown / assumptions / next step).
+
+---
+
 ### Hooks System
 
 Automated behaviors wired to lifecycle events in `settings.json`:
@@ -167,9 +191,15 @@ Every `##` section is tagged `| importance:high/medium/low`. Low-importance cont
 | `/breakdown <task>` | Decompose into subtasks with model tiers and parallelization flags |
 | `/fork` | Initialize context in a new session (loads memory, session, CLAUDE.md) |
 | `/review-pr` | Structured review: Blockers / Suggestions / Looks Good with file:line |
+| `/pr` | Generate PR description (Summary, Changes, Testing, Breaking Changes) — shows for approval before creating |
 | `/consolidate-memory` | Haiku agent compresses all memory files |
 | `/learn` | Extract and save a reusable pattern immediately |
 | `/debug <issue>` | Systematic debugging workflow |
+| `/e2e <flow>` | Playwright E2E tests — data-testid selectors, waitFor patterns, no flakiness |
+| `/refactor-clean` | Find unused imports, duplicate logic, oversized files, dead code — proposes before applying |
+| `/standup` | `git log --since=yesterday` → Yesterday / Today / Blockers format, max 5 bullets |
+| `/test-coverage` | Run coverage report, list files below 80%, write tests for highest-priority gaps |
+| `/update-codemaps` | Scan project and write/update `.claude/codemap.md` (max 100 lines, navigation only) |
 
 ### mem0 — Structured Fact Extraction
 
@@ -213,6 +243,88 @@ Without `ANTHROPIC_API_KEY`, mem0 silently skips extraction (you'll see `[mem0] 
 
 **Deduplication logic:**
 Each new fact is classified as `ADD` (genuinely new), `UPDATE` (refines existing), or `NOOP` (already captured). This prevents duplicate facts from accumulating across sessions.
+
+---
+
+### Skills
+
+**Directory:** `~/.claude/skills/`
+
+Skills are always-available internal behaviors — not slash commands, but loaded context that shapes how Claude operates during sessions.
+
+#### `skills/continuous-learning/`
+
+The pattern extraction system. At every session end, `evaluate-session.sh` fires via the Stop hook, logs session metadata, and prompts for pattern extraction. `SKILL.md` defines what patterns are worth capturing:
+- Error resolutions that were non-trivial
+- Debugging techniques discovered mid-session
+- Project-specific patterns Claude didn't know about
+- Corrections you had to make to Claude's default behavior
+
+Learned patterns are saved to `skills/learned/[pattern-name].md` and available in future sessions. Use `/learn` to extract a pattern immediately rather than waiting for session end.
+
+#### `skills/strategic-compact.md`
+
+Documents **when and why** to manually compact context — rather than letting auto-compact fire at arbitrary points mid-task.
+
+When to compact:
+- After the exploration phase, before implementation begins
+- After a milestone completes, before starting the next
+- After 50+ tool calls in a session
+- When switching between major features
+
+**Critical:** before running `/compact`, write state to a session file — what was built, what failed, what's pending, key decisions. The session file provides re-entry context after compaction.
+
+#### `skills/codemap-updater.md`
+
+Defines the codemap format and update triggers. Codemaps (`~/.claude/codemap.md`) are project navigation files — max 100 lines, updated at session start, after major refactors, and before compaction.
+
+Format:
+```
+# Codemap — [Project] — [Date]
+## Entry Points   — key files and their purpose
+## Key Directories — what lives where
+## Architecture   — how pieces connect (5-10 lines)
+## Key Files      — files that matter most
+## Recently Changed — from git log
+```
+
+Why this matters: without a codemap, Claude re-explores the project on every session. A current codemap eliminates that overhead entirely.
+
+---
+
+### Status Line
+
+**File:** `statusline-command.sh`
+**Config:** `settings.json` → `statusLine`
+
+Displays a live status bar inside Claude Code, styled after the robbyrussell oh-my-zsh theme:
+
+```
+my-project  git:(feat/auth) ✗  ctx:34%  claude-sonnet-4-6
+```
+
+- **Directory name** — current working directory basename
+- **Git branch** — current branch with dirty state indicator (`✗` if uncommitted changes)
+- **Context usage** — percentage of context window used (green < 50%, yellow < 80%, red ≥ 80%)
+- **Model name** — active model
+
+Color coding on context usage lets you know when to manually compact before auto-compact fires mid-task.
+
+---
+
+### Policy Limits
+
+**File:** `policy-limits.json`
+
+```json
+{
+  "restrictions": {
+    "allow_remote_control": { "allowed": false }
+  }
+}
+```
+
+Disables remote control of Claude Code — prevents any external process or MCP server from programmatically driving Claude actions without your direct involvement. Security constraint, not a workflow setting.
 
 ---
 
