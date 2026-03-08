@@ -27,4 +27,6 @@ history.jsonl
 paste-cache/
 ide/
 plugins/
-memory/
+
+# Facts extracted by mem0 (personal, per-project — lives in projects/ which is already excluded)
+**/facts.json

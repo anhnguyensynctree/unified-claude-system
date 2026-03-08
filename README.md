@@ -171,6 +171,51 @@ Every `##` section is tagged `| importance:high/medium/low`. Low-importance cont
 | `/learn` | Extract and save a reusable pattern immediately |
 | `/debug <issue>` | Systematic debugging workflow |
 
+### mem0 — Structured Fact Extraction
+
+**File:** `memory/mem0.py`
+**Requires:** `ANTHROPIC_API_KEY` set in your shell environment
+
+mem0 is a lightweight memory extraction script that runs at session end. It reads the session transcript, uses the Anthropic API (Haiku model) to extract memorable facts, deduplicates them against existing memory, and writes them to `facts.json`. At next session start, those facts are injected into context automatically.
+
+**What it extracts:**
+- User preferences and workflow decisions
+- Technical choices (tools, frameworks, patterns selected)
+- Project context (what you're building, constraints)
+- Problems solved or discovered
+
+**How facts are stored:**
+```json
+[
+  {
+    "id": "uuid",
+    "content": "Prefers pnpm over npm in all projects",
+    "created_at": "2026-03-07T...",
+    "updated_at": "2026-03-07T..."
+  }
+]
+```
+
+Facts live in `~/.claude/projects/[encoded-project-path]/memory/facts.json` — excluded from this repo by `.gitignore`.
+
+**Setup — required for mem0 to work:**
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+Then reload: `source ~/.zshrc`
+
+Without `ANTHROPIC_API_KEY`, mem0 silently skips extraction (you'll see `[mem0] Set ANTHROPIC_API_KEY in ~/.zshrc to enable extraction` in stderr). The rest of the system works fine without it — only automated fact extraction is disabled.
+
+**Cost:** mem0 uses `claude-haiku-4-5` — the cheapest available model. Extraction runs on the last 80 messages, capped at 600 chars each. Typical cost per session: fractions of a cent.
+
+**Deduplication logic:**
+Each new fact is classified as `ADD` (genuinely new), `UPDATE` (refines existing), or `NOOP` (already captured). This prevents duplicate facts from accumulating across sessions.
+
+---
+
 ### Plugins (Active)
 
 | Plugin | Purpose |
