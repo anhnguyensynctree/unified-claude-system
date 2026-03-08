@@ -1,0 +1,191 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "Glob",
+      "Grep"
+    ]
+  },
+  "model": "claude-sonnet-4-6",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo|pytest)' && echo '[Hook] Long-running process detected \u2014 consider using run_in_background or a separate terminal' >&2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' && echo \"$FILE\" | grep -qvE '(README|CLAUDE|codemap|plan-|research-|review-|session|\\.claude/|references/|docs/|specs/|decisions/)' && echo 'Blocked: avoid creating loose .md files. Only README.md, CLAUDE.md, and .claude/ session files are allowed.' >&2 && exit 2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | grep -q 'git push' && echo '[Hook] Review your diff before pushing. Run /review-pr first.' >&2 || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' || exit 0; [ -f \"$FILE\" ] || exit 0; LINES=$(grep -c '[^[:space:]]' \"$FILE\" 2>/dev/null || echo 0); HAS_HEADING=$(grep -c '^#' \"$FILE\" 2>/dev/null || echo 0); HAS_PLACEHOLDER=$(grep -cE '^\\[|^TODO|^\\.\\.\\.' \"$FILE\" 2>/dev/null || echo 0); [ \"$HAS_HEADING\" -eq 0 ] && echo '[Hook] .md missing heading \u2014 add a # title' >&2; [ \"$LINES\" -lt 5 ] && echo \"[Hook] .md too sparse ($LINES lines) \u2014 every .md must justify its token cost\" >&2; [ \"$HAS_PLACEHOLDER\" -gt 0 ] && echo '[Hook] .md has unfilled placeholders \u2014 complete or remove them' >&2; true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.(ts|tsx|js|jsx)$' && npx prettier --write \"$FILE\" 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.(ts|tsx)$' && npx tsc --noEmit --skipLibCheck 2>&1 | head -20 >&2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path'); [ -f \"$FILE\" ] && grep -n 'console\\.log' \"$FILE\" && echo '[Hook] console.log found \u2014 remove before committing' >&2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | grep -q 'grep -r' && echo '[Hook] Prefer mgrep over grep -r for ~50% token reduction' >&2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.py$' && pyright \"$FILE\" 2>&1 | grep -E '(error|warning)' | head -20 >&2 || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/memory-persistence/session-end.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/skills/continuous-learning/evaluate-session.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git diff --name-only HEAD 2>/dev/null | xargs grep -l 'console\\.log' 2>/dev/null | while read f; do echo \"[Hook] console.log found in modified file: $f\" >&2; done || true"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/memory-persistence/pre-compact.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/memory-persistence/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"Claude needs your attention\" with title \"Claude Code\"' 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/memory-persistence/mem0-extract.sh",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccusage@latest statusline",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "hookify@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "code-review@claude-plugins-official": false,
+    "commit-commands@claude-plugins-official": false,
+    "security-guidance@claude-plugins-official": false,
+    "mgrep@Mixedbread-Grep": true,
+    "frontend-design@claude-plugins-official": false,
+    "supabase@claude-plugins-official": false,
+    "pyright-lsp@claude-plugins-official": true
+  },
+  "skipDangerousModePermissionPrompt": true
+}

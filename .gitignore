@@ -1,0 +1,30 @@
+# Personal session data — never publish
+sessions/
+debug/
+telemetry/
+backups/
+cache/
+file-history/
+tasks/
+todos/
+shell-snapshots/
+
+# Project-specific memory (contains personal notes and session context)
+projects/
+
+# Learned skills (generated per-user, not part of base setup)
+skills/learned/
+
+# Temp files
+*.tmp
+*.log
+
+# Plans (generated per-session)
+plans/
+
+# Local tool data
+history.jsonl
+paste-cache/
+ide/
+plugins/
+memory/
