@@ -61,13 +61,18 @@ Unless told otherwise:
 - Never modify files outside the task scope
 
 ## Markdown File Standards
-Every .md costs tokens on load. Rules for all .md writes:
-- Files under .claude/ — always allowed (rules, workflows, memory, sessions)
+Every .md costs tokens on load and shapes Claude's behavior. Rules for all .md writes:
+- Files under .claude/ — allowed only when improving workflow, rules, or memory; subject to strict quality gate below
 - README.md at project root — always allowed
 - Any .md in a project's docs/ folder — only allowed when docs context is active
 - All other .md files anywhere — require explicit user request
-- Must have a # heading, minimum 5 substantive lines, no unfilled placeholders
-- Dense and scannable — every section earns its place
+
+Quality gate — applies to every .md, especially files under .claude/:
+- Must have a # heading
+- Minimum 5 substantive lines — no stub or placeholder files
+- No unfilled placeholders ([empty], TODO, ...)
+- Dense and scannable — every line earns its place; cut anything decorative
+- A shallow .claude/ file is worse than no file — it loads as false context every session
 
 ## Switching Modes
 When asked to review code or a PR → read ~/.claude/contexts/review.md and apply it
