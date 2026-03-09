@@ -1,62 +1,61 @@
 <svg width="1200" height="540" viewBox="0 0 1200 540" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, 'Cascadia Code', 'Fira Mono', monospace">
   <defs>
-    <!-- Animations -->
     <style>
-      .blink  { animation: blink  5s ease-in-out infinite; }
-      .blink2 { animation: blink  5s ease-in-out 2.5s infinite; }
-      .pulse  { animation: pulse  2.5s ease-in-out infinite; }
-      .spark1 { animation: spark  1.8s ease-in-out infinite; }
-      .spark2 { animation: spark  1.8s ease-in-out 0.6s infinite; }
-      .spark3 { animation: spark  1.8s ease-in-out 1.2s infinite; }
-      .dot1   { animation: dotseq 2s ease-in-out 0s   infinite; }
-      .dot2   { animation: dotseq 2s ease-in-out 0.3s infinite; }
-      .dot3   { animation: dotseq 2s ease-in-out 0.6s infinite; }
-      .dot4   { animation: dotseq 2s ease-in-out 0.9s infinite; }
-      .arrow-glow { animation: arrowpulse 2s ease-in-out infinite; }
-      @keyframes blink   { 0%,86%,100%{opacity:1} 90%{opacity:0} }
-      @keyframes pulse   { 0%,100%{opacity:0.8}   50%{opacity:1} }
-      @keyframes spark   { 0%,100%{opacity:0.75}  45%{opacity:0.1} }
-      @keyframes dotseq  { 0%,100%{opacity:0.45}  50%{opacity:1} }
-      @keyframes arrowpulse { 0%,100%{opacity:0.7} 50%{opacity:1} }
+      .blink   { animation: blink   5s  ease-in-out infinite; }
+      .blink2  { animation: blink   5s  ease-in-out 2.5s infinite; }
+      .pulse   { animation: pulse   2.5s ease-in-out infinite; }
+      .spark1  { animation: spark   1.8s ease-in-out infinite; }
+      .spark2  { animation: spark   1.8s ease-in-out 0.6s infinite; }
+      .spark3  { animation: spark   1.8s ease-in-out 1.2s infinite; }
+      .dot1    { animation: dotseq  2s   ease-in-out 0s   infinite; }
+      .dot2    { animation: dotseq  2s   ease-in-out 0.4s infinite; }
+      .dot3    { animation: dotseq  2s   ease-in-out 0.8s infinite; }
+      .dot4    { animation: dotseq  2s   ease-in-out 1.2s infinite; }
+      .aglow   { animation: apulse  2s   ease-in-out infinite; }
+      @keyframes blink  { 0%,86%,100%{opacity:1}     90%{opacity:0} }
+      @keyframes pulse  { 0%,100%{opacity:0.8}        50%{opacity:1} }
+      @keyframes spark  { 0%,100%{opacity:0.75}       45%{opacity:0.1} }
+      @keyframes dotseq { 0%,100%{opacity:0.4}        50%{opacity:1} }
+      @keyframes apulse { 0%,100%{opacity:0.65}       50%{opacity:1} }
     </style>
 
-    <!-- Filters -->
-    <filter id="glow-lg"   x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="9"   result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="glow-xl" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="glow-md"   x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="glow-lg" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6"  result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="glow-sm"   x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="glow-md" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-sm" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="2"  result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
 
-    <!-- Gradients -->
-    <radialGradient id="brain-g" cx="50%" cy="40%" r="55%">
-      <stop offset="0%"   stop-color="#58a6ff" stop-opacity="0.95"/>
-      <stop offset="55%"  stop-color="#1a4a8a" stop-opacity="0.85"/>
-      <stop offset="100%" stop-color="#06111f" stop-opacity="1"/>
+    <radialGradient id="arc-g" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#e6f4ff"/>
+      <stop offset="30%"  stop-color="#388bfd"/>
+      <stop offset="70%"  stop-color="#0d3a7a"/>
+      <stop offset="100%" stop-color="#040e1e"/>
     </radialGradient>
     <radialGradient id="halo-g" cx="50%" cy="50%" r="50%">
-      <stop offset="0%"   stop-color="#1a4a8a" stop-opacity="0.22"/>
+      <stop offset="0%"   stop-color="#1a4a8a" stop-opacity="0.25"/>
       <stop offset="100%" stop-color="#0d1117" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="eye-g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#388bfd"/>
-      <stop offset="100%" stop-color="#0d2a56"/>
+    <linearGradient id="armor-l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0f1824"/>
+      <stop offset="100%" stop-color="#060d16"/>
+    </linearGradient>
+    <linearGradient id="rust-l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#1e1610"/>
+      <stop offset="100%" stop-color="#0f0c08"/>
     </linearGradient>
 
-    <!-- Dot grid -->
     <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
       <circle cx="11" cy="11" r="0.55" fill="#21262d"/>
     </pattern>
-
-    <!-- Arrowhead -->
     <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
       <path d="M0,0.5 L0,8.5 L8,4.5 z" fill="#388bfd"/>
-    </marker>
-    <marker id="arr-dim" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
-      <path d="M0,0 L0,5 L5,2.5 z" fill="#1f3a5e"/>
     </marker>
   </defs>
 
@@ -71,236 +70,271 @@
   <line x1="80" y1="84" x2="1120" y2="84" stroke="#21262d" stroke-width="1"/>
 
 
-  <!-- ══════════════════════════════════════ -->
-  <!--  LEFT ROBOT  —  MARK I  (plain)       -->
-  <!-- ══════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════ -->
+  <!--  MARK I  —  crude, industrial      -->
+  <!-- ═══════════════════════════════════ -->
 
-  <!-- Labels -->
-  <text x="195" y="102" font-size="16" fill="#4a5160" text-anchor="middle" font-weight="bold" letter-spacing="1">MARK I</text>
-  <text x="195" y="117" font-size="9"  fill="#3d444d" text-anchor="middle" letter-spacing="2">BEFORE</text>
+  <text x="195" y="102" font-size="16" fill="#5a4e3a" text-anchor="middle" font-weight="bold" letter-spacing="1">MARK I</text>
+  <text x="195" y="117" font-size="9"  fill="#3d3020" text-anchor="middle" letter-spacing="2.5">BEFORE</text>
 
-  <!-- Antenna -->
-  <line x1="195" y1="148" x2="195" y2="133" stroke="#30363d" stroke-width="2"/>
-  <circle cx="195" cy="130" r="5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
-  <circle cx="195" cy="130" r="2" fill="#30363d"/>
+  <!-- Antenna — crude straight rod -->
+  <line x1="195" y1="148" x2="195" y2="132" stroke="#3d3020" stroke-width="3"/>
+  <rect x="188" y="128" width="14" height="6" rx="1" fill="#2a2010" stroke="#3d3020" stroke-width="1"/>
 
-  <!-- Head -->
-  <rect x="167" y="146" width="56" height="54" rx="10" fill="#111820" stroke="#30363d" stroke-width="1.5"/>
-  <!-- Forehead panel -->
-  <rect x="174" y="150" width="42" height="8"  rx="3" fill="#0d1117" stroke="#21262d" stroke-width="0.5"/>
-  <!-- Corner bolts -->
-  <circle cx="174" cy="158" r="2" fill="#21262d" stroke="#30363d" stroke-width="0.5"/>
-  <circle cx="216" cy="158" r="2" fill="#21262d" stroke="#30363d" stroke-width="0.5"/>
+  <!-- Helmet — angular, boxy polygon -->
+  <polygon points="169,146 221,146 226,152 226,198 221,203 169,203 164,198 164,152"
+           fill="url(#rust-l)" stroke="#4a3a22" stroke-width="2"/>
+  <!-- Helmet top ridge -->
+  <rect x="174" y="143" width="42" height="7" rx="2" fill="#201810" stroke="#4a3a22" stroke-width="1"/>
+  <!-- Forehead panel line -->
+  <line x1="169" y1="160" x2="221" y2="160" stroke="#3d3020" stroke-width="1" opacity="0.6"/>
+  <!-- Corner rivets -->
+  <circle cx="175" cy="154" r="2.5" fill="#3d3020" stroke="#5a4e3a" stroke-width="0.5"/>
+  <circle cx="215" cy="154" r="2.5" fill="#3d3020" stroke="#5a4e3a" stroke-width="0.5"/>
+  <circle cx="175" cy="193" r="2.5" fill="#3d3020" stroke="#5a4e3a" stroke-width="0.5"/>
+  <circle cx="215" cy="193" r="2.5" fill="#3d3020" stroke="#5a4e3a" stroke-width="0.5"/>
+  <!-- Visor housing -->
+  <rect x="175" y="162" width="40" height="14" rx="2" fill="#0d0c08" stroke="#3d3020" stroke-width="1.5"/>
+  <!-- Visor — split into two dull amber slits -->
+  <rect x="177" y="164" width="16" height="8" rx="1" fill="#2a1a00" stroke="#3d2a00" stroke-width="0.5"/>
+  <rect x="197" y="164" width="16" height="8" rx="1" fill="#2a1a00" stroke="#3d2a00" stroke-width="0.5"/>
+  <!-- Very dim eye glow — barely alive -->
+  <rect x="179" y="166" width="12" height="4" rx="1" fill="#4a2e00" opacity="0.6"/>
+  <rect x="199" y="166" width="12" height="4" rx="1" fill="#4a2e00" opacity="0.6"/>
+  <!-- Chin plate -->
+  <rect x="179" y="188" width="32" height="12" rx="3" fill="#181208" stroke="#3d3020" stroke-width="1"/>
+  <line x1="183" y1="194" x2="207" y2="194" stroke="#3d3020" stroke-width="1"/>
 
-  <!-- Eyes — dull, dead -->
-  <circle cx="183" cy="170" r="7"   fill="#0d1117" stroke="#2a3340" stroke-width="1.5"/>
-  <circle cx="183" cy="170" r="4"   fill="#131920"/>
-  <circle cx="183" cy="170" r="1.5" fill="#21262d"/>
-  <circle cx="207" cy="170" r="7"   fill="#0d1117" stroke="#2a3340" stroke-width="1.5"/>
-  <circle cx="207" cy="170" r="4"   fill="#131920"/>
-  <circle cx="207" cy="170" r="1.5" fill="#21262d"/>
+  <!-- Neck — thick industrial block -->
+  <rect x="184" y="203" width="22" height="18" rx="2" fill="#181208" stroke="#3d3020" stroke-width="1.5"/>
+  <line x1="189" y1="207" x2="201" y2="207" stroke="#3d3020" stroke-width="1"/>
+  <line x1="189" y1="212" x2="201" y2="212" stroke="#3d3020" stroke-width="1"/>
 
-  <!-- Mouth — flat frown -->
-  <path d="M 182,186 Q 195,183 208,186" fill="none" stroke="#2a3340" stroke-width="1.5" stroke-linecap="round"/>
-  <!-- Chin panel -->
-  <rect x="186" y="190" width="18" height="4" rx="2" fill="#0d1117" stroke="#21262d" stroke-width="0.5"/>
+  <!-- Pauldrons (shoulder armor) -->
+  <polygon points="141,222 175,218 175,232 141,236" fill="#1a1208" stroke="#4a3a22" stroke-width="1.5"/>
+  <polygon points="215,218 249,222 249,236 215,232" fill="#1a1208" stroke="#4a3a22" stroke-width="1.5"/>
 
-  <!-- Neck -->
-  <rect x="189" y="200" width="12" height="16" rx="3" fill="#111820" stroke="#30363d" stroke-width="1"/>
+  <!-- Body — chunky block -->
+  <rect x="157" y="221" width="76" height="76" rx="5" fill="url(#rust-l)" stroke="#4a3a22" stroke-width="2"/>
+  <!-- Body panel lines -->
+  <line x1="195" y1="225" x2="195" y2="293" stroke="#3d3020" stroke-width="1" opacity="0.5"/>
+  <line x1="162" y1="250" x2="228" y2="250" stroke="#3d3020" stroke-width="1" opacity="0.5"/>
+  <line x1="162" y1="270" x2="228" y2="270" stroke="#3d3020" stroke-width="1" opacity="0.5"/>
+  <!-- Dead power cell (no arc reactor) -->
+  <circle cx="195" cy="258" r="16" fill="#0d0c08" stroke="#3d3020" stroke-width="1.5"/>
+  <circle cx="195" cy="258" r="10" fill="#0a0908" stroke="#2a2010" stroke-width="1"/>
+  <circle cx="195" cy="258" r="4"  fill="#151008" stroke="#2a1a00" stroke-width="1"/>
+  <!-- Dim amber — no power -->
+  <circle cx="195" cy="258" r="2"  fill="#2a1a00" opacity="0.4"/>
 
-  <!-- Body -->
-  <rect x="160" y="216" width="70" height="70" rx="8" fill="#111820" stroke="#30363d" stroke-width="1.5"/>
-  <!-- Empty chest panel (no power) -->
-  <rect x="174" y="228" width="42" height="30" rx="4" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
-  <line x1="182" y1="238" x2="208" y2="238" stroke="#1a2030" stroke-width="1" stroke-dasharray="2,2"/>
-  <line x1="182" y1="248" x2="208" y2="248" stroke="#1a2030" stroke-width="1" stroke-dasharray="2,2"/>
-  <!-- Side vents -->
-  <rect x="163" y="268" width="8"  height="12" rx="2" fill="#0d1117" stroke="#21262d" stroke-width="0.5"/>
-  <rect x="219" y="268" width="8"  height="12" rx="2" fill="#0d1117" stroke="#21262d" stroke-width="0.5"/>
-
-  <!-- Arms -->
-  <rect x="142" y="218" width="15" height="58" rx="7" fill="#111820" stroke="#30363d" stroke-width="1"/>
-  <rect x="233" y="218" width="15" height="58" rx="7" fill="#111820" stroke="#30363d" stroke-width="1"/>
+  <!-- Arms — thick cylinders -->
+  <rect x="138" y="223" width="17" height="62" rx="5" fill="url(#rust-l)" stroke="#4a3a22" stroke-width="1.5"/>
+  <rect x="235" y="223" width="17" height="62" rx="5" fill="url(#rust-l)" stroke="#4a3a22" stroke-width="1.5"/>
+  <!-- Arm bolts -->
+  <circle cx="146" cy="238" r="2" fill="#3d3020"/>
+  <circle cx="146" cy="270" r="2" fill="#3d3020"/>
+  <circle cx="244" cy="238" r="2" fill="#3d3020"/>
+  <circle cx="244" cy="270" r="2" fill="#3d3020"/>
   <!-- Hands -->
-  <rect x="140" y="273" width="19" height="12" rx="4" fill="#111820" stroke="#30363d" stroke-width="1"/>
-  <rect x="231" y="273" width="19" height="12" rx="4" fill="#111820" stroke="#30363d" stroke-width="1"/>
+  <rect x="134" y="281" width="25" height="14" rx="4" fill="#181208" stroke="#4a3a22" stroke-width="1.5"/>
+  <rect x="231" y="281" width="25" height="14" rx="4" fill="#181208" stroke="#4a3a22" stroke-width="1.5"/>
 
   <!-- Legs -->
-  <rect x="172" y="282" width="24" height="68" rx="6" fill="#111820" stroke="#30363d" stroke-width="1"/>
-  <rect x="194" y="282" width="24" height="68" rx="6" fill="#111820" stroke="#30363d" stroke-width="1"/>
-  <!-- Knee joints -->
-  <rect x="173" y="307" width="22" height="6" rx="2" fill="#0d1117" stroke="#21262d" stroke-width="0.5"/>
-  <rect x="195" y="307" width="22" height="6" rx="2" fill="#0d1117" stroke="#21262d" stroke-width="0.5"/>
+  <rect x="165" y="293" width="26" height="72" rx="5" fill="url(#rust-l)" stroke="#4a3a22" stroke-width="1.5"/>
+  <rect x="199" y="293" width="26" height="72" rx="5" fill="url(#rust-l)" stroke="#4a3a22" stroke-width="1.5"/>
+  <!-- Knee plates -->
+  <rect x="165" y="316" width="26" height="10" rx="2" fill="#151008" stroke="#3d3020" stroke-width="1"/>
+  <rect x="199" y="316" width="26" height="10" rx="2" fill="#151008" stroke="#3d3020" stroke-width="1"/>
 
-  <!-- Feet -->
-  <rect x="160" y="346" width="38" height="14" rx="5" fill="#111820" stroke="#30363d" stroke-width="1"/>
-  <rect x="192" y="346" width="38" height="14" rx="5" fill="#111820" stroke="#30363d" stroke-width="1"/>
+  <!-- Feet — flat, heavy -->
+  <rect x="153" y="361" width="42" height="16" rx="4" fill="#181208" stroke="#4a3a22" stroke-width="1.5"/>
+  <rect x="195" y="361" width="42" height="16" rx="4" fill="#181208" stroke="#4a3a22" stroke-width="1.5"/>
 
   <!-- Caption -->
-  <text x="195" y="378" font-size="11" fill="#4a5160" text-anchor="middle">stateless · forgets everything</text>
-  <text x="195" y="394" font-size="10" fill="#2a3340" text-anchor="middle">↻ re-explain every session</text>
+  <text x="195" y="396" font-size="11" fill="#5a4e3a" text-anchor="middle">stateless · forgets everything</text>
+  <text x="195" y="412" font-size="10" fill="#3d3020" text-anchor="middle">↻ re-explain every session</text>
 
 
-  <!-- ══════════════════════════════════════ -->
-  <!--  TRANSFORMATION ZONE                  -->
-  <!-- ══════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════ -->
+  <!--  TRANSFORMATION                    -->
+  <!-- ═══════════════════════════════════ -->
 
   <text x="455" y="230" font-size="11" fill="#8b949e" text-anchor="middle" font-style="italic">equipped with</text>
-
-  <!-- Arrow -->
-  <line x1="362" y1="262" x2="534" y2="262" stroke="#388bfd" stroke-width="3" class="arrow-glow" marker-end="url(#arr)"/>
-  <rect x="362" y="254" width="172" height="16" rx="3" fill="#0d1117"/>
-  <line x1="362" y1="262" x2="534" y2="262" stroke="#388bfd" stroke-width="2.5" class="arrow-glow" marker-end="url(#arr)"/>
+  <rect x="362" y="254" width="174" height="16" rx="3" fill="#0d1117"/>
+  <line x1="362" y1="262" x2="534" y2="262" stroke="#388bfd" stroke-width="2.5" class="aglow" marker-end="url(#arr)"/>
   <text x="449" y="258" font-size="11" fill="#388bfd" text-anchor="middle" font-weight="bold">unified-claude-system</text>
 
 
-  <!-- ══════════════════════════════════════ -->
-  <!--  RIGHT ROBOT  —  MARK L  (upgraded)   -->
-  <!-- ══════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════ -->
+  <!--  MARK L  —  sleek nanotech armor   -->
+  <!-- ═══════════════════════════════════ -->
 
-  <!-- Atmospheric halo -->
-  <ellipse cx="771" cy="325" rx="155" ry="195" fill="url(#halo-g)"/>
+  <!-- Halo -->
+  <ellipse cx="771" cy="320" rx="160" ry="200" fill="url(#halo-g)"/>
 
-  <!-- Labels -->
   <text x="771" y="102" font-size="16" fill="#388bfd" text-anchor="middle" font-weight="bold" letter-spacing="1" filter="url(#glow-sm)">MARK L</text>
-  <text x="771" y="117" font-size="9"  fill="#3fb950" text-anchor="middle" letter-spacing="2">AFTER</text>
+  <text x="771" y="117" font-size="9"  fill="#3fb950" text-anchor="middle" letter-spacing="2.5">AFTER</text>
 
-  <!-- Antenna with animated sparks -->
-  <line x1="771" y1="142" x2="771" y2="125" stroke="#388bfd" stroke-width="2.5"/>
-  <circle cx="771" cy="122" r="6" fill="#388bfd" class="pulse" filter="url(#glow-md)"/>
-  <circle cx="771" cy="122" r="3" fill="#e6edf3"/>
-  <line x1="761" y1="117" x2="756" y2="111" stroke="#388bfd" stroke-width="1.5" class="spark1"/>
-  <line x1="781" y1="117" x2="786" y2="111" stroke="#388bfd" stroke-width="1.5" class="spark2"/>
-  <line x1="771" y1="116" x2="771" y2="109" stroke="#388bfd" stroke-width="1.5" class="spark3"/>
+  <!-- Antenna — sleek, powered -->
+  <line x1="771" y1="142" x2="771" y2="126" stroke="#388bfd" stroke-width="2.5"/>
+  <circle cx="771" cy="123" r="6" fill="#388bfd" class="pulse" filter="url(#glow-lg)"/>
+  <circle cx="771" cy="123" r="3" fill="#e6edf3"/>
+  <line x1="761" y1="118" x2="756" y2="112" stroke="#388bfd" stroke-width="1.5" class="spark1"/>
+  <line x1="781" y1="118" x2="786" y2="112" stroke="#388bfd" stroke-width="1.5" class="spark2"/>
+  <line x1="771" y1="117" x2="771" y2="110" stroke="#388bfd" stroke-width="1.5" class="spark3"/>
 
-  <!-- Head -->
-  <rect x="730" y="140" width="82" height="80" rx="13" fill="#080f1c" stroke="#388bfd" stroke-width="2"/>
-  <!-- Top face trim -->
-  <rect x="738" y="143" width="66" height="5" rx="2.5" fill="#0d2040" stroke="#1f3a5e" stroke-width="0.5"/>
+  <!-- ── Iron Man-style angular helmet ── -->
+  <!-- Main helmet polygon — angular cheeks, pointed chin -->
+  <polygon points="748,140 794,140 812,155 812,193 800,207 771,212 742,207 730,193 730,155"
+           fill="url(#armor-l)" stroke="#388bfd" stroke-width="2"/>
+  <!-- Helmet top center ridge -->
+  <rect x="756" y="137" width="30" height="6" rx="3" fill="#0d1f38" stroke="#388bfd" stroke-width="1"/>
+  <!-- Forehead angled panels — left and right -->
+  <polygon points="730,155 748,140 748,157 732,162" fill="#0d1f38" stroke="#1f3a5e" stroke-width="0.8"/>
+  <polygon points="794,140 812,155 810,162 794,157" fill="#0d1f38" stroke="#1f3a5e" stroke-width="0.8"/>
+  <!-- Face center panel -->
+  <rect x="746" y="157" width="50" height="50" rx="2" fill="#07111e" stroke="#1f3a5e" stroke-width="0.5"/>
 
-  <!-- LED Eyebrows -->
-  <rect x="741" y="152" width="20" height="3.5" rx="1.5" fill="#388bfd" filter="url(#glow-sm)" class="pulse"/>
-  <rect x="781" y="152" width="20" height="3.5" rx="1.5" fill="#388bfd" filter="url(#glow-sm)" class="pulse"/>
+  <!-- Visor — the iconic horizontal glowing slit -->
+  <rect x="738" y="163" width="66" height="13" rx="2" fill="#030a14" stroke="#388bfd" stroke-width="1.5"/>
+  <!-- Visor glow fill -->
+  <rect x="740" y="165" width="62" height="9"  rx="1" fill="#388bfd" opacity="0.18"/>
+  <!-- Visor inner bright strip (animated blink) -->
+  <rect x="741" y="166" width="60" height="7"  rx="1" fill="#388bfd" filter="url(#glow-md)" class="blink" opacity="0.7"/>
+  <!-- Visor center divider line -->
+  <line x1="771" y1="163" x2="771" y2="176" stroke="#1f3a5e" stroke-width="1.5"/>
 
-  <!-- Eyes — glowing multi-ring -->
-  <!-- Left eye -->
-  <circle cx="751" cy="163" r="10"  fill="#050f20" stroke="#388bfd" stroke-width="1.5"/>
-  <circle cx="751" cy="163" r="7"   fill="url(#eye-g)" class="blink"/>
-  <circle cx="751" cy="163" r="3.5" fill="#388bfd" filter="url(#glow-sm)" class="blink"/>
-  <circle cx="749" cy="161" r="1.5" fill="#d0e8ff" class="blink"/>
-  <!-- Right eye -->
-  <circle cx="791" cy="163" r="10"  fill="#050f20" stroke="#388bfd" stroke-width="1.5"/>
-  <circle cx="791" cy="163" r="7"   fill="url(#eye-g)" class="blink2"/>
-  <circle cx="791" cy="163" r="3.5" fill="#388bfd" filter="url(#glow-sm)" class="blink2"/>
-  <circle cx="789" cy="161" r="1.5" fill="#d0e8ff" class="blink2"/>
+  <!-- Cheekbone accent lines -->
+  <line x1="731" y1="172" x2="741" y2="179" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
+  <line x1="811" y1="172" x2="801" y2="179" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
+  <!-- Lower face armor panel -->
+  <polygon points="748,178 794,178 800,207 771,212 742,207" fill="#08121e" stroke="#1f3a5e" stroke-width="1"/>
+  <!-- Mouth slit -->
+  <rect x="756" y="198" width="30" height="5" rx="2" fill="#030a14" stroke="#388bfd" stroke-width="1"/>
+  <line x1="760" y1="201" x2="764" y2="201" stroke="#388bfd" stroke-width="1" opacity="0.6"/>
+  <line x1="768" y1="201" x2="774" y2="201" stroke="#388bfd" stroke-width="1" opacity="0.6"/>
+  <line x1="778" y1="201" x2="782" y2="201" stroke="#388bfd" stroke-width="1" opacity="0.6"/>
 
-  <!-- ★ BRAIN — memory layer ★ -->
-  <ellipse cx="771" cy="182" rx="28" ry="24" fill="url(#brain-g)" filter="url(#glow-lg)" class="pulse"/>
-  <line x1="771" y1="160" x2="771" y2="204" stroke="#a0c8ff" stroke-width="0.9" opacity="0.45"/>
-  <path d="M 756,172 Q 763,179 756,186" fill="none" stroke="#a0c8ff" stroke-width="0.9" opacity="0.45"/>
-  <path d="M 786,172 Q 779,179 786,186" fill="none" stroke="#a0c8ff" stroke-width="0.9" opacity="0.45"/>
-  <path d="M 762,162 Q 752,172 758,182" fill="none" stroke="#a0c8ff" stroke-width="0.7" opacity="0.35"/>
-  <path d="M 780,162 Q 790,172 784,182" fill="none" stroke="#a0c8ff" stroke-width="0.7" opacity="0.35"/>
+  <!-- Neck — segmented -->
+  <rect x="757" y="212" width="28" height="24" rx="4" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
+  <line x1="757" y1="219" x2="785" y2="219" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="757" y1="226" x2="785" y2="226" stroke="#1f3a5e" stroke-width="1"/>
 
-  <!-- Smile -->
-  <path d="M 758,207 Q 771,215 784,207" fill="none" stroke="#388bfd" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
-  <!-- Chin vent -->
-  <rect x="763" y="212" width="16" height="4" rx="2" fill="#0a1628" stroke="#1f3a5e" stroke-width="0.5"/>
+  <!-- Pauldrons — shoulder armor plates -->
+  <polygon points="698,238 740,234 740,252 698,256" fill="url(#armor-l)" stroke="#388bfd" stroke-width="1.5"/>
+  <polygon points="802,234 844,238 844,256 802,252" fill="url(#armor-l)" stroke="#388bfd" stroke-width="1.5"/>
+  <!-- Pauldron detail lines -->
+  <line x1="710" y1="242" x2="738" y2="237" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="804" y1="237" x2="832" y2="242" stroke="#1f3a5e" stroke-width="1"/>
 
-  <!-- Neck -->
-  <rect x="761" y="220" width="20" height="20" rx="4" fill="#0a1628" stroke="#388bfd" stroke-width="1"/>
-  <!-- Neck circuit -->
-  <line x1="771" y1="222" x2="771" y2="238" stroke="#1f3a5e" stroke-width="1"/>
+  <!-- Body — chest plate -->
+  <polygon points="700,238 842,238 850,260 842,346 700,346 692,260"
+           fill="url(#armor-l)" stroke="#388bfd" stroke-width="2"/>
+  <!-- Body panel lines -->
+  <line x1="771" y1="240" x2="771" y2="344" stroke="#1f3a5e" stroke-width="1" opacity="0.5"/>
+  <line x1="706" y1="280" x2="836" y2="280" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
+  <line x1="700" y1="310" x2="842" y2="310" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
 
-  <!-- Body -->
-  <rect x="706" y="240" width="130" height="106" rx="10" fill="#080f1c" stroke="#388bfd" stroke-width="2"/>
-  <!-- Circuit lines -->
-  <line x1="726" y1="258" x2="726" y2="330" stroke="#1f3a5e" stroke-width="1" opacity="0.6"/>
-  <line x1="816" y1="258" x2="816" y2="330" stroke="#1f3a5e" stroke-width="1" opacity="0.6"/>
-  <line x1="726" y1="278" x2="816" y2="278" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
-  <line x1="726" y1="320" x2="816" y2="320" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
-  <!-- Chest core — rules engine -->
-  <rect x="728" y="258" width="86" height="58" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5" filter="url(#glow-sm)"/>
-  <rect x="736" y="266" width="70" height="42" rx="5" fill="#06111f"/>
-  <!-- Animated core dots (3×2) -->
-  <circle cx="751" cy="277" r="3" fill="#388bfd" class="dot1"/>
-  <circle cx="763" cy="277" r="3" fill="#388bfd" class="dot2"/>
-  <circle cx="775" cy="277" r="3" fill="#388bfd" class="dot3"/>
-  <circle cx="787" cy="277" r="3" fill="#388bfd" class="dot4"/>
-  <circle cx="751" cy="291" r="3" fill="#58a6ff" class="dot4"/>
-  <circle cx="763" cy="291" r="3" fill="#58a6ff" class="dot3"/>
-  <circle cx="775" cy="291" r="3" fill="#58a6ff" class="dot2"/>
-  <circle cx="787" cy="291" r="3" fill="#58a6ff" class="dot1"/>
-  <!-- Lower body shoulder tabs -->
-  <rect x="708" y="242" width="16" height="8" rx="3" fill="#0a1628" stroke="#388bfd" stroke-width="1"/>
-  <rect x="818" y="242" width="16" height="8" rx="3" fill="#0a1628" stroke="#388bfd" stroke-width="1"/>
+  <!-- ★ ARC REACTOR = MEMORY LAYER ★ -->
+  <!-- Outer glow ring -->
+  <circle cx="771" cy="262" r="32" fill="none" stroke="#388bfd" stroke-width="1" opacity="0.3" filter="url(#glow-xl)" class="pulse"/>
+  <!-- Housing ring -->
+  <circle cx="771" cy="262" r="26" fill="#040e1e" stroke="#388bfd" stroke-width="2" filter="url(#glow-md)"/>
+  <!-- Mid ring -->
+  <circle cx="771" cy="262" r="19" fill="#06111f" stroke="#388bfd" stroke-width="1.5" class="pulse"/>
+  <!-- Inner energy fill -->
+  <circle cx="771" cy="262" r="13" fill="url(#arc-g)" filter="url(#glow-lg)" class="pulse"/>
+  <!-- Core -->
+  <circle cx="771" cy="262" r="5"  fill="#e6f4ff" filter="url(#glow-xl)" class="pulse"/>
+  <!-- Reactor spokes -->
+  <line x1="771" y1="246" x2="771" y2="243" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
+  <line x1="771" y1="278" x2="771" y2="281" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
+  <line x1="755" y1="262" x2="752" y2="262" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
+  <line x1="787" y1="262" x2="790" y2="262" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
 
-  <!-- Arms -->
-  <rect x="672" y="240" width="30" height="96" rx="9" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
-  <rect x="840" y="240" width="30" height="96" rx="9" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
-  <!-- Arm accents (circuit strips) -->
-  <rect x="680" y="261" width="14" height="3" rx="1" fill="#388bfd" opacity="0.5"/>
-  <rect x="680" y="270" width="14" height="3" rx="1" fill="#388bfd" opacity="0.3"/>
-  <rect x="848" y="261" width="14" height="3" rx="1" fill="#388bfd" opacity="0.5"/>
-  <rect x="848" y="270" width="14" height="3" rx="1" fill="#388bfd" opacity="0.3"/>
-  <!-- Hands -->
-  <rect x="668" y="332" width="38" height="16" rx="6" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
-  <rect x="836" y="332" width="38" height="16" rx="6" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
-  <!-- Knuckle lines -->
-  <line x1="680" y1="334" x2="680" y2="346" stroke="#1f3a5e" stroke-width="1"/>
-  <line x1="688" y1="334" x2="688" y2="346" stroke="#1f3a5e" stroke-width="1"/>
-  <line x1="848" y1="334" x2="848" y2="346" stroke="#1f3a5e" stroke-width="1"/>
-  <line x1="856" y1="334" x2="856" y2="346" stroke="#1f3a5e" stroke-width="1"/>
+  <!-- Lower chest accent dots -->
+  <circle cx="745" cy="300" r="3" fill="#388bfd" class="dot1" opacity="0.7"/>
+  <circle cx="757" cy="300" r="3" fill="#388bfd" class="dot2" opacity="0.7"/>
+  <circle cx="769" cy="300" r="3" fill="#388bfd" class="dot3" opacity="0.7"/>
+  <circle cx="781" cy="300" r="3" fill="#388bfd" class="dot4" opacity="0.7"/>
+  <circle cx="793" cy="300" r="3" fill="#388bfd" class="dot1" opacity="0.7"/>
 
-  <!-- Legs -->
-  <rect x="716" y="342" width="38" height="94" rx="8" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
-  <rect x="788" y="342" width="38" height="94" rx="8" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
-  <!-- Knee cap -->
-  <rect x="717" y="366" width="36" height="10" rx="4" fill="#06111f" stroke="#388bfd" stroke-width="1"/>
-  <rect x="789" y="366" width="36" height="10" rx="4" fill="#06111f" stroke="#388bfd" stroke-width="1"/>
-  <!-- Shin strip -->
-  <rect x="727" y="382" width="16" height="40" rx="3" fill="#06111f" stroke="#1f3a5e" stroke-width="0.5"/>
-  <rect x="799" y="382" width="16" height="40" rx="3" fill="#06111f" stroke="#1f3a5e" stroke-width="0.5"/>
+  <!-- Abs panel lines -->
+  <line x1="740" y1="316" x2="802" y2="316" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="740" y1="328" x2="802" y2="328" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="771" y1="312" x2="771" y2="344" stroke="#1f3a5e" stroke-width="1" opacity="0.5"/>
 
-  <!-- Feet -->
-  <rect x="703" y="432" width="56" height="18" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
-  <rect x="783" y="432" width="56" height="18" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
-  <!-- Toe detail -->
-  <line x1="717" y1="438" x2="717" y2="444" stroke="#1f3a5e" stroke-width="1"/>
-  <line x1="725" y1="438" x2="725" y2="444" stroke="#1f3a5e" stroke-width="1"/>
-  <line x1="797" y1="438" x2="797" y2="444" stroke="#1f3a5e" stroke-width="1"/>
-  <line x1="805" y1="438" x2="805" y2="444" stroke="#1f3a5e" stroke-width="1"/>
+  <!-- Arms — sleek, segmented -->
+  <polygon points="668,240 698,236 698,298 668,302" fill="url(#armor-l)" stroke="#1f6feb" stroke-width="1.5"/>
+  <polygon points="844,236 874,240 874,302 844,298" fill="url(#armor-l)" stroke="#1f6feb" stroke-width="1.5"/>
+  <!-- Elbow joint -->
+  <rect x="665" y="295" width="36" height="12" rx="4" fill="#0a1628" stroke="#388bfd" stroke-width="1"/>
+  <rect x="841" y="295" width="36" height="12" rx="4" fill="#0a1628" stroke="#388bfd" stroke-width="1"/>
+  <!-- Forearms -->
+  <polygon points="668,307 700,305 700,348 668,348" fill="url(#armor-l)" stroke="#1f6feb" stroke-width="1.5"/>
+  <polygon points="842,305 874,307 874,348 842,348" fill="url(#armor-l)" stroke="#1f6feb" stroke-width="1.5"/>
+  <!-- Arm circuit strips -->
+  <rect x="674" y="318" width="18" height="3" rx="1" fill="#388bfd" opacity="0.5"/>
+  <rect x="674" y="326" width="18" height="3" rx="1" fill="#388bfd" opacity="0.3"/>
+  <rect x="850" y="318" width="18" height="3" rx="1" fill="#388bfd" opacity="0.5"/>
+  <rect x="850" y="326" width="18" height="3" rx="1" fill="#388bfd" opacity="0.3"/>
+  <!-- Hands / gauntlets -->
+  <rect x="660" y="346" width="44" height="18" rx="5" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="838" y="346" width="44" height="18" rx="5" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
+  <line x1="674" y1="349" x2="674" y2="361" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="683" y1="349" x2="683" y2="361" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="692" y1="349" x2="692" y2="361" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="852" y1="349" x2="852" y2="361" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="861" y1="349" x2="861" y2="361" stroke="#1f3a5e" stroke-width="1"/>
+  <line x1="870" y1="349" x2="870" y2="361" stroke="#1f3a5e" stroke-width="1"/>
+
+  <!-- Legs — tapered thigh + shin -->
+  <polygon points="707,346 761,346 757,432 711,432" fill="url(#armor-l)" stroke="#388bfd" stroke-width="1.5"/>
+  <polygon points="781,346 835,346 831,432 777,432" fill="url(#armor-l)" stroke="#388bfd" stroke-width="1.5"/>
+  <!-- Knee plate -->
+  <rect x="709" y="368" width="50" height="14" rx="5" fill="#06111f" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="783" y="368" width="50" height="14" rx="5" fill="#06111f" stroke="#388bfd" stroke-width="1.5"/>
+  <!-- Shin strip + detail -->
+  <rect x="724" y="388" width="20" height="38" rx="3" fill="#06111f" stroke="#1f3a5e" stroke-width="1"/>
+  <rect x="798" y="388" width="20" height="38" rx="3" fill="#06111f" stroke="#1f3a5e" stroke-width="1"/>
+
+  <!-- Boots -->
+  <rect x="703" y="430" width="58" height="20" rx="6" fill="#0a1628" stroke="#388bfd" stroke-width="2"/>
+  <rect x="777" y="430" width="58" height="20" rx="6" fill="#0a1628" stroke="#388bfd" stroke-width="2"/>
+  <!-- Boot thrusters -->
+  <ellipse cx="732" cy="451" rx="14" ry="4" fill="#06111f" stroke="#388bfd" stroke-width="1" class="pulse" filter="url(#glow-sm)"/>
+  <ellipse cx="806" cy="451" rx="14" ry="4" fill="#06111f" stroke="#388bfd" stroke-width="1" class="pulse" filter="url(#glow-sm)"/>
 
   <!-- Caption -->
-  <text x="771" y="470" font-size="13" fill="#3fb950" text-anchor="middle" font-weight="bold">Claude that never forgets</text>
-  <text x="771" y="488" font-size="10" fill="#1a4a20" text-anchor="middle">context-aware  ·  always warm  ·  grows smarter</text>
+  <text x="771" y="472" font-size="13" fill="#3fb950" text-anchor="middle" font-weight="bold">Claude that never forgets</text>
+  <text x="771" y="490" font-size="10" fill="#1a4a20" text-anchor="middle">context-aware  ·  always warm  ·  grows smarter</text>
 
 
-  <!-- ══════════════════════════════════════ -->
-  <!--  CALLOUT LABELS                        -->
-  <!-- ══════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════ -->
+  <!--  CALLOUT LABELS                    -->
+  <!-- ═══════════════════════════════════ -->
 
-  <!-- Brain → MEMORY LAYER -->
-  <line x1="799" y1="165" x2="872" y2="160" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="872" cy="160" r="2.5" fill="#388bfd"/>
-  <text x="880" y="156" font-size="11" fill="#388bfd" font-weight="bold">MEMORY LAYER</text>
-  <text x="880" y="172" font-size="10" fill="#4a7aaa">persists across sessions</text>
+  <!-- Arc reactor → MEMORY LAYER -->
+  <line x1="797" y1="255" x2="882" y2="248" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="882" cy="248" r="2.5" fill="#388bfd"/>
+  <text x="890" y="244" font-size="11" fill="#388bfd" font-weight="bold">MEMORY LAYER</text>
+  <text x="890" y="260" font-size="10" fill="#4a7aaa">arc reactor — persists across sessions</text>
 
   <!-- Right arm → HOOKS -->
-  <line x1="870" y1="275" x2="904" y2="224" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="904" cy="224" r="2.5" fill="#388bfd"/>
-  <text x="912" y="220" font-size="11" fill="#388bfd" font-weight="bold">HOOKS</text>
-  <text x="912" y="236" font-size="10" fill="#4a7aaa">quality gates · auto-format</text>
+  <line x1="874" y1="270" x2="906" y2="220" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="906" cy="220" r="2.5" fill="#388bfd"/>
+  <text x="914" y="216" font-size="11" fill="#388bfd" font-weight="bold">HOOKS</text>
+  <text x="914" y="232" font-size="10" fill="#4a7aaa">quality gates · auto-format</text>
 
-  <!-- Chest → RULES -->
-  <line x1="836" y1="288" x2="904" y2="295" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="904" cy="295" r="2.5" fill="#388bfd"/>
-  <text x="912" y="291" font-size="11" fill="#388bfd" font-weight="bold">RULES</text>
-  <text x="912" y="307" font-size="10" fill="#4a7aaa">conventions enforced</text>
+  <!-- Body lower → RULES -->
+  <line x1="842" y1="323" x2="906" y2="296" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="906" cy="296" r="2.5" fill="#388bfd"/>
+  <text x="914" y="292" font-size="11" fill="#388bfd" font-weight="bold">RULES</text>
+  <text x="914" y="308" font-size="10" fill="#4a7aaa">conventions enforced</text>
 
   <!-- Legs → COMMANDS -->
-  <line x1="826" y1="400" x2="904" y2="380" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="904" cy="380" r="2.5" fill="#388bfd"/>
-  <text x="912" y="376" font-size="11" fill="#388bfd" font-weight="bold">COMMANDS</text>
-  <text x="912" y="392" font-size="10" fill="#4a7aaa">/tdd · /commit · /plan · /review</text>
+  <line x1="831" y1="400" x2="906" y2="376" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="906" cy="376" r="2.5" fill="#388bfd"/>
+  <text x="914" y="372" font-size="11" fill="#388bfd" font-weight="bold">COMMANDS</text>
+  <text x="914" y="388" font-size="10" fill="#4a7aaa">/tdd · /commit · /plan · /review</text>
 </svg>
