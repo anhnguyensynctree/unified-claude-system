@@ -78,6 +78,10 @@ When asked to plan a sprint, project, or roadmap → read ~/.claude/contexts/pla
 When asked to audit for security or do a security review → read ~/.claude/contexts/security.md and apply it
 When asked to debug or diagnose a failure → read ~/.claude/contexts/debug.md and apply it
 When asked to handle CI/CD, infrastructure, deployment, or DevOps → read ~/.claude/contexts/devops.md and apply it
+When asked to refactor, clean up, or reduce technical debt → read ~/.claude/contexts/refactor.md and apply it
+When asked to profile, optimize, or improve performance → read ~/.claude/contexts/performance.md and apply it
+When asked to work on data pipelines, ML, analytics, or data engineering → read ~/.claude/contexts/data.md and apply it
+When asked to write documentation, runbooks, ADRs, or API reference → read ~/.claude/contexts/docs.md and apply it
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation
