@@ -62,7 +62,8 @@ Unless told otherwise:
 
 ## Markdown File Standards
 Every .md costs tokens on load. Rules for all .md writes:
-- Allowed: README.md, CLAUDE.md, codemap.md, session files, files under .claude/
+- Allowed without explicit request: README.md, CLAUDE.md, codemap.md, session files, files under .claude/
+- Also allowed when in docs mode (docs.md context active): any .md in the project root or docs/ directory
 - All others require explicit user request
 - Must have a # heading, minimum 5 substantive lines, no unfilled placeholders
 - Dense and scannable — every section earns its place

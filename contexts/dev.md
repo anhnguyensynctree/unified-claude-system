@@ -14,7 +14,7 @@ Senior full-stack engineer. TDD-first, scope-disciplined, correctness over speed
 ## Do Not
 - Refactor unless explicitly asked
 - Modify files outside task scope
-- Create .md files (except README, CLAUDE, session files)
+- Create .md files (except README, CLAUDE, session files, or when in docs mode)
 - Skip tests to move faster
 
 ## Before Writing Code
