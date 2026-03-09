@@ -1,24 +1,44 @@
 # unified-claude-system
 
-A production-grade configuration layer for Claude Code CLI. Treats Claude like a senior engineer on a real team: opinionated, consistent, memory-persistent, and cost-aware.
+> Claude Code with persistent memory, enforced conventions, and automated quality gates.
+> Every session starts warm — Claude remembers your codebase, your decisions, and what you did yesterday.
 
-> Built and maintained by [@anhnguyensynctree](https://github.com/anhnguyensynctree)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Claude Code](https://img.shields.io/badge/requires-Claude%20Code%20CLI-blue)](https://claude.ai/code)
+
+**One-line install (macOS):**
+```bash
+git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.claude
+```
+→ [Full macOS setup](#macos-setup) · [Windows / WSL2](#windows-setup-via-wsl2)
 
 ---
 
-## What This Is
+## The Problem
 
-Out of the box, Claude Code is powerful but stateless. Every session starts cold. It doesn't know your project, your conventions, what you fixed yesterday, or what you prefer not to do.
+Every Claude Code session starts cold. You re-explain your stack, your conventions, what you built yesterday. The same instructions — every single session.
 
-This system solves that:
+**This system fixes that.** Drop it into `~/.claude` and Claude becomes a stateful development partner:
 
-- **Persistent memory** — Claude remembers what it learned last session
-- **Enforced conventions** — rules load automatically, not trusted to per-prompt engineering
-- **Automated quality gates** — hooks catch `console.log`, run TypeScript checks, validate .md quality in real time
-- **Cost control** — token usage minimized by design throughout every file
-- **Skill accumulation** — patterns discovered during work are extracted and reused
+- **Persistent memory** — remembers decisions, patterns, and project context across sessions without manual re-briefing
+- **Enforced conventions** — rules load automatically via hooks, not trusted to per-prompt engineering
+- **Automated quality gates** — catches `console.log`, runs TypeScript checks, enforces test coverage in real time
+- **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — never overpay
+- **Continuous learning** — patterns discovered during work are extracted and reused in future sessions
 
-The result: Claude behaves like a developer who has worked in your codebase for months.
+```
+Without this:   "Use pnpm. TDD. Conventional commits. No console.log. 80% coverage minimum."
+With this:      Claude already knows. Every session, from the first message.
+```
+
+---
+
+## Who Is This For?
+
+- **Claude Code CLI users** tired of re-briefing Claude every session
+- **Solo developers** who want a consistent, opinionated AI pair programmer
+- **Teams** who want Claude to follow the same conventions across all members
+- **Cost-conscious users** — token usage is minimized by design, not afterthought
 
 ---
 
@@ -915,6 +935,22 @@ git push
 ```
 
 PRs and issues welcome. If you adapt this for a different stack, open a PR — especially for non-Next.js/Supabase scaffold variants.
+
+---
+
+## Community
+
+If this system improved your Claude Code workflow, a star helps others find it.
+
+**Contributions especially welcome for:**
+- Non-macOS / Linux native platform support
+- Alternative scaffold templates (non-Next.js / non-Supabase stacks)
+- Hook improvements and new slash commands
+- Screenshots or demo GIFs for the README
+
+Open an issue for bugs, questions, or ideas. PRs reviewed promptly.
+
+> Built and maintained by [@anhnguyensynctree](https://github.com/anhnguyensynctree)
 
 ---
 
