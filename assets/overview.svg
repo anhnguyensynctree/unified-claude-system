@@ -11,12 +11,14 @@
       .dot2    { animation: dotseq  2s   ease-in-out 0.4s infinite; }
       .dot3    { animation: dotseq  2s   ease-in-out 0.8s infinite; }
       .dot4    { animation: dotseq  2s   ease-in-out 1.2s infinite; }
-      .aglow   { animation: apulse  2s   ease-in-out infinite; }
-      @keyframes blink  { 0%,86%,100%{opacity:1}     90%{opacity:0} }
-      @keyframes pulse  { 0%,100%{opacity:0.8}        50%{opacity:1} }
-      @keyframes spark  { 0%,100%{opacity:0.75}       45%{opacity:0.1} }
-      @keyframes dotseq { 0%,100%{opacity:0.4}        50%{opacity:1} }
-      @keyframes apulse { 0%,100%{opacity:0.65}       50%{opacity:1} }
+      .arrow-line  { stroke-dasharray:180; stroke-dashoffset:180; animation: drawArrow 2.4s ease-out infinite; }
+      .arrow-label { animation: arrowLabel 2.4s ease-out infinite; }
+      @keyframes blink     { 0%,86%,100%{opacity:1}     90%{opacity:0} }
+      @keyframes pulse     { 0%,100%{opacity:0.8}        50%{opacity:1} }
+      @keyframes spark     { 0%,100%{opacity:0.75}       45%{opacity:0.1} }
+      @keyframes dotseq    { 0%,100%{opacity:0.4}        50%{opacity:1} }
+      @keyframes drawArrow { 0%{stroke-dashoffset:180;opacity:0.4} 15%{opacity:1} 65%,90%{stroke-dashoffset:0;opacity:1} 100%{stroke-dashoffset:0;opacity:0.3} }
+      @keyframes arrowLabel{ 0%,20%{opacity:0} 50%,85%{opacity:1} 100%{opacity:0} }
     </style>
 
     <filter id="glow-xl" x="-60%" y="-60%" width="220%" height="220%">
@@ -75,7 +77,6 @@
   <!-- ═══════════════════════════════════ -->
 
   <text x="195" y="102" font-size="16" fill="#5a4e3a" text-anchor="middle" font-weight="bold" letter-spacing="1">MARK I</text>
-  <text x="195" y="117" font-size="9"  fill="#3d3020" text-anchor="middle" letter-spacing="2.5">BEFORE</text>
 
   <!-- Antenna — crude straight rod -->
   <line x1="195" y1="148" x2="195" y2="132" stroke="#3d3020" stroke-width="3"/>
@@ -161,8 +162,8 @@
 
   <text x="455" y="230" font-size="11" fill="#8b949e" text-anchor="middle" font-style="italic">equipped with</text>
   <rect x="362" y="254" width="174" height="16" rx="3" fill="#0d1117"/>
-  <line x1="362" y1="262" x2="534" y2="262" stroke="#388bfd" stroke-width="2.5" class="aglow" marker-end="url(#arr)"/>
-  <text x="449" y="258" font-size="11" fill="#388bfd" text-anchor="middle" font-weight="bold">unified-claude-system</text>
+  <line x1="362" y1="262" x2="534" y2="262" stroke="#388bfd" stroke-width="2.5" class="arrow-line" marker-end="url(#arr)"/>
+  <text x="449" y="258" font-size="11" fill="#388bfd" text-anchor="middle" font-weight="bold" class="arrow-label">unified-claude-system</text>
 
 
   <!-- ═══════════════════════════════════ -->
@@ -173,7 +174,6 @@
   <ellipse cx="771" cy="320" rx="160" ry="200" fill="url(#halo-g)"/>
 
   <text x="771" y="102" font-size="16" fill="#388bfd" text-anchor="middle" font-weight="bold" letter-spacing="1" filter="url(#glow-sm)">MARK L</text>
-  <text x="771" y="117" font-size="9"  fill="#3fb950" text-anchor="middle" letter-spacing="2.5">AFTER</text>
 
   <!-- Antenna — sleek, powered -->
   <line x1="771" y1="142" x2="771" y2="126" stroke="#388bfd" stroke-width="2.5"/>
@@ -306,35 +306,35 @@
   <ellipse cx="806" cy="451" rx="14" ry="4" fill="#06111f" stroke="#388bfd" stroke-width="1" class="pulse" filter="url(#glow-sm)"/>
 
   <!-- Caption -->
-  <text x="771" y="472" font-size="13" fill="#3fb950" text-anchor="middle" font-weight="bold">Claude that never forgets</text>
-  <text x="771" y="490" font-size="10" fill="#1a4a20" text-anchor="middle">context-aware  ·  always warm  ·  grows smarter</text>
+  <text x="771" y="472" font-size="13" fill="#388bfd" text-anchor="middle" font-weight="bold" filter="url(#glow-sm)">Iron Man  ✦  J.A.R.V.I.S.</text>
+  <text x="771" y="490" font-size="10" fill="#2a5a8a" text-anchor="middle">Claude Code, fully equipped</text>
 
 
   <!-- ═══════════════════════════════════ -->
   <!--  CALLOUT LABELS                    -->
   <!-- ═══════════════════════════════════ -->
 
-  <!-- Arc reactor → MEMORY LAYER -->
-  <line x1="797" y1="255" x2="882" y2="248" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="882" cy="248" r="2.5" fill="#388bfd"/>
-  <text x="890" y="244" font-size="11" fill="#388bfd" font-weight="bold">MEMORY LAYER</text>
-  <text x="890" y="260" font-size="10" fill="#4a7aaa">arc reactor — persists across sessions</text>
+  <!-- Head → MEMORY LAYER -->
+  <line x1="812" y1="165" x2="882" y2="155" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="882" cy="155" r="2.5" fill="#388bfd"/>
+  <text x="890" y="151" font-size="11" fill="#388bfd" font-weight="bold">MEMORY LAYER</text>
+  <text x="890" y="167" font-size="10" fill="#4a7aaa">persists across sessions</text>
 
   <!-- Right arm → HOOKS -->
-  <line x1="874" y1="270" x2="906" y2="220" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="906" cy="220" r="2.5" fill="#388bfd"/>
-  <text x="914" y="216" font-size="11" fill="#388bfd" font-weight="bold">HOOKS</text>
-  <text x="914" y="232" font-size="10" fill="#4a7aaa">quality gates · auto-format</text>
+  <line x1="874" y1="268" x2="906" y2="232" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="906" cy="232" r="2.5" fill="#388bfd"/>
+  <text x="914" y="228" font-size="11" fill="#388bfd" font-weight="bold">HOOKS</text>
+  <text x="914" y="244" font-size="10" fill="#4a7aaa">quality gates · auto-format</text>
 
-  <!-- Body lower → RULES -->
-  <line x1="842" y1="323" x2="906" y2="296" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="906" cy="296" r="2.5" fill="#388bfd"/>
-  <text x="914" y="292" font-size="11" fill="#388bfd" font-weight="bold">RULES</text>
-  <text x="914" y="308" font-size="10" fill="#4a7aaa">conventions enforced</text>
+  <!-- Arc reactor / heart → RULES + CONTEXT -->
+  <line x1="797" y1="262" x2="882" y2="280" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="882" cy="280" r="2.5" fill="#388bfd"/>
+  <text x="890" y="276" font-size="11" fill="#388bfd" font-weight="bold">RULES + CONTEXT</text>
+  <text x="890" y="292" font-size="10" fill="#4a7aaa">conventions · dev / review / research</text>
 
-  <!-- Legs → COMMANDS -->
-  <line x1="831" y1="400" x2="906" y2="376" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="906" cy="376" r="2.5" fill="#388bfd"/>
-  <text x="914" y="372" font-size="11" fill="#388bfd" font-weight="bold">COMMANDS</text>
-  <text x="914" y="388" font-size="10" fill="#4a7aaa">/tdd · /commit · /plan · /review</text>
+  <!-- Right leg → COMMANDS -->
+  <line x1="831" y1="395" x2="906" y2="368" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="906" cy="368" r="2.5" fill="#388bfd"/>
+  <text x="914" y="364" font-size="11" fill="#388bfd" font-weight="bold">COMMANDS</text>
+  <text x="914" y="380" font-size="10" fill="#4a7aaa">/tdd · /commit · /plan · /review</text>
 </svg>
