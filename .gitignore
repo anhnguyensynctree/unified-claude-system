@@ -30,3 +30,7 @@ plugins/
 
 # Facts extracted by mem0 (personal, per-project — lives in projects/ which is already excluded)
 **/facts.json
+
+# Local cache and settings
+*-cache.json
+settings.local.json
