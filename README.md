@@ -1,6 +1,6 @@
 # unified-claude-system
 
-> Claude Code with persistent memory, enforced conventions, and automated quality gates.
+> Claude Code with persistent memory, enforced conventions, 10 context modes, and automated quality gates.
 > Every session starts warm — Claude remembers your codebase, your decisions, and what you did yesterday.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -24,6 +24,7 @@ Every Claude Code session starts cold. You re-explain your stack, your conventio
 
 - **Persistent memory** — remembers decisions, patterns, and project context across sessions without manual re-briefing
 - **Enforced conventions** — rules load automatically via hooks, not trusted to per-prompt engineering
+- **10 context modes** — Claude shifts persona and priorities based on what you're doing: dev, test, review, security, debug, plan, ui-ux, architecture, devops, research — each loaded on demand, zero token cost until triggered
 - **Automated quality gates** — catches `console.log`, runs TypeScript checks, enforces test coverage in real time
 - **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — never overpay
 - **Continuous learning** — patterns discovered during work are extracted and reused in future sessions
