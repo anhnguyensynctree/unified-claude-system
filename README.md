@@ -12,6 +12,8 @@ git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.clau
 ```
 → [Full macOS setup](#macos-setup) · [Windows / WSL2](#windows-setup-via-wsl2)
 
+![unified-claude-system architecture](assets/overview.svg)
+
 ---
 
 ## The Problem
