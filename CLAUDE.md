@@ -71,6 +71,13 @@ Every .md costs tokens on load. Rules for all .md writes:
 When asked to review code or a PR → read ~/.claude/contexts/review.md and apply it
 When asked to research or explore → read ~/.claude/contexts/research.md and apply it
 When asked to implement or build → read ~/.claude/contexts/dev.md and apply it
+When asked to write tests or QA → read ~/.claude/contexts/test.md and apply it
+When asked to design UI, UX, or interface flows → read ~/.claude/contexts/ui-ux.md and apply it
+When asked to design system architecture or backend design → read ~/.claude/contexts/architecture.md and apply it
+When asked to plan a sprint, project, or roadmap → read ~/.claude/contexts/plan.md and apply it
+When asked to audit for security or do a security review → read ~/.claude/contexts/security.md and apply it
+When asked to debug or diagnose a failure → read ~/.claude/contexts/debug.md and apply it
+When asked to handle CI/CD, infrastructure, deployment, or DevOps → read ~/.claude/contexts/devops.md and apply it
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation

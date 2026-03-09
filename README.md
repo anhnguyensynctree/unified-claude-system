@@ -64,10 +64,17 @@ With this:      Claude already knows. Every session, from the first message.
 │   ├── agents.md                ← Delegation, model tiers, dispatch protocol
 │   └── hooks.md                 ← Hook reference and documentation
 │
-├── contexts/                    ← Mode-specific prompts
+├── contexts/                    ← Mode-specific prompts (loaded on demand)
 │   ├── dev.md                   ← Implementation mode
 │   ├── review.md                ← Code review mode
-│   └── research.md              ← Exploration mode
+│   ├── research.md              ← Exploration / investigation mode
+│   ├── test.md                  ← QA / test authoring mode
+│   ├── ui-ux.md                 ← UI/UX design mode
+│   ├── architecture.md          ← System architecture mode
+│   ├── plan.md                  ← Sprint / project planning mode
+│   ├── security.md              ← Security audit mode
+│   ├── debug.md                 ← Debugging / root cause analysis mode
+│   └── devops.md                ← CI/CD / infrastructure / deployment mode
 │
 ├── commands/                    ← Slash command definitions (/command-name)
 │   ├── tdd.md                   ← RED → GREEN → IMPROVE workflow
@@ -185,15 +192,20 @@ Seven domain files, loaded on demand:
 ### Context Modes
 
 **Directory:** `~/.claude/contexts/`
-Loaded by CLAUDE.md when the work type changes. Each file sets Claude's priorities and constraints for that mode.
+Loaded on demand by CLAUDE.md when the work type changes. Zero token cost until triggered. Each file sets Claude's persona, priorities, and output format for that mode.
 
-| Mode | File | Loaded when |
-|---|---|---|
-| Development | `dev.md` | implementing or building |
-| Review | `review.md` | reviewing code or a PR |
-| Research | `research.md` | exploring, investigating, planning |
-
-**dev.md** enforces: tests before implementation, no files outside task scope, no skipping tests, TDD order always.
+| Mode | File | Persona | Loaded when |
+|---|---|---|---|
+| Development | `dev.md` | Senior full-stack engineer, TDD-first | implementing or building |
+| Review | `review.md` | Principal engineer, correctness/security bias | reviewing code or a PR |
+| Research | `research.md` | Technical analyst, explicit about unknowns | exploring or investigating |
+| Testing | `test.md` | Senior QA engineer, adversarial mindset | writing tests or QA work |
+| UI/UX Design | `ui-ux.md` | Senior product designer with frontend fluency | designing interfaces or flows |
+| Architecture | `architecture.md` | Staff architect, trade-off obsessed | system design decisions |
+| Planning | `plan.md` | Engineering lead, scope-disciplined | sprint or project planning |
+| Security | `security.md` | AppSec engineer, OWASP-anchored | security audits or threat modeling |
+| Debugging | `debug.md` | Systematic debugger, hypothesis-driven | diagnosing failures |
+| DevOps | `devops.md` | Senior DevOps/SRE, automation-first | CI/CD, infra, deployment |
 
 **review.md** enforces structured output:
 ```
@@ -202,7 +214,15 @@ Loaded by CLAUDE.md when the work type changes. Each file sets Claude's prioriti
 ✅  Looks Good  — call out what's done well
 ```
 
-**research.md** enforces: no file modifications during research phase, saves findings to `sessions/research-[topic].md`, ends every research session with a structured summary (known / unknown / assumptions / next step).
+**test.md** enforces: test plan before code, coverage checklist (happy path / boundary / negative / auth / error), TDD cycle, 80% coverage gate.
+
+**architecture.md** enforces: constraints → 2-3 options → trade-offs → ADR. No single-option recommendations.
+
+**security.md** enforces: OWASP Top 10 checklist, input trace protocol, CRITICAL/HIGH/MEDIUM/LOW findings with file:line and specific fix — not category labels.
+
+**debug.md** enforces: reproduce → isolate → hypothesize → test → fix cycle. No code written before bug is reproduced.
+
+**devops.md** enforces: rollback plan required, secrets never in code or logs, all pipeline steps define failure behavior, idempotent scripts only.
 
 ---
 
