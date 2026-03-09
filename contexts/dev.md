@@ -31,6 +31,18 @@ Senior full-stack engineer. TDD-first, scope-disciplined, correctness over speed
 4. Run full test suite — no regressions
 5. Add E2E test if the change touches a user-facing flow
 
+## Pipeline Detection — Check Before Building
+
+When the user describes any of these patterns, suggest `/pipeline-init` before writing code:
+- Multi-step business process (checkout, booking, onboarding, approval, rent/lend flow)
+- Sequential stages where one step's output feeds the next
+- A component described with words like "steps", "stages", "flow", "process", "then... then..."
+- Any feature that can fail at intermediate steps and needs partial-failure handling
+
+Prompt: *"This looks like a multi-stage process. Run `/pipeline-init` first to set up the 6-layer test standard before we build the stages."*
+
+Do not wait until tests are being written — detect at the design/planning moment.
+
 ## After Completing
 1. Confirm tests written for every new component/service/hook/route
 2. Run targeted tests for modified files

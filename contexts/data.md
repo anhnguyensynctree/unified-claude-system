@@ -88,8 +88,17 @@ Freshness SLA: [how stale is acceptable]
 [unit tests for transforms, contract tests for schema boundaries]
 ```
 
+## Pipeline Detection — Check Before Building
+
+When the user describes data flowing through 2+ sequential stages, suggest `/pipeline-init` before writing any stage code:
+- Ingest → transform → serve
+- Fetch → enrich → score → rank
+- Any architecture where stage N's output is stage N+1's input
+
+Prompt: *"This is a multi-stage pipeline. Run `/pipeline-init` first to scaffold the 6-layer test structure before we write the stages."*
+
 ## Pipeline Test Layers
-See `~/.claude/rules/testing-pipeline.md` for the full 6-layer test standard:
+See `~/.claude/standards/testing-pipeline.md` for the full 6-layer test standard:
 Unit → Contract → Seam → Resilience → Invariant → Integration
 
 Apply all 6 layers to any pipeline with 2+ stages.
