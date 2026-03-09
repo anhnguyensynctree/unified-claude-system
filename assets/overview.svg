@@ -109,90 +109,90 @@
   <!-- ═══════════════════════════════════════════ -->
 
   <!-- Atmospheric halo behind robot -->
-  <ellipse cx="770" cy="295" rx="155" ry="185" fill="url(#robot-halo)"/>
+  <ellipse cx="770" cy="325" rx="155" ry="185" fill="url(#robot-halo)"/>
 
   <text x="770" y="100" font-size="9" fill="#3fb950" text-anchor="middle" font-weight="bold" letter-spacing="2.5">AFTER</text>
 
-  <!-- Antenna with spark -->
-  <line x1="770" y1="112" x2="770" y2="95" stroke="#388bfd" stroke-width="2.5"/>
-  <circle cx="770" cy="92" r="6" fill="#388bfd" filter="url(#glow-soft)"/>
-  <circle cx="770" cy="92" r="3" fill="#e6edf3"/>
+  <!-- Antenna with spark — shifted down 30px -->
+  <line x1="770" y1="142" x2="770" y2="125" stroke="#388bfd" stroke-width="2.5"/>
+  <circle cx="770" cy="122" r="6" fill="#388bfd" filter="url(#glow-soft)"/>
+  <circle cx="770" cy="122" r="3" fill="#e6edf3"/>
   <!-- Spark lines -->
-  <line x1="760" y1="87" x2="756" y2="81" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
-  <line x1="780" y1="87" x2="784" y2="81" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
-  <line x1="770" y1="86" x2="770" y2="79" stroke="#388bfd" stroke-width="1.5" opacity="0.5"/>
+  <line x1="760" y1="117" x2="756" y2="111" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
+  <line x1="780" y1="117" x2="784" y2="111" stroke="#388bfd" stroke-width="1.5" opacity="0.7"/>
+  <line x1="770" y1="116" x2="770" y2="109" stroke="#388bfd" stroke-width="1.5" opacity="0.5"/>
 
   <!-- Head -->
-  <rect x="730" y="110" width="82" height="80" rx="13" fill="#080f1c" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="730" y="140" width="82" height="80" rx="13" fill="#080f1c" stroke="#388bfd" stroke-width="1.5"/>
 
   <!-- ★ BRAIN — the memory layer ★ -->
-  <ellipse cx="771" cy="148" rx="30" ry="26" fill="url(#brain-grad)" filter="url(#glow-blue)"/>
+  <ellipse cx="771" cy="178" rx="30" ry="26" fill="url(#brain-grad)" filter="url(#glow-blue)"/>
   <!-- Brain fold lines -->
-  <line x1="771" y1="125" x2="771" y2="168" stroke="#7ab8ff" stroke-width="0.9" opacity="0.5"/>
-  <path d="M 754,137 Q 761,144 754,151" fill="none" stroke="#7ab8ff" stroke-width="0.9" opacity="0.5"/>
-  <path d="M 788,137 Q 781,144 788,151" fill="none" stroke="#7ab8ff" stroke-width="0.9" opacity="0.5"/>
-  <path d="M 760,127 Q 750,136 756,148" fill="none" stroke="#7ab8ff" stroke-width="0.7" opacity="0.4"/>
-  <path d="M 782,127 Q 792,136 786,148" fill="none" stroke="#7ab8ff" stroke-width="0.7" opacity="0.4"/>
+  <line x1="771" y1="155" x2="771" y2="198" stroke="#7ab8ff" stroke-width="0.9" opacity="0.5"/>
+  <path d="M 754,167 Q 761,174 754,181" fill="none" stroke="#7ab8ff" stroke-width="0.9" opacity="0.5"/>
+  <path d="M 788,167 Q 781,174 788,181" fill="none" stroke="#7ab8ff" stroke-width="0.9" opacity="0.5"/>
+  <path d="M 760,157 Q 750,166 756,178" fill="none" stroke="#7ab8ff" stroke-width="0.7" opacity="0.4"/>
+  <path d="M 782,157 Q 792,166 786,178" fill="none" stroke="#7ab8ff" stroke-width="0.7" opacity="0.4"/>
 
   <!-- Eyes — glowing -->
-  <circle cx="750" cy="123" r="6" fill="#388bfd" filter="url(#glow-soft)"/>
-  <circle cx="792" cy="123" r="6" fill="#388bfd" filter="url(#glow-soft)"/>
-  <circle cx="750" cy="123" r="3" fill="#e6edf3"/>
-  <circle cx="792" cy="123" r="3" fill="#e6edf3"/>
+  <circle cx="750" cy="153" r="6" fill="#388bfd" filter="url(#glow-soft)"/>
+  <circle cx="792" cy="153" r="6" fill="#388bfd" filter="url(#glow-soft)"/>
+  <circle cx="750" cy="153" r="3" fill="#e6edf3"/>
+  <circle cx="792" cy="153" r="3" fill="#e6edf3"/>
 
   <!-- Neck -->
-  <rect x="760" y="190" width="22" height="20" rx="4" fill="#0a1628" stroke="#388bfd" stroke-width="1"/>
+  <rect x="760" y="220" width="22" height="20" rx="4" fill="#0a1628" stroke="#388bfd" stroke-width="1"/>
 
   <!-- Body -->
-  <rect x="706" y="210" width="130" height="106" rx="10" fill="#080f1c" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="706" y="240" width="130" height="106" rx="10" fill="#080f1c" stroke="#388bfd" stroke-width="1.5"/>
   <!-- Circuit lines on body -->
-  <line x1="726" y1="228" x2="726" y2="300" stroke="#1f3a5e" stroke-width="1" opacity="0.6"/>
-  <line x1="816" y1="228" x2="816" y2="300" stroke="#1f3a5e" stroke-width="1" opacity="0.6"/>
-  <line x1="726" y1="248" x2="816" y2="248" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
-  <line x1="726" y1="290" x2="816" y2="290" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
+  <line x1="726" y1="258" x2="726" y2="330" stroke="#1f3a5e" stroke-width="1" opacity="0.6"/>
+  <line x1="816" y1="258" x2="816" y2="330" stroke="#1f3a5e" stroke-width="1" opacity="0.6"/>
+  <line x1="726" y1="278" x2="816" y2="278" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
+  <line x1="726" y1="320" x2="816" y2="320" stroke="#1f3a5e" stroke-width="1" opacity="0.4"/>
   <!-- Chest core — rules engine -->
-  <rect x="730" y="226" width="82" height="58" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1" filter="url(#glow-soft)"/>
-  <rect x="738" y="234" width="66" height="42" rx="5" fill="#0d2040"/>
+  <rect x="730" y="256" width="82" height="58" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1" filter="url(#glow-soft)"/>
+  <rect x="738" y="264" width="66" height="42" rx="5" fill="#0d2040"/>
   <!-- Core pattern: 3 rows of small dots -->
-  <circle cx="752" cy="244" r="2.5" fill="#388bfd" opacity="0.7"/>
-  <circle cx="764" cy="244" r="2.5" fill="#388bfd" opacity="0.7"/>
-  <circle cx="776" cy="244" r="2.5" fill="#388bfd" opacity="0.7"/>
-  <circle cx="788" cy="244" r="2.5" fill="#388bfd" opacity="0.7"/>
-  <circle cx="752" cy="256" r="2.5" fill="#58a6ff" opacity="0.5"/>
-  <circle cx="764" cy="256" r="2.5" fill="#58a6ff" opacity="0.5"/>
-  <circle cx="776" cy="256" r="2.5" fill="#58a6ff" opacity="0.5"/>
-  <circle cx="788" cy="256" r="2.5" fill="#58a6ff" opacity="0.5"/>
-  <circle cx="752" cy="268" r="2.5" fill="#1f3a5e" opacity="0.8"/>
-  <circle cx="764" cy="268" r="2.5" fill="#1f3a5e" opacity="0.8"/>
-  <circle cx="776" cy="268" r="2.5" fill="#1f3a5e" opacity="0.8"/>
-  <circle cx="788" cy="268" r="2.5" fill="#1f3a5e" opacity="0.8"/>
+  <circle cx="752" cy="274" r="2.5" fill="#388bfd" opacity="0.7"/>
+  <circle cx="764" cy="274" r="2.5" fill="#388bfd" opacity="0.7"/>
+  <circle cx="776" cy="274" r="2.5" fill="#388bfd" opacity="0.7"/>
+  <circle cx="788" cy="274" r="2.5" fill="#388bfd" opacity="0.7"/>
+  <circle cx="752" cy="286" r="2.5" fill="#58a6ff" opacity="0.5"/>
+  <circle cx="764" cy="286" r="2.5" fill="#58a6ff" opacity="0.5"/>
+  <circle cx="776" cy="286" r="2.5" fill="#58a6ff" opacity="0.5"/>
+  <circle cx="788" cy="286" r="2.5" fill="#58a6ff" opacity="0.5"/>
+  <circle cx="752" cy="298" r="2.5" fill="#1f3a5e" opacity="0.8"/>
+  <circle cx="764" cy="298" r="2.5" fill="#1f3a5e" opacity="0.8"/>
+  <circle cx="776" cy="298" r="2.5" fill="#1f3a5e" opacity="0.8"/>
+  <circle cx="788" cy="298" r="2.5" fill="#1f3a5e" opacity="0.8"/>
 
   <!-- Arms -->
-  <rect x="674" y="210" width="28" height="96" rx="9" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
-  <rect x="840" y="210" width="28" height="96" rx="9" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
+  <rect x="674" y="240" width="28" height="96" rx="9" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
+  <rect x="840" y="240" width="28" height="96" rx="9" fill="#0a1628" stroke="#1f6feb" stroke-width="1.5"/>
   <!-- Arm circuit accents -->
-  <line x1="683" y1="234" x2="693" y2="234" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
-  <line x1="683" y1="246" x2="693" y2="246" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
-  <line x1="849" y1="234" x2="859" y2="234" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
-  <line x1="849" y1="246" x2="859" y2="246" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
+  <line x1="683" y1="264" x2="693" y2="264" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
+  <line x1="683" y1="276" x2="693" y2="276" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
+  <line x1="849" y1="264" x2="859" y2="264" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
+  <line x1="849" y1="276" x2="859" y2="276" stroke="#388bfd" stroke-width="1" opacity="0.5"/>
   <!-- Hands -->
-  <rect x="669" y="302" width="38" height="16" rx="6" fill="#0a1628" stroke="#1f6feb" stroke-width="1"/>
-  <rect x="835" y="302" width="38" height="16" rx="6" fill="#0a1628" stroke="#1f6feb" stroke-width="1"/>
+  <rect x="669" y="332" width="38" height="16" rx="6" fill="#0a1628" stroke="#1f6feb" stroke-width="1"/>
+  <rect x="835" y="332" width="38" height="16" rx="6" fill="#0a1628" stroke="#1f6feb" stroke-width="1"/>
 
   <!-- Legs -->
-  <rect x="718" y="312" width="36" height="94" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
-  <rect x="788" y="312" width="36" height="94" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="718" y="342" width="36" height="94" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="788" y="342" width="36" height="94" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
   <!-- Leg joint circles -->
-  <circle cx="736" cy="316" r="5" fill="#0d2040" stroke="#388bfd" stroke-width="1"/>
-  <circle cx="806" cy="316" r="5" fill="#0d2040" stroke="#388bfd" stroke-width="1"/>
+  <circle cx="736" cy="346" r="5" fill="#0d2040" stroke="#388bfd" stroke-width="1"/>
+  <circle cx="806" cy="346" r="5" fill="#0d2040" stroke="#388bfd" stroke-width="1"/>
 
   <!-- Feet -->
-  <rect x="704" y="402" width="54" height="18" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
-  <rect x="784" y="402" width="54" height="18" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="704" y="432" width="54" height="18" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="784" y="432" width="54" height="18" rx="7" fill="#0a1628" stroke="#388bfd" stroke-width="1.5"/>
 
   <!-- Right robot caption -->
-  <text x="771" y="442" font-size="12" fill="#3fb950" text-anchor="middle" font-style="italic">your AI pair programmer, upgraded</text>
-  <text x="771" y="458" font-size="10" fill="#1a4a20" text-anchor="middle">remembers · enforces · automates · learns</text>
+  <text x="771" y="470" font-size="13" fill="#3fb950" text-anchor="middle" font-weight="bold">Claude that never forgets</text>
+  <text x="771" y="488" font-size="10" fill="#1a4a20" text-anchor="middle">context-aware  ·  always warm  ·  grows smarter</text>
 
 
   <!-- ═══════════════════════════════════════════ -->
@@ -200,27 +200,27 @@
   <!-- ═══════════════════════════════════════════ -->
 
   <!-- 1. Brain → MEMORY LAYER -->
-  <line x1="801" y1="132" x2="870" y2="132" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="870" cy="132" r="2.5" fill="#388bfd"/>
-  <text x="878" y="128" font-size="11" fill="#388bfd" font-weight="bold">MEMORY LAYER</text>
-  <text x="878" y="144" font-size="10" fill="#4a7aaa">persists across sessions</text>
+  <line x1="801" y1="162" x2="870" y2="162" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="870" cy="162" r="2.5" fill="#388bfd"/>
+  <text x="878" y="158" font-size="11" fill="#388bfd" font-weight="bold">MEMORY LAYER</text>
+  <text x="878" y="174" font-size="10" fill="#4a7aaa">persists across sessions</text>
 
   <!-- 2. Right arm → HOOKS -->
-  <line x1="868" y1="248" x2="902" y2="195" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="902" cy="195" r="2.5" fill="#388bfd"/>
-  <text x="910" y="191" font-size="11" fill="#388bfd" font-weight="bold">HOOKS</text>
-  <text x="910" y="207" font-size="10" fill="#4a7aaa">quality gates · auto-format</text>
+  <line x1="868" y1="278" x2="902" y2="225" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="902" cy="225" r="2.5" fill="#388bfd"/>
+  <text x="910" y="221" font-size="11" fill="#388bfd" font-weight="bold">HOOKS</text>
+  <text x="910" y="237" font-size="10" fill="#4a7aaa">quality gates · auto-format</text>
 
   <!-- 3. Chest core → RULES -->
-  <line x1="836" y1="257" x2="902" y2="265" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="902" cy="265" r="2.5" fill="#388bfd"/>
-  <text x="910" y="261" font-size="11" fill="#388bfd" font-weight="bold">RULES</text>
-  <text x="910" y="277" font-size="10" fill="#4a7aaa">conventions enforced</text>
+  <line x1="836" y1="287" x2="902" y2="295" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="902" cy="295" r="2.5" fill="#388bfd"/>
+  <text x="910" y="291" font-size="11" fill="#388bfd" font-weight="bold">RULES</text>
+  <text x="910" y="307" font-size="10" fill="#4a7aaa">conventions enforced</text>
 
   <!-- 4. Legs → COMMANDS -->
-  <line x1="824" y1="368" x2="902" y2="348" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
-  <circle cx="902" cy="348" r="2.5" fill="#388bfd"/>
-  <text x="910" y="344" font-size="11" fill="#388bfd" font-weight="bold">COMMANDS</text>
-  <text x="910" y="360" font-size="10" fill="#4a7aaa">/tdd · /commit · /plan · /review</text>
+  <line x1="824" y1="398" x2="902" y2="378" stroke="#1f3a5e" stroke-width="1" stroke-dasharray="3,2"/>
+  <circle cx="902" cy="378" r="2.5" fill="#388bfd"/>
+  <text x="910" y="374" font-size="11" fill="#388bfd" font-weight="bold">COMMANDS</text>
+  <text x="910" y="390" font-size="10" fill="#4a7aaa">/tdd · /commit · /plan · /review</text>
 
 </svg>
