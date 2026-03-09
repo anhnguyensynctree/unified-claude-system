@@ -1,89 +1,98 @@
-<svg width="1200" height="380" viewBox="0 0 1200 380" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, 'Cascadia Code', 'Fira Mono', monospace">
+<svg width="1200" height="480" viewBox="0 0 1200 480" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, 'Cascadia Code', 'Fira Mono', monospace">
   <defs>
-    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L8,3 z" fill="#388bfd"/>
-    </marker>
-    <marker id="arr-l" markerWidth="8" markerHeight="8" refX="2" refY="3" orient="auto">
-      <path d="M8,0 L8,6 L0,3 z" fill="#388bfd"/>
-    </marker>
+    <filter id="mem-glow" x="-5%" y="-10%" width="110%" height="130%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0d1117"/>
       <stop offset="100%" stop-color="#010409"/>
     </linearGradient>
+    <linearGradient id="mem-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#091320"/>
+      <stop offset="100%" stop-color="#050d18"/>
+    </linearGradient>
   </defs>
 
   <!-- Background -->
-  <rect width="1200" height="380" fill="url(#bg)" rx="12"/>
-  <rect width="1200" height="380" fill="none" stroke="#21262d" stroke-width="1" rx="12"/>
+  <rect width="1200" height="480" fill="url(#bg)" rx="12"/>
+  <rect width="1200" height="480" fill="none" stroke="#21262d" stroke-width="1" rx="12"/>
 
   <!-- Header -->
-  <text x="600" y="48" font-size="26" fill="#e6edf3" text-anchor="middle" font-weight="bold" letter-spacing="-0.5">unified-claude-system</text>
-  <text x="600" y="76" font-size="13" fill="#8b949e" text-anchor="middle">Claude Code · persistent memory · enforced conventions · automated quality gates</text>
-  <line x1="60" y1="96" x2="1140" y2="96" stroke="#21262d" stroke-width="1"/>
+  <text x="600" y="44" font-size="26" fill="#e6edf3" text-anchor="middle" font-weight="bold" letter-spacing="-0.5">unified-claude-system</text>
+  <text x="600" y="70" font-size="13" fill="#8b949e" text-anchor="middle">A unified configuration layer for Claude Code CLI — persistent memory · enforced conventions · automated quality gates</text>
+  <line x1="60" y1="88" x2="1140" y2="88" stroke="#21262d" stroke-width="1"/>
 
-  <!-- ── LEFT: Without ── -->
-  <text x="178" y="122" font-size="10" fill="#f85149" text-anchor="middle" font-weight="bold" letter-spacing="1.5">WITHOUT</text>
-  <rect x="60" y="134" width="236" height="192" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
-  <text x="178" y="158" font-size="12" fill="#8b949e" text-anchor="middle">every session</text>
-  <line x1="78" y1="166" x2="278" y2="166" stroke="#21262d" stroke-width="1"/>
-  <text x="80" y="190" font-size="12" fill="#f85149">✗  starts cold</text>
-  <text x="80" y="214" font-size="12" fill="#f85149">✗  re-explain stack</text>
-  <text x="80" y="238" font-size="12" fill="#f85149">✗  re-explain conventions</text>
-  <text x="80" y="262" font-size="12" fill="#f85149">✗  re-explain preferences</text>
-  <text x="80" y="286" font-size="12" fill="#f85149">✗  nothing persists</text>
-  <text x="80" y="310" font-size="12" fill="#8b949e">↻  repeat on every session</text>
+  <!-- ── LAYER 1: Interface (y=102, h=60) ── -->
+  <rect x="60" y="102" width="1080" height="60" rx="6" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <rect x="60" y="102" width="3" height="60" rx="2" fill="#6e7681"/>
+  <!-- Label -->
+  <text x="80" y="136" font-size="9" fill="#6e7681" font-weight="bold" letter-spacing="2">INTERFACE</text>
+  <line x1="174" y1="108" x2="174" y2="156" stroke="#21262d" stroke-width="1"/>
+  <!-- Content -->
+  <text x="190" y="122" font-size="11" fill="#e6edf3">Claude Code CLI  ·  Custom Status Line  ·  Keybindings</text>
+  <text x="190" y="146" font-size="11" fill="#6e7681">/tdd · /commit · /plan · /fork · /review-pr · /debug · /learn · /standup · /e2e · /scaffold-project · /breakdown</text>
 
-  <!-- ── CENTRE: Memory Layer ── -->
-  <text x="600" y="122" font-size="10" fill="#388bfd" text-anchor="middle" font-weight="bold" letter-spacing="1.5">MEMORY LAYER</text>
-  <rect x="400" y="134" width="400" height="192" rx="10" fill="#0d1117" stroke="#388bfd" stroke-width="1.5"/>
-  <text x="600" y="158" font-size="12" fill="#388bfd" text-anchor="middle" font-weight="bold">~/.claude/</text>
-  <line x1="418" y1="166" x2="782" y2="166" stroke="#1f3a5e" stroke-width="1"/>
+  <!-- ── LAYER 2: Hooks (y=168, h=76) ── -->
+  <rect x="60" y="168" width="1080" height="76" rx="6" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <rect x="60" y="168" width="3" height="76" rx="2" fill="#1f6feb"/>
+  <text x="80" y="210" font-size="9" fill="#1f6feb" font-weight="bold" letter-spacing="2">HOOKS</text>
+  <line x1="148" y1="174" x2="148" y2="238" stroke="#21262d" stroke-width="1"/>
+  <text x="164" y="190" font-size="11" fill="#e6edf3">PreToolUse:   .md file blocker  ·  git push reminder  ·  long-process warning</text>
+  <text x="164" y="210" font-size="11" fill="#6e7681">PostToolUse:  prettier auto-format  ·  tsc --noEmit  ·  console.log warn  ·  markdown quality check</text>
+  <text x="164" y="230" font-size="11" fill="#6e7681">Stop / Start:  session persist  ·  mem0 fact extraction  ·  continuous learning  ·  warm context inject</text>
 
-  <text x="430" y="190" font-size="12" fill="#e6edf3">MEMORY.md</text>
-  <text x="680" y="190" font-size="11" fill="#8b949e">index, always loaded</text>
+  <!-- ── LAYER 3: Rules (y=250, h=76) ── -->
+  <rect x="60" y="250" width="1080" height="76" rx="6" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <rect x="60" y="250" width="3" height="76" rx="2" fill="#388bfd"/>
+  <text x="80" y="292" font-size="9" fill="#388bfd" font-weight="bold" letter-spacing="2">RULES</text>
+  <line x1="138" y1="256" x2="138" y2="320" stroke="#21262d" stroke-width="1"/>
+  <text x="154" y="272" font-size="11" fill="#e6edf3">coding-style · testing · git-workflow · security · performance · patterns · agents</text>
+  <text x="154" y="292" font-size="11" fill="#6e7681">Contexts: dev mode (TDD enforced)  ·  review mode (blockers / suggestions)  ·  research mode (no file edits)</text>
+  <text x="154" y="312" font-size="11" fill="#6e7681">Model tiers: Haiku → repetitive worker tasks  ·  Sonnet → 90% of coding  ·  Opus → architecture / security-critical</text>
 
-  <text x="430" y="214" font-size="12" fill="#e6edf3">topics/</text>
-  <text x="680" y="214" font-size="11" fill="#8b949e">loaded on demand</text>
+  <!-- ── LAYER 4: Memory — FOUNDATION (y=332, h=122) ── -->
+  <!-- Outer glow -->
+  <rect x="58" y="330" width="1084" height="126" rx="8" fill="none" stroke="#388bfd" stroke-width="8" opacity="0.1" filter="url(#mem-glow)"/>
+  <!-- Box -->
+  <rect x="60" y="332" width="1080" height="122" rx="6" fill="url(#mem-fill)" stroke="#388bfd" stroke-width="1.5"/>
+  <rect x="60" y="332" width="3" height="122" rx="2" fill="#388bfd"/>
 
-  <text x="430" y="238" font-size="12" fill="#e6edf3">facts.json</text>
-  <text x="680" y="238" font-size="11" fill="#8b949e">mem0 extraction</text>
+  <!-- Label -->
+  <text x="80" y="362" font-size="9" fill="#388bfd" font-weight="bold" letter-spacing="2">★  MEMORY</text>
+  <line x1="162" y1="338" x2="162" y2="448" stroke="#1f3a5e" stroke-width="1"/>
 
-  <text x="430" y="262" font-size="12" fill="#e6edf3">hooks/</text>
-  <text x="680" y="262" font-size="11" fill="#8b949e">quality gates, auto-format</text>
+  <!-- Content: 2 columns -->
+  <!-- Col 1 -->
+  <text x="178" y="358" font-size="11" fill="#58a6ff" font-weight="bold">MEMORY.md</text>
+  <text x="178" y="376" font-size="11" fill="#6e7681">lean index · always injected at session start · kept under 80 lines</text>
 
-  <text x="430" y="286" font-size="12" fill="#e6edf3">rules/</text>
-  <text x="680" y="286" font-size="11" fill="#8b949e">enforced conventions</text>
+  <text x="178" y="400" font-size="11" fill="#58a6ff" font-weight="bold">facts.json</text>
+  <text x="178" y="418" font-size="11" fill="#6e7681">structured facts extracted by mem0 via Haiku · deduplicated</text>
 
-  <text x="430" y="310" font-size="12" fill="#e6edf3">commands/</text>
-  <text x="680" y="310" font-size="11" fill="#8b949e">tdd · commit · plan · review</text>
+  <!-- Col 2 -->
+  <text x="660" y="358" font-size="11" fill="#58a6ff" font-weight="bold">topics/</text>
+  <text x="660" y="376" font-size="11" fill="#6e7681">debugging · patterns · projects · hooks · agents · loaded on demand</text>
 
-  <!-- ── RIGHT: With system ── -->
-  <text x="1022" y="122" font-size="10" fill="#3fb950" text-anchor="middle" font-weight="bold" letter-spacing="1.5">WITH THIS SYSTEM</text>
-  <rect x="904" y="134" width="236" height="192" rx="8" fill="#161b22" stroke="#238636" stroke-width="1"/>
-  <text x="1022" y="158" font-size="12" fill="#8b949e" text-anchor="middle">every session</text>
-  <line x1="922" y1="166" x2="1122" y2="166" stroke="#21262d" stroke-width="1"/>
-  <text x="924" y="190" font-size="12" fill="#3fb950">✓  starts warm</text>
-  <text x="924" y="214" font-size="12" fill="#3fb950">✓  knows your codebase</text>
-  <text x="924" y="238" font-size="12" fill="#3fb950">✓  enforces conventions</text>
-  <text x="924" y="262" font-size="12" fill="#3fb950">✓  remembers yesterday</text>
-  <text x="924" y="286" font-size="12" fill="#3fb950">✓  patterns accumulate</text>
-  <text x="924" y="310" font-size="12" fill="#3fb950">✓  gets smarter over time</text>
+  <text x="660" y="400" font-size="11" fill="#58a6ff" font-weight="bold">session notes</text>
+  <text x="660" y="418" font-size="11" fill="#6e7681">last 7 days · injected at session start · auto-expired</text>
 
-  <!-- Arrows left ↔ centre -->
-  <line x1="298" y1="216" x2="396" y2="216" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arr)"/>
-  <text x="347" y="210" font-size="10" fill="#388bfd" text-anchor="middle">persists</text>
+  <!-- Memory tagline -->
+  <line x1="178" y1="428" x2="1122" y2="428" stroke="#1f3a5e" stroke-width="1"/>
+  <text x="600" y="444" font-size="11" fill="#388bfd" text-anchor="middle" font-style="italic">Persists across every session · Claude starts warm, not cold · /consolidate-memory keeps it lean</text>
 
-  <line x1="398" y1="246" x2="300" y2="246" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arr-l)"/>
-  <text x="347" y="262" font-size="10" fill="#388bfd" text-anchor="middle">loads</text>
+  <!-- Right-side layer bracket annotation -->
+  <line x1="1154" y1="102" x2="1154" y2="406" stroke="#21262d" stroke-width="1"/>
+  <line x1="1148" y1="102" x2="1154" y2="102" stroke="#21262d" stroke-width="1"/>
+  <line x1="1148" y1="406" x2="1154" y2="406" stroke="#21262d" stroke-width="1"/>
+  <text x="1170" y="218" font-size="10" fill="#3d444d" text-anchor="middle" transform="rotate(90, 1170, 218)">unified system</text>
 
-  <!-- Arrows centre ↔ right -->
-  <line x1="802" y1="216" x2="900" y2="216" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arr)"/>
-  <text x="851" y="210" font-size="10" fill="#388bfd" text-anchor="middle">loads</text>
-
-  <line x1="902" y1="246" x2="804" y2="246" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arr-l)"/>
-  <text x="851" y="262" font-size="10" fill="#388bfd" text-anchor="middle">persists</text>
-
-  <!-- Footer -->
-  <line x1="60" y1="344" x2="1140" y2="344" stroke="#21262d" stroke-width="1"/>
-  <text x="600" y="366" font-size="11" fill="#3d444d" text-anchor="middle">github.com/anhnguyensynctree/unified-claude-system</text>
+  <!-- Down arrows between layers (right side) -->
+  <text x="1130" y="138" font-size="14" fill="#21262d" text-anchor="middle">↓</text>
+  <text x="1130" y="204" font-size="14" fill="#21262d" text-anchor="middle">↓</text>
+  <text x="1130" y="286" font-size="14" fill="#21262d" text-anchor="middle">↓</text>
+  <text x="1130" y="324" font-size="14" fill="#388bfd" text-anchor="middle">↓</text>
 </svg>
