@@ -328,7 +328,7 @@ For any additional packages added by the user, apply this rule table:
 
 Determine the absolute path of the project root. Compute the encoded path:
 - Take the absolute path, replace each `/` with `-`
-- Example: `/Users/Lewis/projects/my-app` → `-Users-Lewis-projects-my-app`
+- Example: `/Users/Annie/projects/my-app` → `-Users-Annie-projects-my-app`
 - Memory root: `~/.claude/projects/[encoded-path]/memory/`
 
 Create the full tiered memory structure:

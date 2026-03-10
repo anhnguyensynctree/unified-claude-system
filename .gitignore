@@ -34,3 +34,7 @@ plugins/
 # Local cache and settings
 *-cache.json
 settings.local.json
+
+# Auto-memory and image cache
+memory/
+image-cache/

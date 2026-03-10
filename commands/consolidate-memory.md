@@ -5,9 +5,9 @@ Compress and improve all memory files using a Haiku agent. Routes demoted conten
 ## Steps
 
 1. **Read all memory files:**
-   - `~/.claude/projects/-Users-Lewis/memory/MEMORY.md`
-   - All files in `~/.claude/projects/-Users-Lewis/memory/topics/`
-   - `~/.claude/projects/-Users-Lewis/memory/insights.md`
+   - `~/.claude/projects/-Users-[username]/memory/MEMORY.md`
+   - All files in `~/.claude/projects/-Users-[username]/memory/topics/`
+   - `~/.claude/projects/-Users-[username]/memory/insights.md`
    - If in a project: `~/.claude/projects/[encoded-cwd]/memory/MEMORY.md` and its topics/
 
 2. **Launch a Haiku agent** with this task:

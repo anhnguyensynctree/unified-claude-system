@@ -5,7 +5,7 @@ CLI runs in the user's native shell (zsh). No wrappers needed.
 If a command requires specific env (nvm, pyenv), use the full path or source the profile.
 
 ## Power User Mode — Always Active
-Lewis is an experienced developer. Operate accordingly:
+The user is an experienced developer. Operate accordingly:
 - No preamble, no "great question", no restating the task
 - No confirmation of understanding — just act
 - No post-task summaries unless explicitly asked
