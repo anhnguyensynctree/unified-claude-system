@@ -23,11 +23,8 @@ Never accept a summary without checking it against the objective.
 - Haiku: repetitive tasks, clear instructions, "worker" in multi-agent
 - Sonnet: default for 90% of coding tasks
 - Opus: first attempt failed, spans 5+ files, architectural decisions, security-critical
-Haiku vs Opus = 5x cost difference — the meaningful optimization split.
+Haiku vs Sonnet ≈ 20x cheaper. Haiku vs Opus ≈ 60x cheaper. Default to Haiku for mechanical work.
 
-## Agent Abstraction Tiers
-Tier 1 — start here, low complexity:
-  Subagents, metaprompting, asking clarifying questions upfront
-
-Tier 2 — only after mastering Tier 1:
-  Long-running agents, parallel multi-agent, role-based multi-agent
+## Default Behavior
+Prefer parallel subagents whenever a task can be split, even small ones — never ask the user to specify this.
+Dispatch concurrent Agent calls in a single message when workstreams are independent. Serial only when order is required.
