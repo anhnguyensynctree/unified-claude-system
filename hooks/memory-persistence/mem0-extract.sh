@@ -15,3 +15,4 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
 fi
 
 python3 "$HOME/.claude/memory/mem0.py" extract "$TRANSCRIPT_PATH" 2>&1 >&2
+python3 "$HOME/.claude/memory/mem0.py" handoff "$TRANSCRIPT_PATH" "$(date +%Y-%m-%d)" 2>&1 >&2

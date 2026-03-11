@@ -17,18 +17,26 @@ Patterns worth extracting:
 - Corrections you had to make to Claude's default approach
 
 ## Output Location
-Learned skills: ~/.claude/skills/learned/[pattern-name].md
-Session logs: ~/.claude/sessions/YYYY-MM-DD-[topic].tmp
+Learned skills: `~/.claude/skills/learned/[pattern-name].md`
+Session logs: `~/.claude/sessions/YYYY-MM-DD-session.tmp` (auto-populated by mem0 handoff)
 
-## Session Log Format
-Each .tmp file should contain:
-- What approaches WORKED (with evidence)
-- What approaches did NOT work
-- What hasn't been attempted yet
-- What's left to do
-- Key decisions and why they were made
+## Observation Routing — Always Follow
+When extracting patterns, route to the correct topic file:
 
-Create one file per session. Do not append to old session files.
+| Content type | Target file |
+|---|---|
+| Hook fix, hook config change, hook pattern | `~/.claude/projects/-Users-Lewis/memory/topics/hooks.md` |
+| Project scaffold, stack decision, monorepo setup | `~/.claude/projects/-Users-Lewis/memory/topics/scaffold.md` |
+| Agent delegation, model selection, subagent pattern | `~/.claude/projects/-Users-Lewis/memory/topics/agents.md` |
+| Bug fix insight, non-obvious diagnosis, debugging technique | `~/.claude/projects/-Users-Lewis/memory/topics/debugging.md` |
+| API design, architecture decision, code pattern | `~/.claude/projects/-Users-Lewis/memory/topics/patterns.md` |
+| Project history, stack, status, per-project decision | `~/.claude/projects/-Users-Lewis/memory/topics/projects.md` |
+| Cross-project patterns, insights spanning multiple topics | `~/.claude/projects/-Users-Lewis/memory/insights.md` |
+| User preference, workflow change | `~/.claude/projects/-Users-Lewis/memory/MEMORY.md` |
+
+Never write to MEMORY.md for domain-specific content — route to topic files. MEMORY.md is the index only.
+
+Before writing to any topic file, grep the target file for semantically similar content. If a match exists, UPDATE the existing entry rather than appending a new one.
 
 ## Manual Extraction
 Run /learn mid-session to extract a pattern immediately.

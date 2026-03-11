@@ -39,6 +39,10 @@ Rules:
 - NOOP: already captured (equivalent info exists)
 Be conservative: prefer NOOP over duplicate ADD."""
 
+HANDOFF_SYSTEM = """Extract a session handoff. Output ONLY valid JSON:
+{"decisions":["choice + WHY"],"next_steps":["ordered actions"],"blockers":["unresolved issues"],"open_questions":["things to revisit"],"files":["paths modified"]}
+Max 5 per list. Empty list [] if none. Be specific."""
+
 
 def api_call(system: str, user: str) -> str:
     if not ANTHROPIC_API_KEY:
@@ -209,6 +213,55 @@ def extract(transcript_path: str):
     )
 
 
+def handoff(transcript_path: str, date: str):
+    if not ANTHROPIC_API_KEY:
+        return
+
+    try:
+        conversation = read_transcript(transcript_path)
+    except RuntimeError as e:
+        print(f"[mem0-handoff] {e}", file=sys.stderr)
+        return
+
+    if len(conversation.strip()) < 100:
+        print("[mem0-handoff] Conversation too short — skipping", file=sys.stderr)
+        return
+
+    try:
+        raw = api_call(HANDOFF_SYSTEM, f"Conversation:\n{conversation}")
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("Expected dict")
+    except Exception as e:
+        print(f"[mem0-handoff] Failed: {e}", file=sys.stderr)
+        return
+
+    session_file = Path.home() / ".claude" / "sessions" / f"{date}-session.tmp"
+    if not session_file.exists():
+        print(f"[mem0-handoff] Session file not found: {session_file}", file=sys.stderr)
+        return
+
+    sections = [
+        ("Decisions", "decisions"),
+        ("Next steps", "next_steps"),
+        ("Blockers", "blockers"),
+        ("Open questions", "open_questions"),
+        ("Files modified", "files"),
+    ]
+    lines = []
+    for label, key in sections:
+        items = data.get(key, [])
+        if items:
+            lines.append(f"**{label}:** " + "; ".join(str(i) for i in items))
+
+    if lines:
+        with open(session_file, "a") as f:
+            f.write("\n\n---\n## Handoff\n" + "\n".join(lines) + "\n")
+        print(f"[mem0-handoff] Written to {session_file}", file=sys.stderr)
+    else:
+        print("[mem0-handoff] Nothing to write", file=sys.stderr)
+
+
 def retrieve(facts_path: Path, global_facts_path: Path | None = None) -> str:
     global_facts = []
     if global_facts_path and global_facts_path.exists() and global_facts_path != facts_path:
@@ -233,6 +286,12 @@ def main():
             print("[mem0] extract requires <transcript_path>", file=sys.stderr)
             sys.exit(1)
         extract(sys.argv[2])
+
+    elif cmd == "handoff":
+        if len(sys.argv) < 4:
+            print("[mem0] handoff requires <transcript_path> <date>", file=sys.stderr)
+            sys.exit(1)
+        handoff(sys.argv[2], sys.argv[3])
 
     elif cmd == "retrieve":
         if len(sys.argv) < 3:

@@ -36,9 +36,9 @@ Compress and improve all memory files using a Haiku agent. Routes demoted conten
    > - Example: "Auth solved same way in 3 projects — see patterns.md"
    >
    > **Decay pruning — prune if ALL conditions met:**
-   > - `updated:` date is older than 90 days from today
-   > - `importance:low`
-   > - No cross-references from other entries
+   > - `importance:low` AND `updated:` older than 7 days AND no cross-references
+   > - `importance:medium` AND `updated:` older than 30 days AND no cross-references
+   > - `importance:high` — never prune, only merge duplicates
    > Move pruned entries to `topics/archived.md` with a note of the prune date — never delete outright.
    >
    > **Deduplication — before keeping any entry:**

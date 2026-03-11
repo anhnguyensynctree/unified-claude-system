@@ -13,20 +13,9 @@ if [ ! -f "$SESSION_FILE" ]; then
 # Session: $DATE
 Project: $(basename "${CLAUDE_PROJECT_DIR:-unknown}")
 Branch: $(git branch --show-current 2>/dev/null || echo "unknown")
-Started: unknown
 Ended: $TIME
 
-## What was worked on
-
-## Approaches that WORKED (with evidence)
-
-## Approaches that did NOT work
-
-## What hasn't been attempted yet
-
-## What's left to do
-
-## Key decisions and why
+<!-- Handoff auto-populated by mem0 at SessionEnd -->
 EOF
   echo "[SessionEnd] Session file created: $SESSION_FILE" >&2
 else

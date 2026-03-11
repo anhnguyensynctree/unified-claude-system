@@ -10,27 +10,8 @@ mkdir -p "$SESSIONS_DIR" "$LEARNED_DIR"
 
 SESSION_FILE="$SESSIONS_DIR/$DATE-session.tmp"
 
-if [ ! -f "$SESSION_FILE" ]; then
-  cat > "$SESSION_FILE" << EOF
-# Session: $DATE
-Project: $(basename "${CLAUDE_PROJECT_DIR:-unknown}")
-Branch: $(git branch --show-current 2>/dev/null || echo "unknown")
-Started: unknown
-Ended: $TIME
-
-## What was worked on
-
-## Approaches that WORKED (with evidence)
-
-## Approaches that did NOT work
-
-## What hasn't been attempted yet
-
-## What's left to do
-
-## Key decisions and why
-EOF
-else
+# session-end.sh (Stop hook) handles file creation — just append timestamp if already exists
+if [ -f "$SESSION_FILE" ]; then
   echo "" >> "$SESSION_FILE"
   echo "Session ended: $TIME" >> "$SESSION_FILE"
 fi

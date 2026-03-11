@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo|pytest)' && echo '[Hook] Long-running process detected \u2014 consider using run_in_background or a separate terminal' >&2 || true"
+            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo|pytest)' && echo '[Hook] Long-running process detected — consider using run_in_background or a separate terminal' >&2 || true"
           }
         ]
       },
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' && echo \"$FILE\" | grep -qvE '(README|CLAUDE|codemap|plan-|research-|review-|session|\\.claude/|references/|docs/|specs/|decisions/)' && echo 'Blocked: avoid creating loose .md files. Only README.md, CLAUDE.md, and .claude/ session files are allowed.' >&2 && exit 2 || true"
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' && echo \"$FILE\" | grep -qvE '(README|CLAUDE|codemap|plan-|research-|review-|session|\\.claude/|references/|docs/|specs/|decisions/|packages/agents/)' && echo 'Blocked: avoid creating loose .md files. Only README.md, CLAUDE.md, .claude/ files, and packages/agents/ system files are allowed.' >&2 && exit 2 || true"
           }
         ]
       },
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' || exit 0; [ -f \"$FILE\" ] || exit 0; LINES=$(grep -c '[^[:space:]]' \"$FILE\" 2>/dev/null || echo 0); HAS_HEADING=$(grep -c '^#' \"$FILE\" 2>/dev/null || echo 0); HAS_PLACEHOLDER=$(grep -cE '^\\[|^TODO|^\\.\\.\\.' \"$FILE\" 2>/dev/null || echo 0); [ \"$HAS_HEADING\" -eq 0 ] && echo '[Hook] .md missing heading \u2014 add a # title' >&2; [ \"$LINES\" -lt 5 ] && echo \"[Hook] .md too sparse ($LINES lines) \u2014 every .md must justify its token cost\" >&2; [ \"$HAS_PLACEHOLDER\" -gt 0 ] && echo '[Hook] .md has unfilled placeholders \u2014 complete or remove them' >&2; true"
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' || exit 0; [ -f \"$FILE\" ] || exit 0; LINES=$(grep -c '[^[:space:]]' \"$FILE\" 2>/dev/null || echo 0); HAS_HEADING=$(grep -c '^#' \"$FILE\" 2>/dev/null || echo 0); HAS_PLACEHOLDER=$(grep -cE '^\\[|^TODO|^\\.\\.\\.' \"$FILE\" 2>/dev/null || echo 0); [ \"$HAS_HEADING\" -eq 0 ] && echo '[Hook] .md missing heading — add a # title' >&2; [ \"$LINES\" -lt 5 ] && echo \"[Hook] .md too sparse ($LINES lines) — every .md must justify its token cost\" >&2; [ \"$HAS_PLACEHOLDER\" -gt 0 ] && echo '[Hook] .md has unfilled placeholders — complete or remove them' >&2; true"
           }
         ]
       },
@@ -74,7 +74,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); [ -f \"$FILE\" ] && grep -n 'console\\.log' \"$FILE\" && echo '[Hook] console.log found \u2014 remove before committing' >&2 || true"
+            "command": "FILE=$(jq -r '.tool_input.file_path'); [ -f \"$FILE\" ] && grep -n 'console\\.log' \"$FILE\" && echo '[Hook] console.log found — remove before committing' >&2 || true"
           }
         ]
       },
@@ -187,5 +187,6 @@
     "supabase@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": true
   },
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "voiceEnabled": true
 }
