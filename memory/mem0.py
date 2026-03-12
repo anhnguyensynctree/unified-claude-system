@@ -213,7 +213,7 @@ def extract(transcript_path: str):
     )
 
 
-def handoff(transcript_path: str, date: str):
+def handoff(transcript_path: str, date: str, project: str = "unknown"):
     if not ANTHROPIC_API_KEY:
         return
 
@@ -236,10 +236,13 @@ def handoff(transcript_path: str, date: str):
         print(f"[mem0-handoff] Failed: {e}", file=sys.stderr)
         return
 
-    session_file = Path.home() / ".claude" / "sessions" / f"{date}-session.tmp"
+    sessions_dir = Path.home() / ".claude" / "sessions"
+    session_file = sessions_dir / f"{date}-{project}-session.tmp"
+
+    # Create session file if session-end.sh hasn't run yet (race condition safety)
     if not session_file.exists():
-        print(f"[mem0-handoff] Session file not found: {session_file}", file=sys.stderr)
-        return
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(f"# Session: {date}\nProject: {project}\n\n")
 
     sections = [
         ("Decisions", "decisions"),
@@ -289,9 +292,10 @@ def main():
 
     elif cmd == "handoff":
         if len(sys.argv) < 4:
-            print("[mem0] handoff requires <transcript_path> <date>", file=sys.stderr)
+            print("[mem0] handoff requires <transcript_path> <date> [project]", file=sys.stderr)
             sys.exit(1)
-        handoff(sys.argv[2], sys.argv[3])
+        project = sys.argv[4] if len(sys.argv) > 4 else "unknown"
+        handoff(sys.argv[2], sys.argv[3], project)
 
     elif cmd == "retrieve":
         if len(sys.argv) < 3:

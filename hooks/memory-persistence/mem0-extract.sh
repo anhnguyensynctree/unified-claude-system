@@ -3,6 +3,7 @@
 
 HOOK_INPUT=$(cat)
 TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
+PROJECT=$(basename "${CLAUDE_PROJECT_DIR:-$(pwd)}")
 
 # Load API key from secure file — not from shell environment (so Claude Code uses subscription billing)
 if [ -f "$HOME/.config/anthropic/key" ]; then
@@ -15,4 +16,4 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
 fi
 
 python3 "$HOME/.claude/memory/mem0.py" extract "$TRANSCRIPT_PATH" 2>&1 >&2
-python3 "$HOME/.claude/memory/mem0.py" handoff "$TRANSCRIPT_PATH" "$(date +%Y-%m-%d)" 2>&1 >&2
+python3 "$HOME/.claude/memory/mem0.py" handoff "$TRANSCRIPT_PATH" "$(date +%Y-%m-%d)" "$PROJECT" 2>&1 >&2

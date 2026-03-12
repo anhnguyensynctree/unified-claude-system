@@ -4,15 +4,17 @@
 SESSIONS_DIR="$HOME/.claude/sessions"
 DATE=$(date +%Y-%m-%d)
 TIME=$(date +%H:%M)
-SESSION_FILE="$SESSIONS_DIR/$DATE-session.tmp"
+PROJECT=$(basename "${CLAUDE_PROJECT_DIR:-$(pwd)}")
+SESSION_FILE="$SESSIONS_DIR/$DATE-$PROJECT-session.tmp"
 
 mkdir -p "$SESSIONS_DIR"
 
 if [ ! -f "$SESSION_FILE" ]; then
   cat > "$SESSION_FILE" << EOF
 # Session: $DATE
-Project: $(basename "${CLAUDE_PROJECT_DIR:-unknown}")
-Branch: $(git branch --show-current 2>/dev/null || echo "unknown")
+Project: $PROJECT
+Dir: ${CLAUDE_PROJECT_DIR:-$(pwd)}
+Branch: $(git -C "${CLAUDE_PROJECT_DIR:-$(pwd)}" branch --show-current 2>/dev/null || echo "unknown")
 Ended: $TIME
 
 <!-- Handoff auto-populated by mem0 at SessionEnd -->
