@@ -15,5 +15,5 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     exit 0
 fi
 
-python3 "$HOME/.claude/memory/mem0.py" extract "$TRANSCRIPT_PATH" 2>&1 >&2
-python3 "$HOME/.claude/memory/mem0.py" handoff "$TRANSCRIPT_PATH" "$(date +%Y-%m-%d)" "$PROJECT" 2>&1 >&2
+python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" extract "$TRANSCRIPT_PATH" 2>&1 >&2
+python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" handoff "$TRANSCRIPT_PATH" "$(date +%Y-%m-%d)" "$PROJECT" 2>&1 >&2

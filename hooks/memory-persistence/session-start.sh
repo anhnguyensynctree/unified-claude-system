@@ -27,7 +27,7 @@ ENCODED_PATH=$(echo "$CWD" | sed 's|/|-|g')
 FACTS_PATH="$HOME/.claude/projects/$ENCODED_PATH/memory/facts.json"
 GLOBAL_FACTS="$HOME/.claude/projects/-Users-Lewis/memory/facts.json"
 
-FACTS_OUTPUT=$(python3 "$HOME/.claude/memory/mem0.py" retrieve "$FACTS_PATH" "$GLOBAL_FACTS" 2>/dev/null)
+FACTS_OUTPUT=$(python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" retrieve "$FACTS_PATH" "$GLOBAL_FACTS" 2>/dev/null)
 if [ -n "$FACTS_OUTPUT" ]; then
   echo "## Retrieved Facts"
   echo ""
