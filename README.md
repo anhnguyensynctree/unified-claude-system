@@ -75,7 +75,11 @@ With this:      Claude already knows. Every session, from the first message.
 │   ├── plan.md                  ← Sprint / project planning mode
 │   ├── security.md              ← Security audit mode
 │   ├── debug.md                 ← Debugging / root cause analysis mode
-│   └── devops.md                ← CI/CD / infrastructure / deployment mode
+│   ├── devops.md                ← CI/CD / infrastructure / deployment mode
+│   ├── refactor.md              ← Refactoring / tech debt reduction mode
+│   ├── performance.md           ← Profiling / optimization mode
+│   ├── data.md                  ← Data pipelines / ML / analytics mode
+│   └── docs.md                  ← Documentation / runbooks / ADR mode
 │
 ├── commands/                    ← Slash command definitions (/command-name)
 │   ├── tdd.md                   ← RED → GREEN → IMPROVE workflow
@@ -101,10 +105,16 @@ With this:      Claude already knows. Every session, from the first message.
 │       ├── pre-compact.sh       ← Saves state before context compaction
 │       └── mem0-extract.sh      ← Extracts structured facts from transcripts
 │
+├── standards/
+│   └── testing-pipeline.md      ← 6-layer test standard for multi-stage pipelines
+│
 ├── skills/
 │   ├── continuous-learning/
 │   │   ├── SKILL.md             ← Skill definition
 │   │   └── evaluate-session.sh  ← Pattern extraction on Stop hook
+│   ├── oms.md                   ← One-Man-Show multi-agent orchestration engine
+│   ├── oms-train.md             ← Agent persona training workflow
+│   ├── compact-agent-memory.md  ← Compress per-agent MEMORY.md files
 │   ├── strategic-compact.md
 │   └── codemap-updater.md
 │
@@ -207,6 +217,10 @@ Loaded on demand by CLAUDE.md when the work type changes. Zero token cost until 
 | Security | `security.md` | AppSec engineer, OWASP-anchored | security audits or threat modeling |
 | Debugging | `debug.md` | Systematic debugger, hypothesis-driven | diagnosing failures |
 | DevOps | `devops.md` | Senior DevOps/SRE, automation-first | CI/CD, infra, deployment |
+| Refactor | `refactor.md` | Clean code engineer, DRY-obsessed | refactoring or reducing tech debt |
+| Performance | `performance.md` | Performance engineer, profiler-first | profiling, optimizing, benchmarking |
+| Data | `data.md` | Senior data engineer, pipeline-safety bias | data pipelines, ML, analytics |
+| Documentation | `docs.md` | Technical writer with developer empathy | writing docs, runbooks, ADRs |
 
 **review.md** enforces structured output:
 ```
@@ -312,6 +326,9 @@ MEMORY.md is a lean index. Topic files load only when the domain matches the cur
 | `/standup` | `git log --since=yesterday` → Yesterday / Today / Blockers format, max 5 bullets |
 | `/test-coverage` | Run coverage report, list files below 80%, write tests for highest-priority gaps |
 | `/update-codemaps` | Scan project and write/update `.claude/codemap.md` (max 100 lines, navigation only) |
+| `/pipeline-init` | Set up the 6-layer test standard for a multi-stage pipeline or process component |
+| `/oms <intent>` | Orchestrate a One-Man-Show multi-agent discussion — multiple personas debate and synthesize |
+| `/compact-agent-memory [agent]` | Compress per-agent MEMORY.md files when they exceed 80 lines |
 
 ### mem0 — Structured Fact Extraction
 
@@ -409,6 +426,55 @@ Format:
 ```
 
 Why this matters: without a codemap, Claude re-explores the project on every session. A current codemap eliminates that overhead entirely.
+
+#### `skills/oms.md` — One-Man-Show Multi-Agent Engine
+
+OMS orchestrates multiple AI personas (CTO, Product Manager, Executive Coordinator, etc.) as a simulated discussion panel. Each agent has a persona file, a memory file, and is dispatched in parallel.
+
+Invoke with `/oms <your intent>` — Claude loads shared context files, dispatches agent calls concurrently, collects their outputs, and synthesizes a final recommendation.
+
+Agent roles (V1 — Engineering Division):
+
+| Role | Responsibility |
+|---|---|
+| `executive-coordinator` | Keeps discussion focused, resolves deadlocks |
+| `cto` | Technical architecture, risk, build-vs-buy |
+| `product-manager` | User value, scope, timeline trade-offs |
+
+Each agent's memory is stored at `.claude/agents/[role]/MEMORY.md` and persists between `/oms` runs, allowing agents to remember prior decisions.
+
+#### `skills/compact-agent-memory.md`
+
+Compresses per-agent MEMORY.md files when they grow noisy or exceed 80 lines. Works the same way as `/consolidate-memory` but scoped to agent memory paths rather than project memory.
+
+Run after any `/oms` session that modified agent state. The OMS skill flags when this is needed.
+
+---
+
+### Standards
+
+**Directory:** `~/.claude/standards/`
+
+Reusable engineering standards that apply across projects — referenced by context modes and slash commands when the relevant domain is active.
+
+| File | Applies to |
+|---|---|
+| `testing-pipeline.md` | Any multi-stage data or processing pipeline |
+
+#### `testing-pipeline.md` — 6-Layer Pipeline Test Standard
+
+Defines the required test layers for any architecture where data flows through a sequence of stages (ingest → transform → serve, validate → reserve → notify, etc.).
+
+| Layer | Location | Catches |
+|---|---|---|
+| Unit | `tests/<stage>/` | Component internals, branches, error paths |
+| Contract | `tests/contracts/` | Schema field names, types, list validators |
+| Seam | `tests/seams/` | Stage N output → stage N+1 real call, no full mocks |
+| Resilience | `tests/resilience/` | Empty inputs, service failures, partial batches |
+| Invariant | `tests/invariants/` | Score bounds, enum sets, output shape consistency |
+| Integration | `tests/integration/` | Full multi-stage chain, external I/O mocked at true boundary only |
+
+Use `/pipeline-init` to scaffold this structure automatically for any new pipeline.
 
 ---
 
