@@ -26,6 +26,25 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 
 **If exists:** skip entirely.
 
+**Company context check** (runs once, on first `/oms` in any project):
+Check if `~/.claude/agents/shared-context/product/company-direction.md` contains `## What We Are Building` with only generic OMS content (i.e., it describes "a virtual AI company" rather than the CEO's actual project).
+
+If generic: before routing the task, present to CEO:
+"Before I route this task, I need to understand your company context so all agents reason from accurate ground truth. A few questions:
+
+1. What are you building? (product, service, or personal project — one sentence)
+2. Who is it for? (target user or yourself)
+3. What is the current phase? (idea, MVP, live, scaling)
+4. What is the tech stack? (frameworks, database, deployment)
+5. What is explicitly out of scope right now?
+6. Any strategic constraints? (solo builder, no external funding, specific timeline)
+
+Answer these and I'll update the company and product direction files, then route your task."
+
+On CEO answer: update `company-direction.md` and `product-direction.md` with the CEO's actual answers. Then proceed with Step 1 (Router).
+
+If not generic: skip — context already set.
+
 ---
 
 ## Before Running

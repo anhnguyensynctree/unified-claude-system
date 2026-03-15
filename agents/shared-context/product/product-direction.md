@@ -1,23 +1,12 @@
 # Product Direction
 
-## What This File Is
-The current product phase, active scope, and what is explicitly out of scope. Loaded by every agent. Changes more frequently than company direction as the product evolves.
-
-## Why It Exists
-Agents need to know what is actively being built vs. what is deferred. A Backend Dev who doesn't know the web dashboard is dormant will design for it. A PM who doesn't know CMO division isn't active yet will route tasks to it. This file keeps all agents aligned on the current build state.
-
-## How It Gets Updated
-After each strategic decision — either via CEO direct edit or after an escalation that changed product direction. Task-level decisions (features, scoping) are logged in the decisions section below.
-
----
-
-This file is loaded by all agents across all departments. It defines current product priorities, active scope, and what is out of scope for V1.
-
 ## Current Phase: V1 — Engineering Division
 Proving the round-based discussion model before expanding to CMO and CFO divisions.
 
 ## V1 Scope — Active
-- Executive Coordinator
+- Router
+- Facilitator
+- Synthesizer
 - CTO
 - Product Manager
 - Engineering Manager

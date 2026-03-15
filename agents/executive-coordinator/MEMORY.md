@@ -1,7 +1,0 @@
-# Executive Coordinator Memory
-
-<!-- Auto-generated from facts.json. Do not edit directly. -->
-<!-- Edit via: python3 packages/agents/memory/agent-mem-extract.py render executive-coordinator -->
-
-## Learned Facts
-<!-- No facts extracted yet. Facts accumulate after each /oms task. -->

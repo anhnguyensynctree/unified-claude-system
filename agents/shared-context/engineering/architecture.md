@@ -25,7 +25,7 @@ This file is loaded by all engineering agents. It records active architectural d
 | Package | Purpose |
 |---------|---------|
 | `apps/web` | Next.js CEO dashboard — dormant in V1 |
-| `packages/agents` | Agent personas, discussion engine, escalation logic |
+| `~/.claude/agents` | Agent personas, discussion engine, escalation logic |
 | `packages/ui` | Shared component library |
 | `packages/database` | Supabase client, schema, migrations |
 | `packages/config` | Shared tsconfig, eslint, prettier |

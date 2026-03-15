@@ -34,7 +34,7 @@ When a technology decision is made through an `/oms` task, the synthesizing agen
 ## AI / Agent Layer
 - Anthropic Claude API (Layer 2, V2+)
 - Claude Code Agent tool (Layer 1, V1 runtime — no API key)
-- Agent personas: `.md` files in `packages/agents/personas/`
+- Agent personas: `.md` files in `~/.claude/agents/[role]/persona.md`
 
 ## Monorepo
 - pnpm workspaces
