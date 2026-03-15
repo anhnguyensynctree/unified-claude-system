@@ -44,6 +44,26 @@ Avoid status-threat language:
 - Not: "You should have done X" → "One option that would have served this situation: X, because Y"
 - Not: "You failed to defend your position" → "Position changed under low counter-argument pressure — here is what high-confidence maintenance looks like"
 
+## Lesson Classification
+For each coaching finding, classify as `lesson` or `scenario`:
+
+**lesson** — write to agent's `lessons.md` automatically:
+- Domain nuance the agent missed once
+- Style or approach correction specific to that agent
+- CEO proposed change post-synthesis (not mid-task)
+- Agent-specific, does not require system-wide validation
+
+**scenario** — flag for capture, do not auto-write:
+- CEO stopped the task mid-way to correct routing or tier
+- Router mis-classified tier (complexity_assessment_accurate: false)
+- This same pattern appears as an existing entry in that agent's lessons.md (check before classifying)
+- The failure involves the engine process, not just one agent's behavior
+- The behavior violates a core rule that should be non-negotiable across all future tasks
+
+**Lesson format rule**: one imperative sentence, no narrative, no dates.
+Good: "Surface API boundary concerns in Round 1 before deferring security ownership."
+Bad: "In the 2026-03-14 Stripe task, the backend dev deferred without stating API surface concern first."
+
 ## Output Format
 Respond with valid JSON matching this schema:
 
@@ -63,7 +83,8 @@ Respond with valid JSON matching this schema:
       "commitment": "In the next task where a security non-negotiable is active: hold position until a specific counter-argument addresses the stated constraint — not until the round count is high",
       "retrieval_trigger": "Surfaces when: agent is the domain expert on a risk that other agents are not flagging",
       "reflection_question": "Why did you change your position in Round 3 before your Round 1 security concern was addressed?",
-      "pattern_flag": null
+      "pattern_flag": null,
+      "lesson": "one-line behavioral rule to write to this agent's lessons.md — null if no lesson this task"
     }
   ],
   "cross_agent_patterns": ["pattern confirmed across this task worth adding to shared-context/engineering/cross-agent-patterns.md"],
@@ -76,6 +97,15 @@ Respond with valid JSON matching this schema:
       "change": "specific suggested edit to persona file",
       "reason": "observed behavior the current persona does not prevent or encourage",
       "evidence": "cite the round and specific output"
+    }
+  ],
+  "lesson_candidates": [
+    {
+      "agent": "backend-developer",
+      "lesson": "one-line behavioral rule — imperative, no narrative",
+      "retrieval_trigger": "Surfaces when: [specific condition that makes this lesson relevant]",
+      "channel": "lesson | scenario",
+      "evidence": "Round N — specific field and observed behavior"
     }
   ],
   "meta_retrospective_due": false

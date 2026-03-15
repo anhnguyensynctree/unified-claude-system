@@ -239,16 +239,26 @@ Trainer always runs. Scope scales by tier:
 | Stage-Gate 4 failed | Synthesizer specifically — traceability discipline |
 
 Trainer call:
-- Input: `trainer/persona.md` + MEMORY + `validation-criteria.md` + relevant log sections (lazy — load only what the tier scope requires)
-- Instruction: "Evaluate this completed task per the tier scope."
+- Input: `trainer/persona.md` + lessons.md + MEMORY + `validation-criteria.md` + relevant log sections (lazy — load only what the tier scope requires)
+- Instruction: "Evaluate this completed task per the tier scope. For each agent, check their lessons.md before classifying — a lesson already present there should be classified as `channel: scenario`, not re-written."
 
-For each evaluated agent: inject new behavioral facts to MEMORY:
-```bash
-python3 ~/.claude/agents/memory/agent-mem-extract.py inject [agent] "fact"
-```
+**After trainer output:**
+
+1. **Write lessons** — for each `lesson_candidates` entry with `channel: "lesson"`:
+   - Check `~/.claude/agents/[agent]/lessons.md` for a matching rule (4-word fingerprint match)
+   - If not present: append `[date] | [task-id]: [lesson]` to that agent's `lessons.md`
+   - If already present: upgrade to `channel: "scenario"` — flag for Step 8
+
+2. **Inject memory facts** — for each evaluated agent:
+   ```bash
+   python3 ~/.claude/agents/memory/agent-mem-extract.py inject [agent] "fact"
+   ```
+
+3. **Write cross-agent patterns** — if `cross_agent_patterns` non-empty: append to `shared-context/engineering/cross-agent-patterns.md`
+
+4. **Flag scenario candidates** — collect all `lesson_candidates` with `channel: "scenario"` → pass to Step 8
 
 If `complexity_assessment_accurate: false`: inject correction to Router memory.
-If `cross_agent_patterns` non-empty: append to `shared-context/engineering/cross-agent-patterns.md`.
 If `meta_retrospective_due: true`: notify CEO — "Run `/compact-agent-memory [agent]`."
 
 ## Step 7 — Compact Check
@@ -257,11 +267,28 @@ python3 ~/.claude/agents/memory/agent-mem-extract.py check
 ```
 Over threshold → tell CEO: "[role] memory is [N] lines — run `/compact-agent-memory [role]` when convenient."
 
-## Step 8 — CEO Feedback
+## Step 8 — CEO Feedback + Scenario Capture
+
+**Memory routing** (always):
 - Routing/complexity correction → Router memory
 - Synthesis traceability correction → Synthesizer memory
 - Process correction (false convergence, livelock missed) → Facilitator memory
 - Cancellation → Router memory (training signal for future tier calls)
+
+**Scenario capture triggers** (run `/oms-capture` when any apply):
+- CEO stopped the task mid-way to correct routing or tier → always capture
+- Trainer produced any `lesson_candidates` with `channel: "scenario"` → present each to CEO
+- CEO overrides the synthesis decision post-delivery → flag for capture
+
+When capture is triggered, present to CEO:
+```
+Scenario capture available for this task:
+[agent/engine]: [what failed] — [what correct behavior is]
+Run /oms-capture to extract as a training scenario? (y/n)
+```
+
+If CEO declines: log the skip in the task log under `## Capture Decision` with reason.
+If CEO approves: run `/oms-capture [task-id]`.
 
 ---
 
