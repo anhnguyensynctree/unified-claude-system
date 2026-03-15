@@ -53,3 +53,7 @@ Agent-specific fields:
   "risk_level": "low | medium | high"
 }
 ```
+
+## Output Rules
+
+**`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.

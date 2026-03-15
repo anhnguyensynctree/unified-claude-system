@@ -259,7 +259,8 @@ Trainer always runs. Scope scales by tier:
 
 Trainer call:
 - Input: `trainer/persona.md` + lessons.md + MEMORY + `validation-criteria.md` + relevant log sections (lazy — load only what the tier scope requires)
-- Instruction: "Evaluate this completed task per the tier scope. For each agent, check their lessons.md before classifying — a lesson already present there should be classified as `channel: scenario`, not re-written."
+- Context to inject: `tier`, `activated_agents`, and `agent_task_counts` — count of prior tasks per activated agent, read from `~/.claude/agents/training/results.tsv` or `topics/oms-history.md`
+- Instruction: "Evaluate this completed task per the tier scope. Tier: [N]. Activated agents: [list]. Agent task counts: { [role]: [N], ... }. For each agent, check their lessons.md before classifying — a lesson already present should be `channel: scenario`, not re-written."
 
 **After trainer output:**
 

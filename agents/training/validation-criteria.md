@@ -156,6 +156,7 @@ The trainer needs an objective standard, not just a subjective read of each disc
 ## Concern 14 — Posting Order Independence
 
 **IC1**: Running the same scenario with different agent posting orders must produce the same synthesis recommendation. If outcome is order-dependent, information cascade is present.
+*Note: IC1 is aspirational — oms-train does not run order-permutation tests. Evaluated manually when information cascade is suspected.*
 
 **IC2**: Every agent's `reasoning[]` must contain domain-specific analysis, not only references to prior agents' positions. An agent whose reasoning is entirely derivative of the first post has failed independent evaluation.
 
@@ -265,7 +266,7 @@ The trainer needs an objective standard, not just a subjective read of each disc
 
 ## Concern 25 — Confidence Calibration and Delta
 
-**CD1**: Every agent's round output includes `confidence_level` and `confidence_pct`. An output missing these fields fails CD1.
+**CD1**: Every agent's round output includes `confidence_level` (high/medium/low) and `confidence_pct` (integer 0–100). The two must be consistent: high ≥ 70, medium 40–69, low < 40. An output missing either field, or where the two contradict, fails CD1.
 
 **CD2**: Facilitator detects capitulation signals — `changed: true` with non-positive `confidence_delta` — and injects a specific challenge. Facilitator that misses a capitulation signal in this scenario fails CD2.
 
