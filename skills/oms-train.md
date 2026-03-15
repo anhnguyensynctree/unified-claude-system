@@ -141,17 +141,20 @@ SCENARIO CANDIDATES (lessons that appeared 2+ times)
 If all pass: "All scenarios green ✓ — system ready."
 
 If any fail or partial:
-  Present persona changes → CEO approves/denies each
-  Apply approved changes to persona.md files
-  Re-run ONLY failing and partial scenarios (not passing ones)
+  Present persona changes → CEO responds to each:
+    (y) approve → apply change, re-run scenario
+    (n) decline → ask: "Why? (a) wrong diagnosis  (b) right direction, wrong wording  (c) skip"
+      (a) wrong diagnosis → trainer re-analyzes failure, proposes alternative change
+      (b) wrong wording  → CEO provides correct phrasing → apply that, re-run scenario
+      (c) skip           → mark scenario as accepted-failure, remove from loop
+  Re-run only failing/partial scenarios that were not skipped
   Increment run number in results.tsv
   Repeat report → loop
-
-If CEO denies all changes and failures remain:
-  "No approved changes — stopping. Failing scenarios: [list]. Re-run after manual persona edits."
 ```
 
-**Convergence rule**: loop terminates when either all scenarios pass, or a full run produces zero new approved persona changes (plateau reached).
+**Accepted-failure**: a scenario the CEO has consciously decided not to enforce. Logged in `results.tsv` as `accepted-failure` with a note. Does not block "all green" — excluded from the convergence check.
+
+**Convergence rule**: loop terminates when all non-skipped scenarios pass, or a full run produces zero new approved or re-proposed changes (genuine plateau).
 
 ### Persona change application
 When CEO approves a change, edit the relevant `~/.claude/agents/[role]/persona.md` directly. Changes go to:
