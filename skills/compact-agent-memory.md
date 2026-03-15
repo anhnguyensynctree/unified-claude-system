@@ -17,12 +17,12 @@ Consolidates agent memory files when they grow too large. Uses Claude Code runti
 
 ### 1. Check which agents need compacting
 ```bash
-python3 packages/agents/memory/agent-mem-extract.py check
+python3 ~/.claude/agents/memory/agent-mem-extract.py check
 ```
 
 ### 2. For each agent to compact — read their current facts
 ```bash
-python3 packages/agents/memory/agent-mem-extract.py read [role]
+python3 ~/.claude/agents/memory/agent-mem-extract.py read [role]
 ```
 
 ### 3. Consolidate in context (Claude runtime — no API call)
@@ -35,7 +35,7 @@ Read the facts list and consolidate it:
 
 ### 4. Write the consolidated facts back
 ```bash
-python3 packages/agents/memory/agent-mem-extract.py reset [role] "fact 1" "fact 2" ...
+python3 ~/.claude/agents/memory/agent-mem-extract.py reset [role] "fact 1" "fact 2" ...
 ```
 
 This replaces all facts with the consolidated set and rebuilds MEMORY.md.
@@ -43,7 +43,7 @@ This replaces all facts with the consolidated set and rebuilds MEMORY.md.
 ### 5. Spot-check
 Read the new MEMORY.md and confirm no important facts were lost. If anything is missing, inject it back:
 ```bash
-python3 packages/agents/memory/agent-mem-extract.py inject [role] "recovered fact"
+python3 ~/.claude/agents/memory/agent-mem-extract.py inject [role] "recovered fact"
 ```
 
 ## Notes

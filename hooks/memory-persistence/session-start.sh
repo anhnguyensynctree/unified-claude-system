@@ -88,4 +88,8 @@ fi
 # Stderr notices only
 LEARNED_COUNT=$(find "$LEARNED_DIR" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
 [ "$LEARNED_COUNT" -gt 0 ] && echo "[SessionStart] $LEARNED_COUNT learned skills in $LEARNED_DIR" >&2
+
+# --- System health check ---
+"$HOME/.claude/hooks/memory-persistence/health-check.sh"
+
 exit 0

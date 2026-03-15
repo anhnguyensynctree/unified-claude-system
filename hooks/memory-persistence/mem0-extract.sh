@@ -17,3 +17,4 @@ fi
 
 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" extract "$TRANSCRIPT_PATH" 2>&1 >&2
 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" handoff "$TRANSCRIPT_PATH" "$(date +%Y-%m-%d)" "$PROJECT" 2>&1 >&2
+python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" learn "$TRANSCRIPT_PATH" 2>&1 >&2

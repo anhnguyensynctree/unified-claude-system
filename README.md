@@ -103,7 +103,8 @@ With this:      Claude already knows. Every session, from the first message.
 │       ├── session-start.sh     ← Injects context at session open
 │       ├── session-end.sh       ← Persists state at session close
 │       ├── pre-compact.sh       ← Saves state before context compaction
-│       └── mem0-extract.sh      ← Extracts structured facts from transcripts
+│       ├── mem0-extract.sh      ← Extracts structured facts from transcripts
+│       └── health-check.sh      ← Validates system integrity on every session start
 │
 ├── standards/
 │   └── testing-pipeline.md      ← 6-layer test standard for multi-stage pipelines
@@ -269,6 +270,11 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 - Loads retrieved mem0 facts
 - Loads project `MEMORY.md`
 - Loads last session notes (within 7 days)
+- Runs system health check (zero context tokens, stderr only)
+
+**SessionEnd:**
+- mem0 fact extraction from session transcript (async, via Haiku)
+- Handoff summary written to `sessions/YYYY-MM-DD-project-session.tmp`
 
 ### Memory System — Tiered
 
@@ -383,6 +389,40 @@ Each new fact is classified as `ADD` (genuinely new), `UPDATE` (refines existing
 
 ---
 
+### System Health Check
+
+**File:** `hooks/memory-persistence/health-check.sh`
+**Runs:** automatically on every `SessionStart` — wired inside `session-start.sh`
+
+A self-maintaining integrity validator for the entire unified Claude system. Silent when healthy. Warns loudly to stderr the moment something breaks — so you catch it at the start of the session it breaks, not weeks later.
+
+| Check | What it catches |
+|---|---|
+| `settings.json` schema | Missing `matcher` fields, malformed hook objects, missing `type` or `command` |
+| Hook command paths | Scripts that have been moved, deleted, or lost execute permission |
+| Shell script syntax | `bash -n` on every `.sh` in the hooks directory |
+| `mem0.py` syntax | Python syntax errors that would silently break fact extraction |
+| API key presence | Missing or empty `~/.config/anthropic/key` |
+| `facts.json` integrity | Corrupted JSON that would break memory retrieval at session start |
+| Claude Code version | Installed vs latest (cached 24h, fetched from npm registry in background) |
+
+**Cost:** zero — all output is stderr. No context tokens consumed on a healthy run.
+
+**Version check:** once per day, fetches the latest Claude Code version from npm in the background (non-blocking). On the next session after a new version is available:
+```
+[HealthCheck] WARN: Claude Code update available: 2.1.75 → 2.1.76 (run: brew upgrade claude-code)
+```
+
+**Self-maintaining:** no hardcoded lists to update. New hooks added to `settings.json`, new `.sh` scripts, and new project `facts.json` files are all discovered and checked automatically.
+
+Run manually at any time:
+```bash
+~/.claude/hooks/memory-persistence/health-check.sh
+# No output = all healthy
+```
+
+---
+
 ### Skills
 
 **Directory:** `~/.claude/skills/`
@@ -437,7 +477,11 @@ Agent roles (V1 — Engineering Division):
 
 | Role | Responsibility |
 |---|---|
-| `executive-coordinator` | Keeps discussion focused, resolves deadlocks |
+| `router` | Task intake, complexity scoring, roster selection (Haiku) |
+| `facilitator` | Round management, DA protocol, livelock/convergence detection (Sonnet) |
+| `synthesizer` | Decision artifact, traceability, reversibility gate (Sonnet/Opus) |
+| `path-diversity` | Seeds structurally distinct solution paths before Round 1 (Haiku) |
+| `verification` | On-demand factual dispute resolution (Sonnet) |
 | `cto` | Technical architecture, risk, build-vs-buy |
 | `product-manager` | User value, scope, timeline trade-offs |
 
@@ -960,6 +1004,10 @@ echo $ANTHROPIC_API_KEY
 
 # 5. Prerequisites installed
 jq --version && node --version && python3 --version
+
+# 6. System health check passes
+~/.claude/hooks/memory-persistence/health-check.sh
+# No output = all healthy. Warnings mean something needs fixing.
 ```
 
 ---

@@ -23,6 +23,10 @@ All hooks are configured in ~/.claude/settings.json
 
 ## SessionStart Hook
 - session-start.sh: checks for recent sessions (last 7 days), notifies of available context
+- health-check.sh: validates system integrity — settings schema, script permissions, mem0 syntax, facts.json, API key, Claude Code version (zero context tokens, stderr only)
+
+## SessionEnd Hook
+- mem0-extract.sh: extracts facts from session transcript and writes handoff summary (async)
 
 ## Notification Hook
 - macOS notification: displays system alert when Claude needs attention

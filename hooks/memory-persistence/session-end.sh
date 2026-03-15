@@ -26,6 +26,18 @@ else
   echo "[SessionEnd] Session updated: $SESSION_FILE" >&2
 fi
 
+# --- Codemap staleness check ---
+CWD="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+CODEMAP="$CWD/.claude/codemap.md"
+if [ -f "$CODEMAP" ] && git -C "$CWD" rev-parse --git-dir > /dev/null 2>&1; then
+  # Check if any files were created or deleted since codemap was last written
+  CODEMAP_AGE=$(stat -f %m "$CODEMAP" 2>/dev/null || stat -c %Y "$CODEMAP" 2>/dev/null)
+  NEW_OR_DELETED=$(git -C "$CWD" diff --name-status HEAD~1 HEAD 2>/dev/null | grep -E "^[AD]" | wc -l | tr -d ' ')
+  if [ "${NEW_OR_DELETED:-0}" -gt 0 ]; then
+    echo "[Codemap] $NEW_OR_DELETED file(s) added/deleted this session — run /update-codemaps to sync" >&2
+  fi
+fi
+
 # --- Memory threshold check ---
 GLOBAL_MEMORY="$HOME/.claude/projects/-Users-Lewis/memory/MEMORY.md"
 if [ -f "$GLOBAL_MEMORY" ]; then

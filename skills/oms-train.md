@@ -42,7 +42,7 @@ The trainer outputs an extended schema for training runs:
     {
       "criterion": "R2",
       "result": "pass | fail",
-      "evidence": "EC classified as simple, activated frontend-developer only — correct"
+      "evidence": "Router classified as simple, activated frontend-developer only — correct"
     }
   ],
   "agent_evaluations": [...],
