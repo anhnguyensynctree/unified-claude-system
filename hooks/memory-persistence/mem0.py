@@ -15,7 +15,16 @@ from datetime import datetime, timezone
 from urllib import request as urllib_request
 from pathlib import Path
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+def _load_api_key() -> str:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if key:
+        return key
+    key_file = Path.home() / ".config" / "anthropic" / "key"
+    if key_file.exists():
+        return key_file.read_text().strip()
+    return ""
+
+ANTHROPIC_API_KEY = _load_api_key()
 MODEL = "claude-haiku-4-5-20251001"
 API_URL = "https://api.anthropic.com/v1/messages"
 

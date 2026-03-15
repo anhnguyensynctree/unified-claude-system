@@ -100,14 +100,25 @@ else
   ok
 fi
 
-# ── 6. API key — exists and non-empty ────────────────────────────────────────
+# ── 6. API key — exists, non-empty, and loadable by mem0.py ─────────────────
 KEY_FILE="$HOME/.config/anthropic/key"
 if [ ! -f "$KEY_FILE" ]; then
   warn "Anthropic API key not found at $KEY_FILE — mem0 extraction will be skipped"
 elif [ ! -s "$KEY_FILE" ]; then
   warn "Anthropic API key file is empty at $KEY_FILE"
 else
-  ok
+  # Verify mem0.py can load the key (catches env-only loading bugs)
+  KEY_LOADED=$(python3 -c "
+import os, sys
+sys.path.insert(0, '$(dirname "$MEM0")')
+import mem0
+print('ok' if mem0.ANTHROPIC_API_KEY else 'missing')
+" 2>/dev/null)
+  if [ "$KEY_LOADED" != "ok" ]; then
+    warn "mem0.py could not load ANTHROPIC_API_KEY — check _load_api_key() in mem0.py"
+  else
+    ok
+  fi
 fi
 
 # ── 7. facts.json files — valid JSON arrays ───────────────────────────────────
