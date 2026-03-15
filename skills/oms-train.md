@@ -122,39 +122,49 @@ RESULTS
 [003] scope-conflict: fail — D3 ✗ (PM accepted reduced scope without naming sacrificed user need)
 [005] majority-cascade: partial — M1 ✓ M2 ✗ (Backend Dev capitulated in Round 3 citing round count)
 
-AGENTS TO WATCH
-[product-manager]: failed D3 in scenario 003
-[backend-developer]: partial M2 in scenario 005
-
-PERSONA CHANGES SUGGESTED
-[product-manager — scenario 003]: add non-negotiable: scope reduction must name the user need being deferred
-  Approve? (y/n)
-[backend-developer — scenario 005]: strengthen majority-pressure resistance instruction in Discussion section
-  Approve? (y/n)
-
 SCENARIO CANDIDATES (lessons that appeared 2+ times)
 [none this run]
+
+--- Reviewing failures with trainer ---
 ```
+
+### Failure review — conversational, one failure at a time
+
+For each failing or partial scenario, the trainer opens a discussion:
+
+```
+[003] scope-conflict — D3 fail
+Trainer: PM accepted scope reduction in Round 2 without naming the user need being
+deferred. Suggested persona change: add to Non-Negotiables — "scope reduction must
+name the user need it defers." What would you like to do?
+```
+
+You can respond naturally — the trainer understands and acts on your intent:
+
+| What you say | What happens |
+|---|---|
+| "approve" / "looks good" | Apply change as-is, re-run scenario |
+| "change the wording to X" | Apply your wording instead, re-run |
+| "I disagree — the scenario is wrong, PM should be able to concede scope" | Trainer asks: update the scenario to allow this, or skip it? |
+| "update the scenario instead" | Trainer drafts a scenario edit for your review, applies on approval |
+| "skip this one" | Marked accepted-failure, excluded from loop |
+| "why did this fail exactly?" | Trainer shows the specific round output and criterion that failed |
+| "what if we added this to Discussion instead of Non-Negotiables?" | Trainer moves the change there, re-runs |
+
+The trainer stays in this conversation until you reach one of: apply a change, update the scenario, or skip. Then moves to the next failure.
 
 ### Loop logic
 ```
-If all pass: "All scenarios green ✓ — system ready."
-
-If any fail or partial:
-  Present persona changes → CEO responds to each:
-    (y) approve → apply change, re-run scenario
-    (n) decline → ask: "Why? (a) wrong diagnosis  (b) right direction, wrong wording  (c) skip"
-      (a) wrong diagnosis → trainer re-analyzes failure, proposes alternative change
-      (b) wrong wording  → CEO provides correct phrasing → apply that, re-run scenario
-      (c) skip           → mark scenario as accepted-failure, remove from loop
-  Re-run only failing/partial scenarios that were not skipped
-  Increment run number in results.tsv
-  Repeat report → loop
+All failures reviewed → apply all agreed changes → re-run affected scenarios
+Increment run number in results.tsv
+Repeat until all non-skipped scenarios pass (convergence)
 ```
 
-**Accepted-failure**: a scenario the CEO has consciously decided not to enforce. Logged in `results.tsv` as `accepted-failure` with a note. Does not block "all green" — excluded from the convergence check.
+**Accepted-failure**: a scenario consciously excluded. Logged in `results.tsv` as `accepted-failure` with your stated reason. Does not block convergence.
 
-**Convergence rule**: loop terminates when all non-skipped scenarios pass, or a full run produces zero new approved or re-proposed changes (genuine plateau).
+**Scenario edit during training**: if you decide a scenario's expected behavior is wrong, the trainer drafts the correction and presents it for approval before writing. The scenario file is updated, then re-run immediately to confirm the fix.
+
+**Convergence rule**: loop terminates when all non-skipped scenarios pass, or a full pass produces no changes of any kind (genuine plateau — trainer flags this explicitly).
 
 ### Persona change application
 When CEO approves a change, edit the relevant `~/.claude/agents/[role]/persona.md` directly. Changes go to:
