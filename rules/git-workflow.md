@@ -15,6 +15,7 @@
 - Never commit directly to main
 - Always review diff before committing
 - Never include console.log, secrets, or commented-out code in commits
+- NEVER add `Co-Authored-By` trailers to commits or PR descriptions — not for Claude, not for any tool
 
 ## Parallel Work (CLI)
 - Use `EnterWorktree` or `--worktree` flag for isolated parallel work
