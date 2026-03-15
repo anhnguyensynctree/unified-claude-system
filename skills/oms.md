@@ -86,26 +86,28 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 ## Agent Registry
 
 ### Engine Roles
-| Role | File | Memory | Model | When |
-|---|---|---|---|---|
-| router | `~/.claude/agents/router/persona.md` | `router/MEMORY.md` | Haiku | Step 1 |
-| path-diversity | `~/.claude/agents/path-diversity/persona.md` | `path-diversity/MEMORY.md` | Haiku | Step 1.5 (Tier 2+) |
-| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/MEMORY.md` | Sonnet | After each round (Tier 2+) |
-| verification | `~/.claude/agents/verification/persona.md` | `verification/MEMORY.md` | Sonnet | On-demand |
-| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/MEMORY.md` | Sonnet (Opus: 5+ or livelock) | Step 4 (Tier 2+) |
-| trainer | `~/.claude/agents/trainer/persona.md` | `trainer/MEMORY.md` | Sonnet | Step 6 — always |
+| Role | File | Lessons | Memory | Model | When |
+|---|---|---|---|---|---|
+| router | `~/.claude/agents/router/persona.md` | `router/lessons.md` | `router/MEMORY.md` | Haiku | Step 1 |
+| path-diversity | `~/.claude/agents/path-diversity/persona.md` | `path-diversity/lessons.md` | `path-diversity/MEMORY.md` | Haiku | Step 1.5 (Tier 2+) |
+| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | `facilitator/MEMORY.md` | Sonnet | After each round (Tier 2+) |
+| verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | `verification/MEMORY.md` | Sonnet | On-demand |
+| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | `synthesizer/MEMORY.md` | Sonnet (Opus: 5+ or livelock) | Step 4 (Tier 2+) |
+| trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | `trainer/MEMORY.md` | Sonnet | Step 6 — always |
 
 ### Discussion Roster (V1)
-| Role | File | ctx | Memory |
-|---|---|---|---|
-| cto | `~/.claude/agents/cto/persona.md` | `cto.ctx.md` | `cto/MEMORY.md` |
-| product-manager | `~/.claude/agents/product-manager/persona.md` | `product-manager.ctx.md` | `product-manager/MEMORY.md` |
-| engineering-manager | `~/.claude/agents/engineering-manager/persona.md` | `engineering-manager.ctx.md` | `engineering-manager/MEMORY.md` |
-| frontend-developer | `~/.claude/agents/frontend-developer/persona.md` | `frontend-developer.ctx.md` | `frontend-developer/MEMORY.md` |
-| backend-developer | `~/.claude/agents/backend-developer/persona.md` | `backend-developer.ctx.md` | `backend-developer/MEMORY.md` |
-| qa-engineer | `~/.claude/agents/qa-engineer/persona.md` | `qa-engineer.ctx.md` | `qa-engineer/MEMORY.md` |
+| Role | File | Lessons | ctx | Memory |
+|---|---|---|---|---|
+| cto | `~/.claude/agents/cto/persona.md` | `cto/lessons.md` | `cto.ctx.md` | `cto/MEMORY.md` |
+| product-manager | `~/.claude/agents/product-manager/persona.md` | `product-manager/lessons.md` | `product-manager.ctx.md` | `product-manager/MEMORY.md` |
+| engineering-manager | `~/.claude/agents/engineering-manager/persona.md` | `engineering-manager/lessons.md` | `engineering-manager.ctx.md` | `engineering-manager/MEMORY.md` |
+| frontend-developer | `~/.claude/agents/frontend-developer/persona.md` | `frontend-developer/lessons.md` | `frontend-developer.ctx.md` | `frontend-developer/MEMORY.md` |
+| backend-developer | `~/.claude/agents/backend-developer/persona.md` | `backend-developer/lessons.md` | `backend-developer.ctx.md` | `backend-developer/MEMORY.md` |
+| qa-engineer | `~/.claude/agents/qa-engineer/persona.md` | `qa-engineer/lessons.md` | `qa-engineer.ctx.md` | `qa-engineer/MEMORY.md` |
 
-Each agent's effective prompt = persona.md + ctx.md (if exists) + MEMORY.md + `agent_briefings.[role]` from Router.
+Each agent's effective prompt = persona.md + lessons.md + ctx.md (if exists) + MEMORY.md + `agent_briefings.[role]` from Router.
+
+**Load order**: persona.md (identity) → lessons.md (learned behaviors) → ctx.md + MEMORY.md (task context) → agent_briefing (task distillation).
 
 ---
 
