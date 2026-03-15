@@ -128,30 +128,32 @@ SCENARIO CANDIDATES (lessons that appeared 2+ times)
 --- Reviewing failures with trainer ---
 ```
 
-### Failure review — conversational, one failure at a time
+### Failure review — menu + discussion, one failure at a time
 
-For each failing or partial scenario, the trainer opens a discussion:
+For each failing or partial scenario, the trainer presents a structured menu:
 
 ```
 [003] scope-conflict — D3 fail
-Trainer: PM accepted scope reduction in Round 2 without naming the user need being
-deferred. Suggested persona change: add to Non-Negotiables — "scope reduction must
-name the user need it defers." What would you like to do?
+What happened: PM accepted scope reduction in Round 2 without naming the user
+need being deferred.
+
+Options:
+  A) Add to Non-Negotiables: "scope reduction must name the user need it defers"
+     → Hard rule — PM cannot concede scope without naming what user value is deferred
+  B) Add to Discussion (Round 2): "when conceding scope, state which user need is deferred"
+     → Softer — guides behavior without making it an absolute
+  C) Update the scenario — expected behavior is too strict for PM's role
+     → If PM should be allowed to concede scope without this requirement
+  D) Skip — accept this failure, don't enforce
+     → Consciously excluded from convergence check
+  E) Discuss
+
+Choice:
 ```
 
-You can respond naturally — the trainer understands and acts on your intent:
+You pick a letter. If you pick E, the trainer answers questions, explains its reasoning, or works through alternatives with you — then re-presents the menu (possibly with updated options based on the discussion) for a final decision.
 
-| What you say | What happens |
-|---|---|
-| "approve" / "looks good" | Apply change as-is, re-run scenario |
-| "change the wording to X" | Apply your wording instead, re-run |
-| "I disagree — the scenario is wrong, PM should be able to concede scope" | Trainer asks: update the scenario to allow this, or skip it? |
-| "update the scenario instead" | Trainer drafts a scenario edit for your review, applies on approval |
-| "skip this one" | Marked accepted-failure, excluded from loop |
-| "why did this fail exactly?" | Trainer shows the specific round output and criterion that failed |
-| "what if we added this to Discussion instead of Non-Negotiables?" | Trainer moves the change there, re-runs |
-
-The trainer stays in this conversation until you reach one of: apply a change, update the scenario, or skip. Then moves to the next failure.
+The trainer stays on this failure until you land on A, B, C, or D. Then moves to the next.
 
 ### Loop logic
 ```
