@@ -340,7 +340,7 @@ MEMORY.md is a lean index. Topic files load only when the domain matches the cur
 
 ### mem0 — Structured Fact Extraction
 
-**File:** `memory/mem0.py`
+**File:** `hooks/memory-persistence/mem0.py`
 **Requires:** API key stored in `~/.config/anthropic/key` (preferred) or `ANTHROPIC_API_KEY` in your shell environment
 
 mem0 is a lightweight memory extraction script that runs at session end. It reads the session transcript, uses the Anthropic API (Haiku model) to extract memorable facts, deduplicates them against existing memory, and writes them to `facts.json`. At next session start, those facts are injected into context automatically.
