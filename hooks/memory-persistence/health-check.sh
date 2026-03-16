@@ -132,7 +132,40 @@ assert isinstance(d, list), 'not an array'
   fi
 done
 
-# ── 8. Claude Code version — check for updates (cached 24h) ──────────────────
+# ── 8. Project path encoding — encoded dir must match Claude Code's scheme ────
+# Claude Code encodes paths: slashes→hyphens, dots→hyphens, double-slash→double-hyphen
+# e.g. /Users/Lewis/.claude → -Users-Lewis--claude (dot becomes hyphen, / becomes -)
+ENCODED_DIR=$(echo "$CLAUDE_DIR" | sed 's|/|-|g; s|\.|_|g' | sed 's|_|-|g')
+# Simpler: just derive expected name from $CLAUDE_DIR directly
+EXPECTED_DIR=$(python3 -c "
+import sys
+path = '$CLAUDE_DIR'
+# Claude Code encoding: replace / with -, replace . with -
+encoded = path.replace('/', '-').replace('.', '-')
+print(encoded)
+")
+PROJECTS_DIR="$CLAUDE_DIR/projects"
+if [ -d "$PROJECTS_DIR/$EXPECTED_DIR" ]; then
+  ok
+else
+  warn "Expected project dir not found: $PROJECTS_DIR/$EXPECTED_DIR — mem0 may be writing to wrong path"
+fi
+
+# Check for stale bad-encoding dirs (dots not converted) — warn if any exist
+python3 - "$PROJECTS_DIR" "$EXPECTED_DIR" <<'PYEOF' 2>&1 | while IFS= read -r line; do warn "$line"; done
+import sys, os, re
+projects_dir, expected = sys.argv[1], sys.argv[2]
+if not os.path.isdir(projects_dir):
+    sys.exit(0)
+for entry in os.listdir(projects_dir):
+    if entry == expected:
+        continue
+    # Flag dirs that look like path-encoded names but contain literal dots (bad encoding)
+    if entry.startswith('-') and '.' in entry:
+        print(f"Stale bad-encoding project dir found: {entry} — consider removing it")
+PYEOF
+
+# ── 9. Claude Code version — check for updates (cached 24h) ──────────────────
 VERSION_CACHE="$CLAUDE_DIR/.version-cache"
 INSTALLED=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 

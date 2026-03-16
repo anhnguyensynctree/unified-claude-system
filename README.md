@@ -24,7 +24,7 @@ Every Claude Code session starts cold. You re-explain your stack, your conventio
 
 - **Persistent memory** — remembers decisions, patterns, and project context across sessions without manual re-briefing
 - **Enforced conventions** — rules load automatically via hooks, not trusted to per-prompt engineering
-- **10 context modes** — Claude shifts persona and priorities based on what you're doing: dev, test, review, security, debug, plan, ui-ux, architecture, devops, research — each loaded on demand, zero token cost until triggered
+- **14 context modes** — Claude shifts persona and priorities based on what you're doing: dev, test, review, security, debug, plan, ui-ux, architecture, devops, refactor, performance, data, docs, research — each loaded on demand, zero token cost until triggered
 - **Automated quality gates** — catches `console.log`, runs TypeScript checks, enforces test coverage in real time
 - **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — never overpay
 - **Continuous learning** — patterns discovered during work are extracted and reused in future sessions
@@ -119,6 +119,9 @@ With this:      Claude already knows. Every session, from the first message.
 │   ├── strategic-compact.md
 │   └── codemap-updater.md
 │
+├── handoffs/                    ◄★ session handoff files (one per project per day)
+│   └── YYYY-MM-DD-project-session.tmp
+│
 └── projects/[encoded-path]/memory/   ◄★ per-project persistent memory
     ├── MEMORY.md                ← Always loaded index (<80 lines)
     ├── insights.md              ← Cross-topic patterns from consolidation
@@ -146,7 +149,7 @@ Session Start
 │
 ├── facts.json injected (structured facts from past transcripts)
 │
-└── Previous session notes injected (last 7 days)
+└── Previous session handoff injected from ~/.claude/handoffs/ (last 7 days)
 ```
 
 | Component | What it does | Benefit |
@@ -189,7 +192,7 @@ Key behaviors it enforces:
 
 ### Rules System
 
-Seven domain files, loaded on demand:
+Eight domain files, loaded on demand:
 
 | File | Covers |
 |---|---|
@@ -200,6 +203,7 @@ Seven domain files, loaded on demand:
 | `performance.md` | Haiku/Sonnet/Opus tier selection, token minimization |
 | `patterns.md` | `{ data, error, meta }` API shape, async/await, import ordering |
 | `agents.md` | Delegation protocol, model selection per task type |
+| `hooks.md` | Hook reference, event types, configuration |
 
 ### Context Modes
 
@@ -260,7 +264,7 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 - mgrep nudge when `grep -r` is used
 
 **Stop / SessionEnd:**
-- Session state written to `sessions/YYYY-MM-DD-session.tmp`
+- Session handoff written to `~/.claude/handoffs/YYYY-MM-DD-project-session.tmp`
 - Continuous learning evaluation runs
 - `console.log` audit across all modified files
 - mem0 fact extraction from session transcript (async)
@@ -274,7 +278,7 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 
 **SessionEnd:**
 - mem0 fact extraction from session transcript (async, via Haiku)
-- Handoff summary written to `sessions/YYYY-MM-DD-project-session.tmp`
+- Handoff summary written to `~/.claude/handoffs/YYYY-MM-DD-project-session.tmp`
 
 ### Memory System — Tiered
 
@@ -333,8 +337,6 @@ MEMORY.md is a lean index. Topic files load only when the domain matches the cur
 | `/test-coverage` | Run coverage report, list files below 80%, write tests for highest-priority gaps |
 | `/update-codemaps` | Scan project and write/update `.claude/codemap.md` (max 100 lines, navigation only) |
 | `/pipeline-init` | Set up the 6-layer test standard for a multi-stage pipeline or process component |
-| `/oms <intent>` | Orchestrate a One-Man-Show multi-agent discussion — multiple personas debate and synthesize |
-| `/compact-agent-memory [agent]` | Compress per-agent MEMORY.md files when they exceed 80 lines |
 
 ### mem0 — Structured Fact Extraction
 
@@ -467,31 +469,9 @@ Format:
 
 Why this matters: without a codemap, Claude re-explores the project on every session. A current codemap eliminates that overhead entirely.
 
-#### `skills/oms.md` — One-Man-Show Multi-Agent Engine
+#### `skills/oms.md` — Multi-Agent Orchestration
 
-OMS orchestrates multiple AI personas (CTO, Product Manager, Executive Coordinator, etc.) as a simulated discussion panel. Each agent has a persona file, a memory file, and is dispatched in parallel.
-
-Invoke with `/oms <your intent>` — Claude loads shared context files, dispatches agent calls concurrently, collects their outputs, and synthesizes a final recommendation.
-
-Agent roles (V1 — Engineering Division):
-
-| Role | Responsibility |
-|---|---|
-| `router` | Task intake, complexity scoring, roster selection (Haiku) |
-| `facilitator` | Round management, DA protocol, livelock/convergence detection (Sonnet) |
-| `synthesizer` | Decision artifact, traceability, reversibility gate (Sonnet/Opus) |
-| `path-diversity` | Seeds structurally distinct solution paths before Round 1 (Haiku) |
-| `verification` | On-demand factual dispute resolution (Sonnet) |
-| `cto` | Technical architecture, risk, build-vs-buy |
-| `product-manager` | User value, scope, timeline trade-offs |
-
-Each agent's memory is stored at `.claude/agents/[role]/MEMORY.md` and persists between `/oms` runs, allowing agents to remember prior decisions.
-
-#### `skills/compact-agent-memory.md`
-
-Compresses per-agent MEMORY.md files when they grow noisy or exceed 80 lines. Works the same way as `/consolidate-memory` but scoped to agent memory paths rather than project memory.
-
-Run after any `/oms` session that modified agent state. The OMS skill flags when this is needed.
+Internal skill for orchestrating multi-agent discussions. Invoked via `/oms <intent>`. Not intended for general use — loaded on demand only.
 
 ---
 

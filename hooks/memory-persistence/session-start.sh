@@ -70,9 +70,10 @@ for dir in "$TOPICS_DIR" "$GLOBAL_TOPICS_DIR"; do
 done
 
 # --- Previous session (project-scoped, falls back to any recent session) ---
+HANDOFFS_DIR="$HOME/.claude/handoffs"
 PROJECT=$(basename "${CLAUDE_PROJECT_DIR:-$CWD}")
-LATEST=$(find "$SESSIONS_DIR" -name "*-${PROJECT}-session.tmp" -mtime -7 2>/dev/null | sort -r | head -1)
-[ -z "$LATEST" ] && LATEST=$(find "$SESSIONS_DIR" -name "*.tmp" -mtime -7 2>/dev/null | sort -r | head -1)
+LATEST=$(find "$HANDOFFS_DIR" -name "*-${PROJECT}-session.tmp" -mtime -7 2>/dev/null | sort -r | head -1)
+[ -z "$LATEST" ] && LATEST=$(find "$HANDOFFS_DIR" -name "*.tmp" -mtime -7 2>/dev/null | sort -r | head -1)
 
 if [ -n "$LATEST" ]; then
   CONTENT=$(grep -v "^Session ended:" "$LATEST" | grep -v "^$" | tail -n +8 | grep -v "^##" | tr -d '\n')
