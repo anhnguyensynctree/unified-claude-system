@@ -177,7 +177,8 @@ Entries tagged `ctx: always` are extracted and injected at session start without
 
 ---
 
-## Core Components
+<details>
+<summary><strong>Core Components</strong></summary>
 
 ### CLAUDE.md — The Global Brain
 
@@ -548,6 +549,8 @@ Disables remote control of Claude Code — prevents any external process or MCP 
 | `pyright-lsp` | Python type checking on edit |
 
 TypeScript LSP, code-review, and security-guidance plugins are scoped **per package** in per-project `settings.json` — only loaded where needed.
+
+</details>
 
 ---
 
@@ -969,7 +972,8 @@ Claude loads all context and asks what you want to work on.
 
 ---
 
-## Verify Your Installation
+<details>
+<summary><strong>Verify Your Installation</strong></summary>
 
 Run this checklist after setup on either platform:
 
@@ -997,6 +1001,8 @@ jq --version && node --version && python3 --version
 ~/.claude/hooks/memory-persistence/health-check.sh
 # No output = all healthy. Warnings mean something needs fixing.
 ```
+
+</details>
 
 ---
 
@@ -1047,7 +1053,8 @@ git diff origin/main -- settings.json CLAUDE.md
 
 ---
 
-## Iterating and Contributing
+<details>
+<summary><strong>Iterating and Contributing</strong></summary>
 
 This repo **is** `~/.claude`. Updating the system:
 
@@ -1060,6 +1067,8 @@ git push
 ```
 
 PRs and issues welcome. If you adapt this for a different stack, open a PR — especially for non-Next.js/Supabase scaffold variants.
+
+</details>
 
 ---
 
