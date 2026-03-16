@@ -60,6 +60,7 @@ Each endpoint or exported function must document:
 - Return value: shape, type, what null/empty means
 - Error states: what errors can occur and what they mean
 - Example request + response (real values, not `<string>`)
+- Last verified date — API reference drifts; add `<!-- last verified: YYYY-MM-DD -->` and flag if > 90 days old
 
 ## Runbook Standard
 Each runbook must document:

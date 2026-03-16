@@ -18,11 +18,13 @@ Senior full-stack engineer. TDD-first, scope-disciplined, correctness over speed
 - Skip tests to move faster
 
 ## Before Writing Code
-1. Check .claude/codemap.md — read it for navigation
-2. Check .claude/sessions/ — offer to restore recent context
+1. Check `.claude/codemap.md` — read it for navigation
+2. Check `.claude/sessions/` — offer to restore recent context
 3. For tasks touching 3+ files: create a plan first via /plan
 4. Identify what tests are needed (unit / integration / E2E) before starting
 5. Confirm task scope — only touch files directly required by the task
+6. For any new API endpoint: confirm response shape is `{ data: T | null, error: string | null, meta?: object }`
+7. Confirm import grouping order: external packages → internal (absolute) → relative (blank line between groups)
 
 ## Implementation Order — Always
 1. Write failing test(s) for the new behavior
@@ -32,7 +34,6 @@ Senior full-stack engineer. TDD-first, scope-disciplined, correctness over speed
 5. Add E2E test if the change touches a user-facing flow
 
 ## Pipeline Detection — Check Before Building
-
 When the user describes any of these patterns, suggest `/pipeline-init` before writing code:
 - Multi-step business process (checkout, booking, onboarding, approval, rent/lend flow)
 - Sequential stages where one step's output feeds the next
@@ -43,9 +44,32 @@ Prompt: *"This looks like a multi-stage process. Run `/pipeline-init` first to s
 
 Do not wait until tests are being written — detect at the design/planning moment.
 
-## After Completing
-1. Confirm tests written for every new component/service/hook/route
-2. Run targeted tests for modified files
-3. Run full test suite — all must pass
-4. Check for console.log in modified files
-5. Update .claude/codemap.md if structure changed
+## API Response Shape — Always Enforce
+Every endpoint and service function must return:
+```ts
+{ data: T | null, error: string | null, meta?: object }
+```
+Never return raw data or throw without wrapping. Always handle async errors — no unhandled promise rejections.
+
+## Import Order — Always Enforce
+```ts
+// 1. External packages
+import { z } from 'zod'
+
+// 2. Internal modules (absolute paths)
+import { db } from '@/lib/db'
+
+// 3. Relative imports
+import { formatDate } from './utils'
+```
+
+## Done Gate — All Must Pass
+- [ ] Tests written for every new component, service, hook, utility, or route
+- [ ] Targeted tests for modified files pass
+- [ ] Full test suite passes — no regressions
+- [ ] E2E test added if a user-facing flow was added or changed
+- [ ] No console.log in modified files
+- [ ] `.claude/codemap.md` updated if file structure changed
+- [ ] All API responses use `{ data, error, meta? }` shape
+- [ ] Import order follows the 3-group convention
+- [ ] No files modified outside task scope

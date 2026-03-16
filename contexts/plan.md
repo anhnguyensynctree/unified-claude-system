@@ -43,6 +43,8 @@ Timeline: [milestones, not just end date]
 ```
 Categories: technical / vendor / compliance / operational
 Score = Probability × Impact (1-3 each = 1-9 scale)
+Response types: **Mitigate** (reduce likelihood/impact) | **Accept** (monitor only) | **Transfer** (insurance, contract) | **Avoid** (remove the risk entirely by changing scope)
+Anything scoring ≥ 6 must have a mitigation plan — Accept is not allowed above 5.
 
 ### Sprint Backlog
 ```
@@ -56,6 +58,7 @@ Score = Probability × Impact (1-3 each = 1-9 scale)
 - [ ] Implementation complete
 - [ ] Unit tests written and passing
 - [ ] Integration tests passing
+- [ ] E2E test added if the ticket touches a user-facing flow
 - [ ] No console.log in modified files
 - [ ] Code reviewed and approved
 - [ ] Deployed to staging / acceptance criteria verified

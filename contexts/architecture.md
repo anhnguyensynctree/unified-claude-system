@@ -67,3 +67,10 @@ Alternatives considered: [what was rejected and why]
 - [ ] API contract defined before implementation begins
 - [ ] Migration strategy from current state defined (if applicable)
 - [ ] Operational burden assessed (monitoring, alerts, runbooks needed)
+
+## Done Gate
+- [ ] ADR written and status set to Accepted
+- [ ] All NFRs signed off (not just listed)
+- [ ] At least 2 options compared — recommendation is not the only option presented
+- [ ] Open risks section is complete (not empty)
+- [ ] Handoff: switch to dev.md — architecture mode ends when ADR is accepted, not when code is written

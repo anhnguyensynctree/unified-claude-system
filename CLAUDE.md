@@ -75,20 +75,20 @@ Quality gate — applies to every .md, especially files under .claude/:
 - A shallow .claude/ file is worse than no file — it loads as false context every session
 
 ## Switching Modes
-When asked to review code or a PR → read ~/.claude/contexts/review.md and apply it
-When asked to research or explore → read ~/.claude/contexts/research.md and apply it
-When asked to implement or build → read ~/.claude/contexts/dev.md and apply it
-When asked to write tests or QA → read ~/.claude/contexts/test.md and apply it
-When asked to design UI, UX, or interface flows → read ~/.claude/contexts/ui-ux.md and apply it
-When asked to design system architecture or backend design → read ~/.claude/contexts/architecture.md and apply it
-When asked to plan a sprint, project, or roadmap → read ~/.claude/contexts/plan.md and apply it
-When asked to audit for security or do a security review → read ~/.claude/contexts/security.md and apply it
-When asked to debug or diagnose a failure → read ~/.claude/contexts/debug.md and apply it
-When asked to handle CI/CD, infrastructure, deployment, or DevOps → read ~/.claude/contexts/devops.md and apply it
-When asked to refactor, clean up, or reduce technical debt → read ~/.claude/contexts/refactor.md and apply it
-When asked to profile, optimize, or improve performance → read ~/.claude/contexts/performance.md and apply it
-When asked to work on data pipelines, ML, analytics, or data engineering → read ~/.claude/contexts/data.md and apply it
-When asked to write documentation, runbooks, ADRs, or API reference → read ~/.claude/contexts/docs.md and apply it
+When asked to review, audit, critique, or give feedback on code or a PR → read ~/.claude/contexts/review.md and apply it
+When asked to research, explore, investigate, or understand a codebase or topic → read ~/.claude/contexts/research.md and apply it
+When asked to implement, build, add, create, or develop a feature → read ~/.claude/contexts/dev.md and apply it
+When asked to write, fix, debug, run, or review tests, E2E, Playwright, Cypress, Vitest, Jest, or QA → read ~/.claude/contexts/test.md and apply it
+When asked to design, build, or review UI, UX, components, layouts, or interface flows → read ~/.claude/contexts/ui-ux.md and apply it
+When asked to design, plan, or review system architecture, backend design, APIs, or data models → read ~/.claude/contexts/architecture.md and apply it
+When asked to plan, break down, scope, or roadmap a sprint, project, feature, or milestone → read ~/.claude/contexts/plan.md and apply it
+When asked to audit, harden, review, or fix security, vulnerabilities, or auth → read ~/.claude/contexts/security.md and apply it
+When asked to debug, diagnose, trace, or investigate a failure, error, crash, or unexpected behavior → read ~/.claude/contexts/debug.md and apply it
+When asked to handle CI/CD, pipelines, infrastructure, deployment, Docker, Terraform, or DevOps → read ~/.claude/contexts/devops.md and apply it
+When asked to refactor, clean up, restructure, simplify, or reduce technical debt → read ~/.claude/contexts/refactor.md and apply it
+When asked to profile, optimize, improve performance, reduce latency, or fix slow code → read ~/.claude/contexts/performance.md and apply it
+When asked to work on data pipelines, ETL, ML, analytics, transforms, or data engineering → read ~/.claude/contexts/data.md and apply it
+When asked to write, update, or generate documentation, runbooks, ADRs, changelogs, or API reference → read ~/.claude/contexts/docs.md and apply it
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation

@@ -31,7 +31,15 @@ Feature: [name]
 AC Ref: [link or ID]
 
 | ID | Title | Category | Priority | Preconditions | Input | Expected | Notes |
+| T1 | Returns null for unauthenticated user | Auth | Critical | No session | GET /api/profile | 401 + { data: null, error: "Unauthorized" } | Check header too |
 ```
+
+## Framework Defaults — Use What the Project Has
+- **Unit/integration:** Vitest (preferred for TS/Vite projects), Jest (CRA, Node)
+- **Component:** React Testing Library — test behavior, not implementation
+- **E2E:** Playwright (preferred), Cypress
+- **Assertions:** `expect` from Vitest/Jest; never add an extra assertion lib if one exists
+- If the project has no test runner: ask before introducing one
 
 ## Coverage Checklist per Feature
 - [ ] Happy path (valid input, expected output)
@@ -53,3 +61,11 @@ AC Ref: [link or ID]
 1. Run unit tests for modified files first
 2. Run full suite — no regressions
 3. For auth, payments, or shared utils: pass 3 consecutive runs (consistency-critical)
+
+## Done Gate — All Must Pass
+- [ ] Test plan written before any implementation
+- [ ] All Critical/High priority cases implemented
+- [ ] 80% line coverage minimum met
+- [ ] Full suite passes with no regressions
+- [ ] Auth/payment paths have 3 consecutive passing runs
+- [ ] E2E tests added for any user-facing flow touched

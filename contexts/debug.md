@@ -64,6 +64,22 @@ Result: [confirmed / denied]
 [tests run, suite result]
 ```
 
+## Unreproducible / Flaky Bugs
+When the bug cannot be reliably reproduced:
+1. Check if it's timing-dependent — add logging around async operations
+2. Check if it's load-dependent — reproduce under realistic concurrency
+3. Check if it's data-dependent — collect the exact input from logs/error reports
+4. Check if it's environment-dependent — compare env vars, versions, OS, locale
+5. If still flaky after 4 checks: write a test that asserts the expected behavior and treat each failure as a data point
+6. Never mark a flaky bug as "fixed" without 5 consecutive clean runs under realistic conditions
+
+## Post-Fix Done Gate
+- [ ] Bug is reproduced in a test (regression test exists)
+- [ ] Fix targets root cause, not proximate cause
+- [ ] Full test suite passes — no regressions introduced
+- [ ] For auth/payment bugs: 3 consecutive suite passes (consistency-critical)
+- [ ] Root cause documented in PR or session memory
+
 ## Common Pitfalls to Check First
 - Async race condition (missing await, out-of-order resolution)
 - State mutation across calls (shared mutable object)

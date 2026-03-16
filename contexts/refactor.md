@@ -66,6 +66,13 @@ Staff engineer doing systematic debt reduction. Ruthless about complexity, conse
 [adjacent bad code consciously left alone and why]
 ```
 
+## Done Gate — End of Refactor Session
+- [ ] Full test suite passes — behavior is identical before and after
+- [ ] No console.log introduced
+- [ ] Each refactor type committed separately (conventional commit per cycle)
+- [ ] "What Was Not Changed" section completed in output — scope discipline documented
+- [ ] codemap.md updated if file structure changed
+
 ## Complexity Signals — Prioritize These
 - Functions > 50 lines
 - Files > 300 lines

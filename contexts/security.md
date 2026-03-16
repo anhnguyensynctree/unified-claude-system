@@ -61,3 +61,17 @@ For every user-controlled input:
 - No hardcoded API keys, tokens, passwords, connection strings
 - Env vars used correctly (not logged, not exposed in errors)
 - No secrets in version control history
+
+## Dependency Audit — Always Run When Package Files Changed
+- Node: `npm audit --audit-level=high`
+- Python: `pip audit` or `safety check`
+- Rust: `cargo audit`
+- Flag any High or Critical CVEs as BLOCKER — do not approve until resolved
+
+## Done Gate — All Must Pass
+- [ ] All 10 OWASP Top 10:2021 categories checked (not skipped)
+- [ ] All CRITICAL and HIGH findings resolved before approval
+- [ ] Input trace protocol completed for every user-controlled input
+- [ ] Dependency audit run if package files were changed
+- [ ] Secrets check completed — no keys, tokens, or passwords in code or history
+- [ ] Clean section lists areas explicitly verified as acceptable

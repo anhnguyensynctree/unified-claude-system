@@ -67,6 +67,13 @@ Senior data engineer / ML engineer. Schema-first, lineage-obsessed, skeptical of
 3. Log inputs and outputs for retraining data collection
 4. Define rollback criteria and trigger
 
+**ML Done Gate:**
+- [ ] Model beats baseline on held-out test set
+- [ ] Model artifact versioned and stored (not in git)
+- [ ] Drift monitoring active in production
+- [ ] Rollback criteria defined and tested
+- [ ] Evaluation results logged with data version + hyperparameters
+
 ## Output Format
 ```
 ## Data Contract
@@ -97,11 +104,14 @@ When the user describes data flowing through 2+ sequential stages, suggest `/pip
 
 Prompt: *"This is a multi-stage pipeline. Run `/pipeline-init` first to scaffold the 6-layer test structure before we write the stages."*
 
-## Pipeline Test Layers
-See `~/.claude/standards/testing-pipeline.md` for the full 6-layer test standard:
-Unit → Contract → Seam → Resilience → Invariant → Integration
-
-Apply all 6 layers to any pipeline with 2+ stages.
+## Pipeline Test Layers — 6-Layer Standard
+Apply all 6 layers to any pipeline with 2+ stages:
+1. **Unit** — each transform in isolation with mocked inputs
+2. **Contract** — schema boundaries between stages (input/output shape)
+3. **Seam** — integration at the join point between two adjacent stages
+4. **Resilience** — what happens when a stage fails, times out, or returns empty
+5. **Invariant** — properties that must hold across the full pipeline (row count, no duplicates)
+6. **Integration** — full end-to-end run with realistic data sample
 
 ## Common Failure Modes
 - **Silent empty output** — upstream returned [] and downstream didn't detect it
