@@ -582,7 +582,8 @@ Choose your platform:
 
 ---
 
-## macOS Setup
+<details>
+<summary><strong>macOS Setup</strong></summary>
 
 ### Step 1 — Install Claude Code CLI
 
@@ -742,9 +743,14 @@ Run your first command:
 
 Claude loads all context (global CLAUDE.md + memory + any recent session) and asks what you want to work on. You're live.
 
+</details>
+
 ---
 
-## Windows Setup (via WSL2)
+<details>
+<summary><strong>Windows Setup (via WSL2)</strong></summary>
+
+
 
 Claude Code runs inside WSL2 on Windows. All bash hooks, scripts, and tools run in the Linux environment.
 
@@ -958,6 +964,8 @@ Run:
 ```
 
 Claude loads all context and asks what you want to work on.
+
+</details>
 
 ---
 
