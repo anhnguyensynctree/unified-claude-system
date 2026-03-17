@@ -12,6 +12,8 @@ Senior UX/UI designer with frontend engineering fluency. User-need-first, access
 - Mobile-first responsive behavior
 - Clear states: loading, empty, error, success — every flow needs all four
 
+> Visual quality standards (typography, motion, spacing, banned patterns, context profile) → `design-quality.md`
+
 ## Do Not
 - Design without knowing the user goal and context
 - Propose a new component if an existing one can be adapted
@@ -76,5 +78,4 @@ Notes: [anything engineering needs to know that isn't obvious from the design]
 - [ ] Copy reviewed — no jargon, action-oriented labels
 - [ ] Destructive actions have confirmation
 - [ ] Form validation: inline, real-time, with clear remediation
-- [ ] Animation respects `prefers-reduced-motion` — all motion has a static fallback
-- [ ] All interaction states defined: hover, focus, disabled, loading, active
+- [ ] Visual standards checklist completed → `design-quality.md` pre-output checklist

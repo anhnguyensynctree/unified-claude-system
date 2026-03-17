@@ -12,6 +12,15 @@ The user is an experienced developer. Operate accordingly:
 - Responses as short as the task allows — prefer code over prose
 - Never explain what you're about to do — do it, then note only what matters
 
+## Output Completeness — Always Active
+A partial output is a broken output. Never truncate or shortcut:
+- Deliver every file, function, and section requested — count deliverables before starting
+- Banned: `// ...`, `// rest of code`, `// implement here`, `// similar to above`, `// TODO`, bare `...`
+- Banned: "let me know if you want me to continue", "for brevity", "the rest follows the same pattern"
+- Never show a skeleton when a full implementation was requested
+- When approaching token limit: write to a clean breakpoint, then output `[PAUSED — X of Y complete. Send "continue" to resume from: <next section>]`
+- On "continue": resume exactly where stopped — no recap, no repetition
+
 ## Token Minimization — Always Active
 Context is expensive. Minimize usage at every step:
 - Read files at specific line ranges when possible, not full files
@@ -79,7 +88,7 @@ When asked to review, audit, critique, or give feedback on code or a PR → read
 When asked to research, explore, investigate, or understand a codebase or topic → read ~/.claude/contexts/research.md and apply it
 When asked to implement, build, add, create, or develop a feature → read ~/.claude/contexts/dev.md and apply it
 When asked to write, fix, debug, run, or review tests, E2E, Playwright, Cypress, Vitest, Jest, or QA → read ~/.claude/contexts/test.md and apply it
-When asked to design, build, or review UI, UX, components, layouts, or interface flows → read ~/.claude/contexts/ui-ux.md and apply it
+When asked to design, build, or review UI, UX, components, layouts, or interface flows → read ~/.claude/contexts/ui-ux.md AND ~/.claude/contexts/design-quality.md and apply both
 When asked to design, plan, or review system architecture, backend design, APIs, or data models → read ~/.claude/contexts/architecture.md and apply it
 When asked to plan, break down, scope, or roadmap a sprint, project, feature, or milestone → read ~/.claude/contexts/plan.md and apply it
 When asked to audit, harden, review, or fix security, vulnerabilities, or auth → read ~/.claude/contexts/security.md and apply it
