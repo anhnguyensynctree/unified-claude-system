@@ -1,8 +1,8 @@
 # OMS multi-agent system — private, not for public repo
 agents/
-skills/oms.md
-skills/oms-train.md
-skills/oms-capture.md
+skills/oms/
+skills/oms-train/
+skills/oms-capture/
 skills/compact-agent-memory.md
 
 # Personal session data — never publish
