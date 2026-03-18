@@ -1,5 +1,12 @@
 # Testing Rules — Always Follow
 
+## Quick Reference
+- Every component/service/hook/route/utility **must** have tests — no exceptions
+- TDD: RED (failing test) → GREEN (minimal impl) → IMPROVE (refactor)
+- 80% coverage minimum; every error path needs a test
+- Unit: components, hooks, utils | Integration: API routes | E2E: auth, checkout, multi-step flows
+- Done = implementation written + tests written + tests passing
+
 ## Mandatory — No Exceptions
 Every new or modified component, service, hook, utility, or API route MUST have tests.
 "Done" means: implementation written + tests written + tests passing.

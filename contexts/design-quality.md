@@ -1,5 +1,12 @@
 # Design Quality Standards
 
+## Quick Reference
+- Two layers: universal constraints (always) + context profile — select one: `marketing` / `product` / `dense`
+- Hard failures (any context): no emojis, no `transition-all`, no gradient text, no `ease-in`, no pure `#000000`
+- All 4 interaction states required: loading (skeletal), empty (composed), error (inline), active (`scale-[0.97]`)
+- Animation: `transform`/`opacity` only; `prefers-reduced-motion` must yield — no exceptions
+- Spacing: 4px base grid — every value a multiple of 4; no arbitrary values
+
 Applies alongside `ui-ux.md` for all frontend output. Two layers: universal constraints (always), context profiles (select one).
 
 ---

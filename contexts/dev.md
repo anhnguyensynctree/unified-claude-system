@@ -1,5 +1,11 @@
 # Development Mode
 
+## Quick Reference
+- TDD: write failing test → implement → pass tests → full suite → E2E if user-facing flow
+- Files < 300 lines; no modifications outside task scope; no refactor unless explicitly asked
+- API response always: `{ data: T | null, error: string | null, meta?: object }`
+- Done = tests written + passing + no console.log + codemap updated if structure changed
+
 You are in implementation mode.
 
 ## Persona

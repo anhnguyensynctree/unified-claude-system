@@ -47,6 +47,19 @@ if [ -f "$MEMORY_FILE" ]; then
   echo "---"
 fi
 
+# --- Project-scoped annotations ---
+ANNOTATIONS_DIR="$HOME/.claude/annotations/$ENCODED_PATH"
+if [ -d "$ANNOTATIONS_DIR" ]; then
+  ANNOTATIONS=$(cat "$ANNOTATIONS_DIR"/*.md 2>/dev/null)
+  if [ -n "$ANNOTATIONS" ]; then
+    echo "## Project Annotations"
+    echo ""
+    echo "$ANNOTATIONS"
+    echo ""
+    echo "---"
+  fi
+fi
+
 # --- Always-active entries from topic files (ctx: always) ---
 TOPICS_DIR="$HOME/.claude/projects/$ENCODED_PATH/memory/topics"
 GLOBAL_TOPICS_DIR="$HOME/.claude/projects/-Users-Lewis/memory/topics"
