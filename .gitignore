@@ -1,8 +1,10 @@
-# OMS multi-agent system — private, not for public repo
-agents/
-skills/oms/
-skills/oms-train/
-skills/oms-capture/
+# OMS — personal/learned data only (framework is public)
+agents/*/lessons.md
+agents/*/MEMORY.md
+agents/*/facts.json
+agents/training/results.tsv
+agents/shared-context/engineering/
+agents/shared-context/product/
 skills/compact-agent-memory.md
 
 # Personal session data — never publish
