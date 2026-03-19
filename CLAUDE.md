@@ -61,6 +61,9 @@ Memory is split across files. MEMORY.md is always loaded — it is the index, no
 
 **Thresholds:** Run `/consolidate-memory` when any topic file exceeds 100 lines or MEMORY.md exceeds 80 lines. Consolidation uses Haiku — zero extra cost beyond session tokens.
 
+## Core Principles
+- **No Laziness** — find root causes, no temporary fixes, senior developer standards
+
 ## Default Operating Mode
 Unless told otherwise:
 - Prioritize working, tested code over speed
@@ -68,6 +71,7 @@ Unless told otherwise:
 - Run tests before considering a task done
 - Check for console.log before finishing
 - Never modify files outside the task scope
+- For non-trivial implementations: pause before presenting and ask "is there a more elegant solution?" — skip for simple/obvious fixes
 
 ## Markdown File Standards
 Every .md costs tokens on load and shapes Claude's behavior. Rules for all .md writes:
@@ -98,11 +102,14 @@ When asked to refactor, clean up, restructure, simplify, or reduce technical deb
 When asked to profile, optimize, improve performance, reduce latency, or fix slow code → read ~/.claude/contexts/performance.md and apply it
 When asked to work on data pipelines, ETL, ML, analytics, transforms, or data engineering → read ~/.claude/contexts/data.md and apply it
 When asked to write, update, or generate documentation, runbooks, ADRs, changelogs, or API reference → read ~/.claude/contexts/docs.md and apply it
+When asked to test, verify, explore, or QA a live URL, staging environment, localhost app, or web interface → use /browse skill (persistent browser daemon — do NOT cold-start Playwright)
+When asked to check web design, UI layout, visual correctness, or how something looks in the browser → use /browse skill: screenshot first, then inspect, then report findings
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation
 2. Check if .claude/sessions/ has a recent session file → offer to restore context
-3. For multi-file tasks: create a plan first, do not jump to implementation
+3. For any task with 3+ steps or architectural decisions: output a plan first, get confirmation, then implement — never jump straight to code
+4. If something goes sideways mid-task: STOP, re-plan, then continue — don't push through
 
 ## After Completing Any Task
 1. Confirm tests were written for every new/modified component, service, hook, or route
@@ -112,6 +119,7 @@ When asked to write, update, or generate documentation, runbooks, ADRs, changelo
 5. Check for console.log in modified files
 6. Update .claude/codemap.md if structure changed
 7. Write any new decisions or patterns to project memory
+8. Self-check: "Would a staff engineer approve this?" — if no, fix it before presenting
 
 ## Rules Reference
 Read only the relevant file:

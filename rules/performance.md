@@ -15,6 +15,17 @@ Every token costs. Apply these at all times:
 - Prefer targeted Edit over full Write rewrites
 - Cut responses to the minimum that communicates clearly
 
+## Large Output Commands — Use ctx-exec
+When a Bash command will produce >5KB output (test runs, build logs, `gh issue list`, `kubectl`, `docker logs`, large diffs), use ctx-exec to filter by intent:
+```bash
+~/.claude/bin/ctx-exec "intent phrase" <command>
+# Examples:
+~/.claude/bin/ctx-exec "failing tests" pnpm test
+~/.claude/bin/ctx-exec "error warning" npm run build
+~/.claude/bin/ctx-exec "open issues" gh issue list --limit 50
+```
+ctx-exec returns only lines matching the intent (+ 2 lines context). Raw output never enters context window.
+
 ## Context Hygiene
 - Compact manually at logical phase transitions: after exploration, after a milestone, before switching major tasks
 - Never @-reference large doc files inline — use file paths with read guidance

@@ -11,6 +11,7 @@
     ]
   },
   "model": "claude-sonnet-4-6",
+  "autoUpdatesChannel": "latest",
   "hooks": {
     "PreToolUse": [
       {
@@ -75,6 +76,15 @@
           {
             "type": "command",
             "command": "FILE=$(jq -r '.tool_input.file_path'); [ -f \"$FILE\" ] && grep -n 'console\\.log' \"$FILE\" && echo '[Hook] console.log found — remove before committing' >&2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK=$(cat); OUTPUT=$(echo \"$HOOK\" | jq -r '.tool_response.output // \"\"' 2>/dev/null); BYTES=${#OUTPUT}; if [ \"$BYTES\" -gt 5120 ]; then KB=$((BYTES / 1024)); echo \"[ctx] Large output: ${KB}KB in context. Next time use: ~/.claude/bin/ctx-exec \\\"intent\\\" command\" >&2; fi; true"
           }
         ]
       },

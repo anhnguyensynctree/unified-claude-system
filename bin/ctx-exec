@@ -1,0 +1,54 @@
+#!/bin/bash
+# ctx-exec: Run a command and filter large output by intent
+# Usage: ctx-exec "intent phrase" <command>
+# If output > 5KB and intent is provided, returns only BM25-approximated matching lines
+# If no intent provided, returns full output (no filtering)
+
+INTENT="$1"
+shift
+
+if [ -z "$1" ]; then
+  echo "Usage: ctx-exec \"intent\" command [args...]" >&2
+  exit 1
+fi
+
+THRESHOLD=5120  # 5KB
+
+OUTPUT=$(eval "$@" 2>&1)
+EXIT_CODE=$?
+BYTES=${#OUTPUT}
+
+# Under threshold or no intent — return as-is
+if [ "$BYTES" -lt "$THRESHOLD" ] || [ -z "$INTENT" ]; then
+  echo "$OUTPUT"
+  exit $EXIT_CODE
+fi
+
+KB=$(( BYTES / 1024 ))
+
+# Build grep pattern from intent words (OR match)
+PATTERN=$(echo "$INTENT" | tr ' ' '|' | sed 's/[^a-zA-Z0-9|_-]//g')
+
+# Try rg first (faster), fallback to grep
+if command -v rg &>/dev/null; then
+  FILTERED=$(echo "$OUTPUT" | rg -i "$PATTERN" -A 2 -B 1 --no-heading 2>/dev/null | head -150)
+else
+  FILTERED=$(echo "$OUTPUT" | grep -iE "$PATTERN" -A 2 -B 1 2>/dev/null | head -150)
+fi
+
+FILTERED_BYTES=${#FILTERED}
+
+if [ -z "$FILTERED" ]; then
+  # No intent matches — return head + tail summary
+  echo "[ctx-exec] ${KB}KB output — no matches for: \"$INTENT\". Showing head/tail:"
+  echo "--- HEAD ---"
+  echo "$OUTPUT" | head -30
+  echo "--- TAIL ---"
+  echo "$OUTPUT" | tail -20
+else
+  FILTERED_KB=$(( FILTERED_BYTES / 1024 ))
+  echo "[ctx-exec] ${KB}KB → ${FILTERED_KB}KB (intent: \"$INTENT\")"
+  echo "$FILTERED"
+fi
+
+exit $EXIT_CODE

@@ -1,0 +1,11 @@
+{
+  "name": "browse-daemon",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "bun run server.ts",
+    "install-browsers": "~/.bun/bin/bunx playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.44.0"
+  }
+}
