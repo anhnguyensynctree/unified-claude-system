@@ -102,19 +102,30 @@ With this:      Claude already knows. Every session, from the first message.
 │   └── memory-persistence/      ◄★ the memory engine lives here
 │       ├── session-start.sh     ← Injects context at session open
 │       ├── session-end.sh       ← Persists state at session close
-│       ├── pre-compact.sh       ← Saves state before context compaction
+│       ├── pre-compact.sh       ← Emits priority-tiered XML snapshot before compaction
 │       ├── mem0-extract.sh      ← Extracts structured facts from transcripts
 │       └── health-check.sh      ← Validates system integrity on every session start
 │
 ├── standards/
 │   └── testing-pipeline.md      ← 6-layer test standard for multi-stage pipelines
 │
+├── bin/
+│   └── ctx-exec                 ← Filters large command output before it enters context
+│
 ├── skills/
 │   ├── continuous-learning/
 │   │   ├── SKILL.md             ← Skill definition
 │   │   └── evaluate-session.sh  ← Pattern extraction on Stop hook
-│   ├── oms.md                   ← One-Man-Show multi-agent orchestration engine
-│   ├── oms-train.md             ← Agent persona training workflow
+│   ├── browse/                  ← Persistent Playwright browser daemon (/browse)
+│   │   ├── SKILL.md             ← Command reference and QA workflows
+│   │   ├── server.ts            ← Bun HTTP server (idle timeout, auth token)
+│   │   ├── state.ts             ← Browser/context lifecycle management
+│   │   ├── commands.ts          ← Action handlers (click, fill, screenshot, navigate)
+│   │   └── shaper.ts            ← Structured response builder
+│   ├── oms/SKILL.md             ← One-Man-Show multi-agent orchestration engine
+│   ├── oms-train/SKILL.md       ← Agent persona training workflow
+│   ├── oms-capture/SKILL.md     ← Capture real OMS failures as training scenarios
+│   ├── oms-start/SKILL.md       ← Bootstrap OMS context for a new project
 │   ├── compact-agent-memory.md  ← Compress per-agent MEMORY.md files
 │   ├── strategic-compact.md
 │   └── codemap-updater.md
@@ -470,9 +481,66 @@ Format:
 
 Why this matters: without a codemap, Claude re-explores the project on every session. A current codemap eliminates that overhead entirely.
 
-#### `skills/oms.md` — Multi-Agent Orchestration
+#### `skills/oms/` — Multi-Agent Orchestration
 
-Internal skill for orchestrating multi-agent discussions. Invoked via `/oms <intent>`. Not intended for general use — loaded on demand only.
+The OMS (One-Man-Show) engine — a multi-agent discussion system that simulates a full product team inside a single Claude session. Invoked via `/oms <intent>`.
+
+**How it works:** a Router agent classifies the task into a tier (0–3) and activates only the personas needed. A Facilitator drives structured rounds, a Synthesizer produces a traceable decision, and a Trainer evaluates agent behavior post-discussion.
+
+**Setup — run once per project:**
+```bash
+/oms-start   # bootstraps company + product direction ctx files for the current project
+```
+
+Without `/oms-start`, `/oms` will refuse to run — it requires project context to route tasks correctly.
+
+**Four skills:**
+
+| Skill | Command | Purpose |
+|---|---|---|
+| `oms/SKILL.md` | `/oms <intent>` | Run a full multi-agent discussion |
+| `oms-start/SKILL.md` | `/oms-start` | Initialize OMS context for current project |
+| `oms-train/SKILL.md` | `/oms-train [ids]` | Run training scenarios against personas |
+| `oms-capture/SKILL.md` | `/oms-capture` | Capture a real failure as a training scenario |
+
+**Context loading is phase-gated and tier-gated** — Phase 1 loads router/memory/codemap, Phase 2 loads engine rules only at the tier that needs them. Personas receive only their scoped context, never everything.
+
+**OMS scope:** decisions only — "what should we build and why?" Implementation follows separately via direct coding after OMS produces `action_items[]`.
+
+**Agent directory:** `~/.claude/agents/` — see [OMS Agents](#oms-agents) section.
+
+#### `skills/browse/` — Persistent Browser Daemon
+
+A Bun HTTP server that keeps a Playwright browser alive across multiple Claude tool calls. Invoked via `/browse`.
+
+**Why:** cold-starting a browser per command loses cookies, auth sessions, and adds latency. The daemon preserves session state across 20+ commands — log in once, then navigate/interact freely.
+
+**Setup:**
+```bash
+cd ~/.claude/skills/browse
+bun install && bun run install-browsers
+bun run server.ts &   # start daemon before using /browse
+```
+
+**Key features:**
+- Named browser contexts (`ctx:admin`, `ctx:guest`) — test multiple auth states simultaneously
+- Command batching — reduces HTTP round trips
+- Idle timeout — auto-shuts down when inactive
+- Auth token in `~/.claude/browse-state.json`
+
+**Use `/browse` when:** testing a live URL, verifying UI layout, navigating authenticated flows, or checking how something looks in the browser. Not a replacement for CI/CD E2E tests — this is for interactive Claude QA during development.
+
+#### `bin/ctx-exec` — Large Output Filter
+
+Filters command output before it enters the context window. Use when a command produces >5KB output (test runs, build logs, `gh issue list`, `kubectl logs`).
+
+```bash
+~/.claude/bin/ctx-exec "failing tests" pnpm test
+~/.claude/bin/ctx-exec "error warning" npm run build
+~/.claude/bin/ctx-exec "open issues" gh issue list --limit 50
+```
+
+Returns only lines matching the intent phrase (+ 2 lines context). Raw output never hits the context window. A PostToolUse hook warns automatically when a Bash command produces output over 5KB.
 
 ---
 

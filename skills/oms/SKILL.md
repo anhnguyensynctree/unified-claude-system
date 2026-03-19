@@ -30,21 +30,30 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 
 **If exists:** skip entirely.
 
+**Company context check:** if `.claude/agents/company-direction.ctx.md` does not exist in the current project, tell CEO: "Run `/oms-start` to initialize project context before routing this task." — then stop. Do not proceed to Step 1 until it exists.
+
 ---
 
 ## Before Running
 
-**Always load:**
+**Phase 1 — pre-Router (always load):**
 - `~/.claude/memory/MEMORY.md` + relevant topic files
-- `~/.claude/agents/engine/discussion-rules.md`
-- `~/.claude/agents/engine/synthesis-prompt.md`
-- `~/.claude/agents/engine/escalation-format.md`
-- `~/.claude/agents/shared-context/product/company-direction.md`
-- `~/.claude/agents/shared-context/product/product-direction.md`
+- `~/.claude/agents/router/persona.md` + `router/lessons.md`
 - `~/.claude/agents/shared-context/engineering/architecture.md`
 - `~/.claude/agents/shared-context/engineering/cross-agent-patterns.md`
+- Project memory + topic files (if exists)
+- `.claude/codemap.md` (if exists)
+- All project `.claude/agents/*.ctx.md` files
 
-**Load if exists:** project memory + topic files, `.claude/codemap.md`, project agent ctx files.
+> Note: `~/.claude/agents/shared-context/product/company-direction.md` describes the OMS system itself — never load it for project tasks. Project direction lives in `.claude/agents/company-direction.ctx.md`.
+
+**Phase 2 — post-Router (tier-gated):**
+- Tier 1+: `~/.claude/agents/engine/discussion-rules.md`
+- Tier 2+: `~/.claude/agents/engine/synthesis-prompt.md`, `~/.claude/agents/engine/escalation-format.md`
+- All tiers: `~/.claude/agents/trainer/persona.md` + `trainer/lessons.md` (Tier 0 = routing-check only, skip full eval)
+- `~/.claude/agents/shared-context/product/product-direction.md` (only when task_mode requires product context)
+
+**Load if exists:** `.claude/codemap.md`, project agent ctx files (already in Phase 1).
 
 **Scoped context per agent** — never give everyone everything:
 
@@ -54,8 +63,8 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 | facilitator | all | — |
 | synthesizer | none (reads from disk log) | — |
 | cto | architecture.md, tech-stack.md, cross-agent-patterns.md | — |
-| product-manager | company-direction.md, product-direction.md | — |
-| engineering-manager | architecture.md, company-direction.md | — |
+| product-manager | company-direction.ctx.md, product-direction.ctx.md | — |
+| engineering-manager | architecture.md, company-direction.ctx.md | — |
 | backend-developer | tech-stack.md, architecture.md | ✓ |
 | frontend-developer | tech-stack.md | ✓ |
 | qa-engineer | tech-stack.md | ✓ |
@@ -137,6 +146,16 @@ Trainer does not evaluate onboarding sessions.
 ## Task ID
 Every task: `YYYY-MM-DD-short-slug` (kebab-case, max 6 words, from Router output)
 Log path: `logs/tasks/[task-id].md`
+
+---
+
+## OMS Scope Rule
+**OMS is for decisions, not execution.** It answers: "What should we build and why?" — not "How do we build it right now?"
+
+- `/oms <task>` → produces a synthesis with `action_items[]`
+- Implementation follows separately: direct coding, or `/oms-implement` (future skill — runs post-synthesis only)
+- Never invoke `/oms implement ...` — implementation inputs are wasted ceremony after architecture is settled
+- If the task is already decided and you have `action_items`: skip OMS entirely, go implement
 
 ---
 
