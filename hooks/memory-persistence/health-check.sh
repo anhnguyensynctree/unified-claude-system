@@ -249,7 +249,7 @@ for event, expected_path in required.items():
     ]
     if not any(expected_path in cmd for cmd in all_cmds):
         print(f"mem0 hook not registered: {event} → {expected_path}")
-        print(f"  Add it to settings.json hooks.{event} to enable mem0")
+        print(f"  settings.json may have been modified — restore with: git checkout settings.json")
 PYEOF
 fi
 
