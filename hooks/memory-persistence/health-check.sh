@@ -121,20 +121,37 @@ print('ok' if mem0.ANTHROPIC_API_KEY else 'missing')
   fi
 fi
 
-# ── 7. facts.json files — valid JSON arrays ───────────────────────────────────
-find "$CLAUDE_DIR/projects" -name "facts.json" 2>/dev/null | while read -r f; do
-  if ! python3 -c "
-import json, sys
-d = json.load(open('$f'))
-assert isinstance(d, list), 'not an array'
-" 2>/dev/null; then
+# ── 7. facts.json — valid JSON + consolidation check (current project + global only) ──
+CWD_ENCODED=$(python3 -c "import sys; print('$(pwd)'.replace('/', '-').replace('.', '-'))")
+PROJECT_FACTS="$CLAUDE_DIR/projects/$CWD_ENCODED/memory/facts.json"
+GLOBAL_FACTS="$CLAUDE_DIR/projects/-Users-Lewis/memory/facts.json"
+
+for f in "$PROJECT_FACTS" "$GLOBAL_FACTS"; do
+  [ -f "$f" ] || continue
+  result=$(python3 -c "
+import json
+try:
+    d = json.load(open('$f'))
+    if not isinstance(d, list):
+        print('corrupted')
+    elif len(d) > 40:
+        print(len(d))
+    else:
+        print('ok')
+except Exception:
+    print('corrupted')
+" 2>/dev/null)
+  if [ "$result" = "corrupted" ]; then
     warn "Corrupted facts.json: $f"
+  elif [ "$result" != "ok" ]; then
+    project=$(basename "$(dirname "$(dirname "$f")")")
+    warn "facts.json bloated ($result facts, threshold 40): $project — run /consolidate-facts"
   fi
 done
 
 # ── 8. Project path encoding — encoded dir must match Claude Code's scheme ────
 # Claude Code encodes paths: slashes→hyphens, dots→hyphens, double-slash→double-hyphen
-# e.g. /Users/Lewis/.claude → -Users-Lewis--claude (dot becomes hyphen, / becomes -)
+# e.g. /Users/username/.claude → -Users-username--claude (dot becomes hyphen, / becomes -)
 ENCODED_DIR=$(echo "$CLAUDE_DIR" | sed 's|/|-|g; s|\.|_|g' | sed 's|_|-|g')
 # Simpler: just derive expected name from $CLAUDE_DIR directly
 EXPECTED_DIR=$(python3 -c "
@@ -196,6 +213,19 @@ if [ -n "$INSTALLED" ]; then
     warn "Claude Code update available: $INSTALLED → $CACHED_LATEST (run: brew upgrade claude-code)"
   fi
 fi
+
+# ── 10. Daemon skills — node_modules installed ───────────────────────────────
+SKILLS_DIR="$CLAUDE_DIR/skills"
+for pkg in "$SKILLS_DIR"/*/package.json; do
+  [ -f "$pkg" ] || continue
+  skill_dir=$(dirname "$pkg")
+  skill_name=$(basename "$skill_dir")
+  if [ ! -d "$skill_dir/node_modules" ]; then
+    warn "Skill '$skill_name' needs setup: cd $skill_dir && bun install"
+  else
+    ok
+  fi
+done
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 if [ "$FAIL" -gt 0 ]; then

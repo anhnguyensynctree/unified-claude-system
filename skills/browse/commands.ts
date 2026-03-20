@@ -258,10 +258,25 @@ export async function executeCommand(
           tabs: ctx.pages.length,
         };
 
+      case "eval": {
+        // eval <js expression> — evaluate JS in page context, returns result as JSON
+        const js = args.join(" ");
+        if (!js) return { ok: false, error: "eval requires a JS expression" };
+        const result = await page.evaluate((code) => {
+          try {
+            // eslint-disable-next-line no-new-func
+            return { value: Function(`"use strict"; return (${code})`)() };
+          } catch (e) {
+            return { error: String(e) };
+          }
+        }, js);
+        return buildResponse({ result }, ctx);
+      }
+
       default:
         return {
           ok: false,
-          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, status`,
+          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, status, eval`,
         };
     }
   } catch (e) {

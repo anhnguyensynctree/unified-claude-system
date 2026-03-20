@@ -92,12 +92,12 @@ Rules:
 - Empty list [] if none. Be specific."""
 
 
-def api_call(system: str, user: str, prefill: str = "[") -> str:
+def api_call(system: str, user: str, prefill: str = "[", max_tokens: int = 1024) -> str:
     if not ANTHROPIC_API_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
     payload = json.dumps({
         "model": MODEL,
-        "max_tokens": 1024,
+        "max_tokens": max_tokens,
         "system": system,
         "messages": [
             {"role": "user", "content": user},
@@ -356,25 +356,30 @@ TOPIC_FILES = {
     "insights": "insights.md",
 }
 
-MEMORY_BASE = Path.home() / ".claude" / "projects" / "-Users-Lewis" / "memory"
+MEMORY_BASE = Path.home() / ".claude" / "projects" / str(Path.home()).replace("/", "-") / "memory"
 
 CONSOLIDATE_THRESHOLD = 40
 CONSOLIDATE_TARGET = 25
 
 
-def consolidate(facts_path: Path):
+def consolidate(facts_path: Path, force: bool = False):
     facts = load_facts(facts_path)
-    if len(facts) < CONSOLIDATE_THRESHOLD:
+    if not force and len(facts) < CONSOLIDATE_THRESHOLD:
         return
 
+    if not facts:
+        print("[mem0-consolidate] No facts to consolidate", file=sys.stderr)
+        return
+
+    print(f"[mem0-consolidate] Consolidating {len(facts)} facts...", file=sys.stderr)
     all_content = "\n".join(f"- {m['content']}" for m in facts)
     try:
-        raw = api_call(CONSOLIDATE_SYSTEM, f"<facts>\n{all_content}\n</facts>")
+        raw = api_call(CONSOLIDATE_SYSTEM, f"<facts>\n{all_content}\n</facts>", max_tokens=4096)
         merged = json.loads(raw)
         if not isinstance(merged, list):
             raise ValueError("Expected list")
     except Exception as e:
-        print(f"[mem0-consolidate] Failed: {e}", file=sys.stderr)
+        print(f"[mem0-consolidate] Failed: {e} — keeping existing facts", file=sys.stderr)
         return
 
     now = datetime.now(timezone.utc).isoformat()
@@ -485,7 +490,8 @@ def main():
         if len(sys.argv) < 3:
             print("[mem0] consolidate requires <facts_path>", file=sys.stderr)
             sys.exit(1)
-        consolidate(Path(sys.argv[2]))
+        force = "--force" in sys.argv
+        consolidate(Path(sys.argv[2]), force=force)
 
     elif cmd == "retrieve":
         if len(sys.argv) < 3:

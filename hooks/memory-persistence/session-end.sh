@@ -27,16 +27,6 @@ Ended: $TIME
 EOF
 fi
 
-# Write handoff summary synchronously so it's visible before exit
-if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  if [ -f "$HOME/.config/anthropic/key" ]; then
-    export ANTHROPIC_API_KEY=$(cat "$HOME/.config/anthropic/key")
-  fi
-  python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" handoff "$TRANSCRIPT_PATH" "$DATE" "$PROJECT" >&2
-  echo "  session → $SESSION_FILE" >&2
-else
-  echo "  session → $SESSION_FILE (no transcript — handoff skipped)" >&2
-fi
 
 # --- Codemap staleness check ---
 CWD="${PROJECT_CWD:-$(pwd)}"
@@ -49,7 +39,8 @@ if [ -f "$CODEMAP" ] && git -C "$CWD" rev-parse --git-dir > /dev/null 2>&1; then
 fi
 
 # --- Memory threshold check ---
-GLOBAL_MEMORY="$HOME/.claude/projects/-Users-Lewis/memory/MEMORY.md"
+HOME_ENCODED=$(echo "$HOME" | sed 's|/|-|g')
+GLOBAL_MEMORY="$HOME/.claude/projects/${HOME_ENCODED}/memory/MEMORY.md"
 if [ -f "$GLOBAL_MEMORY" ]; then
   line_count=$(wc -l < "$GLOBAL_MEMORY")
   if [ "$line_count" -gt 150 ]; then

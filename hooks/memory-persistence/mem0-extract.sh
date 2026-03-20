@@ -16,6 +16,8 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     exit 0
 fi
 
-# Extract facts into memory (async — runs after exit)
+# Extract facts and write handoff — runs once at true session exit
+DATE=$(date +%Y-%m-%d)
+python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" handoff "$TRANSCRIPT_PATH" "$DATE" "$PROJECT" 2>&1 >&2
 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" extract "$TRANSCRIPT_PATH" 2>&1 >&2
 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" learn "$TRANSCRIPT_PATH" 2>&1 >&2

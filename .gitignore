@@ -28,6 +28,9 @@ skills/learned/
 # Temp files
 *.tmp
 *.log
+*.bak
+__pycache__/
+.version-cache
 
 # Plans (generated per-session)
 plans/

@@ -530,6 +530,7 @@ bun run server.ts &   # start daemon before using /browse
 **Key features:**
 - Named browser contexts (`ctx:admin`, `ctx:guest`) — test multiple auth states simultaneously
 - Command batching — reduces HTTP round trips
+- `eval <js>` — evaluate JavaScript in page context and return the result
 - Idle timeout — auto-shuts down when inactive
 - Auth token in `~/.claude/browse-state.json`
 
