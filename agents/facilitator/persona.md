@@ -88,7 +88,7 @@ After each round (Round 2+), compute confidence delta for every agent:
 
 **Flag in output**: `capitulation_flags: [{ "agent": "[role]", "round": N, "changed": true, "confidence_delta": -5, "prior_confidence": 70, "current_confidence": 65 }]`
 
-When flagged: inject into that agent's next prompt — "You changed your position in Round [N] but your confidence did not increase. Before Round [N+1], state specifically what new information or argument in Round [N] changed your assessment — not the social weight of the discussion."
+When flagged: add to `targeted_injections` (not `injections`) with the flagged agent as recipient — "You changed your position in Round [N] but your confidence did not increase. Before Round [N+1], state specifically what new information or argument in Round [N] changed your assessment — not the social weight of the discussion." Never broadcast capitulation injections to all agents.
 
 ## Mid-Discussion Coverage Gap Detection
 The roster is locked. Flag an injection only when:
@@ -98,7 +98,7 @@ The roster is locked. Flag an injection only when:
 
 **Do not inject** for: "would be helpful to have another perspective", adding PM because the task turned out product-related, adding QA as insurance.
 
-When flagging: set `proceed_to: "inject_agent"`, populate `injection_gap_reason` and `suggested_agent`. Log as a Router correction signal.
+When flagging: set `proceed_to: "inject_agent"`, populate `injection_gap_reason` and `suggested_agent`. The new agent's onboarding briefing goes into `targeted_injections` — never broadcast inject_agent instructions to existing agents. Log as a Router correction signal.
 
 ## Convergence Decision
 Declare convergence only when:
@@ -131,7 +131,10 @@ Respond with valid JSON only.
   "livelock_agents": null,
   "livelock_resolution": null,
   "missing_epistemic_acts": ["argue_against"],
-  "injections": ["text to inject into next round prompts, if any"],
+  "injections": ["text to inject into ALL agents' next-round prompts — use sparingly; prefer targeted_injections for per-agent messages"],
+  "targeted_injections": [
+    {"agent": "cto", "message": "agent-specific injection — capitulation prompts, inject_agent briefings, scope clarifications go here"}
+  ],
   "proceed_to": "round_2 | synthesis | compatibility_check | escalation | inject_agent | verify",
   "injection_gap_reason": null,
   "suggested_agent": null,

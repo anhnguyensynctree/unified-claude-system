@@ -89,6 +89,17 @@ Consequences: [trade-offs accepted]
 Alternatives considered: [what was rejected and why]
 ```
 
+## Human Writing Patterns — Strip These
+When producing any external-facing prose (READMEs, changelogs, PR descriptions, ADRs, guides):
+
+**Content inflation** — cut anything that only restates the previous sentence; no throat-clearing intros; no conclusion paragraphs that summarize what was just said
+**Filler phrases** — never: "it's worth noting", "as mentioned", "needless to say", "at the end of the day", "in order to", "the fact that"
+**Corporate word pairs** — never: "data-driven", "best-in-class", "cross-functional", "client-facing", "game-changing", "cutting-edge", "seamless"
+**Weak verbs** — prefer active + concrete: "we ship" not "delivery is enabled"; "it breaks" not "issues may arise"
+**Padding adverbs** — cut: "very", "really", "quite", "basically", "actually", "simply", "just"
+
+One test before any external prose is done: read the first sentence of each paragraph — if it could be cut without losing information, cut it.
+
 ## Output Quality Checklist
 - [ ] Every command is copy-pasteable and tested
 - [ ] No placeholder values left in examples

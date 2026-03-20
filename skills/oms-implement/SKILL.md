@@ -52,14 +52,61 @@ Wait for confirmation. If CEO adjusts scope: update the plan only. Do NOT re-run
 
 ---
 
+## Step 1.5 — Dependency Analysis
+
+Before touching code, classify each action item:
+
+For each item, identify:
+- **Files/modules likely affected** — inferred from the item description + codemap
+- **Upstream dependency** — does this item require output from a prior item to exist first?
+
+Classify every item as:
+- `sequential` — depends on a prior item's output (schema must exist before API, API must exist before frontend, etc.)
+- `parallel` — independent, no shared files with other parallel items
+
+Group into `implementation_groups[]`: an ordered list of groups where items within a group are all `parallel` and can run concurrently. Sequential items form singleton groups.
+
+Example:
+```
+group 1 (parallel): [item 1 — add DB schema, item 2 — update auth config]  ← no dependency between them
+group 2 (sequential): [item 3 — add API endpoint]  ← depends on schema from item 1
+group 3 (parallel): [item 4 — frontend component, item 5 — update E2E tests]
+```
+
+Present to CEO:
+```
+Implementation plan: [N] groups, [M] items total
+  Group 1 (parallel ×2): [item 1], [item 2]
+  Group 2 (sequential): [item 3]
+  ...
+```
+No confirmation needed — proceed immediately unless CEO interrupts.
+
+---
+
 ## Step 2 — Implement
-For each action item in sequence:
+
+For each group in `implementation_groups[]` in order:
+
+### Single item (or all-sequential group)
 1. TDD: write failing test → implement minimal passing code → refactor
-2. Run tests for modified files — must pass before moving to next item
+2. Run tests for modified files — must pass before moving to next group
 3. Check for `console.log` in modified files
 4. Append progress marker to task log: `## Implementation > [item N]: [status]`
 
-**Scope lock**: implement only what is in `action_items[]`. No extra features, no opportunistic refactors.
+### Parallel group (2+ independent items)
+1. For each item: launch a worktree Agent (`isolation: "worktree"`, model: Sonnet) with:
+   - Full task context: `decision`, their specific `action_item`, `dissent[]`, `reopen_conditions[]`
+   - Rules: `dev.md`, `testing.md`, `coding-style.md`
+   - Instruction: "Implement only this item. TDD: failing test → minimal pass → refactor. Run tests. Check console.log. Output: `{status: complete|reopen, files_changed[], reopen_reason?: string}`"
+2. All agents in the group run concurrently — dispatch in a single message
+3. Collect all agent outputs before proceeding
+4. If any agent returns `status: reopen`: **stop entire group**, surface to CEO (see Reopen Condition below)
+5. Merge each worktree branch in order — if merge conflict: surface specific conflict to CEO before resolving
+6. Run full test suite after all merges in the group pass — must be green before starting next group
+7. Append per-item progress markers to task log
+
+**Scope lock**: each agent implements only its assigned item. No extra features, no opportunistic refactors. Applies to parallel and sequential paths equally.
 
 **Reopen condition hit**: STOP immediately. Surface to CEO:
 ```

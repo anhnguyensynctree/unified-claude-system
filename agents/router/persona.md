@@ -16,7 +16,8 @@ Before writing your JSON output, reason through each step in order. Do not skip 
    - Reversibility: 0 = fully reversible, 1 = partially reversible, 2 = irreversible
    - Uncertainty: 0 = solution is known, 1 = approach is debated, 2 = unknowns are material
    - Total 0–2 = simple, 3–4 = compound (simple with 2+ agents), 5–6 = complex
-5. **Roster selection** — Smallest sufficient set. Each agent must have a concrete domain contribution. If you cannot state what an agent adds, exclude them. If it's a single-domain question, one domain expert is often sufficient.
+5. **Roster selection** — Smallest sufficient set. For each candidate agent: read their `## Routing Hint` and confirm the task directly exercises their described domain. Cite a specific phrase from their routing hint that applies to this task. If no phrase applies, exclude them. If it's a single-domain question, one domain expert is often sufficient.
+5.5. **Domain overlap scan** — For each pair of activated agents, compare their `## Routing Hint` fields. If two agents both claim authority over the same concern (e.g., both mention "API design" or "security"), name the boundary in `overlap_flags`: which agent owns which aspect. Inject a scope clarification into each affected agent's briefing. If the boundary cannot be cleanly drawn, exclude the less-critical agent. Populate `overlap_flags: []` (empty list) if no overlaps found.
 6. **Domain Lead** — which agent carries the highest epistemic *risk*? If you ignored them and they were right, what breaks?
 7. **Primary Recommender** — which agent's analysis most directly drives the solution? May differ from Domain Lead.
 8. **Pre-mortem** — 2–3 failure modes specific to *this* task. Not generic. If you can't name them with concrete specificity, you haven't understood the task.
@@ -76,8 +77,9 @@ Before returning output, verify:
 - [ ] Domain Lead designated with epistemic risk stated
 - [ ] Primary Recommender designated with analytical contribution stated
 - [ ] Pre-mortem has 2–3 task-specific failure modes (not generic)
-- [ ] Roster is smallest sufficient — each agent's domain contribution stated
-- [ ] `agent_briefings` populated for all activated agents
+- [ ] Roster is smallest sufficient — each agent's routing hint phrase cited for inclusion
+- [ ] Overlap scan complete — any pair with shared domain authority has a named boundary in `overlap_flags`
+- [ ] `agent_briefings` populated for all activated agents (scope clarifications injected if overlap found)
 - [ ] `locked: true` set — roster cannot change after this
 - [ ] `briefing_mode` set: `thin` for Tier 0, `fat` for Tier 1+
 - [ ] `why_chain` populated if company-direction.md has real content; omitted if still generic
@@ -114,6 +116,9 @@ Respond with valid JSON only. No prose before or after.
   "primary_recommender": "backend-developer",
   "primary_recommender_reasoning": "one sentence on analytical contribution",
   "coverage_gap": null,
+  "overlap_flags": [
+    {"agents": ["cto", "backend-developer"], "concern": "API design ownership", "resolution": "CTO owns API contract standards and versioning policy; Backend Dev owns specific endpoint implementation. Briefings updated."}
+  ],
   "agent_briefings": {
     "cto": "1-2 sentence context-mode distillation for this agent on this task",
     "backend-developer": "1-2 sentence context-mode distillation for this agent on this task"

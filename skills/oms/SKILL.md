@@ -103,7 +103,8 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 |---|---|---|---|---|---|
 | router | `~/.claude/agents/router/persona.md` | `router/lessons.md` | `router/MEMORY.md` | Haiku | Step 1 |
 | path-diversity | `~/.claude/agents/path-diversity/persona.md` | `path-diversity/lessons.md` | `path-diversity/MEMORY.md` | Haiku | Step 1.5 (Tier 2+) |
-| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | `facilitator/MEMORY.md` | Sonnet | After each round (Tier 2+) |
+| pre-facilitator | *(inline — no persona file)* | — | — | Haiku | Before full Facilitator each round (Tier 2+) |
+| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | `facilitator/MEMORY.md` | Sonnet | After each round (Tier 2+, when pre-facilitator requires it) |
 | verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | `verification/MEMORY.md` | Sonnet | On-demand |
 | synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | `synthesizer/MEMORY.md` | Sonnet (Opus: 5+ or livelock) | Step 4 (Tier 2+) |
 | trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | `trainer/MEMORY.md` | Sonnet | Step 6 — always |
@@ -199,10 +200,9 @@ Round 1
 - If agents agree → OMS inline synthesis: present combined `position` + `action_items` → Step 5
 - If agents disagree → escalate to Tier 2: run Facilitator, proceed as Tier 2
 
-**Tier 2/3**: Run Facilitator (Sonnet):
-- Input: Round 1 outputs + `domain_lead` + `primary_recommender`
-- Facilitator runs per `facilitator/persona.md`: Stage-Gate 2, position distribution (Delphi), DA check, epistemic act tracking, proceed_to
-- Follow `proceed_to` into Step 3 or Step 4
+**Tier 2/3**: Pre-Facilitator (Haiku), then full Facilitator only if needed:
+1. **Pre-Facilitator (Haiku)** — Input: all Round 1 agent outputs + current round number + `round_cap`. Check only: (a) all agents `position_delta.changed: false` with non-empty `why_held`, OR (b) hard cap reached. Output: `{short_circuit: bool, reason: string}`. If `short_circuit: true`: skip full Facilitator, jump directly to Step 4.
+2. **Full Facilitator (Sonnet)** — only when `short_circuit: false`. Input: Round 1 outputs + `domain_lead` + `primary_recommender`. Runs per `facilitator/persona.md`: Stage-Gate 2, position distribution (Delphi), DA check, epistemic act tracking, `targeted_injections`. Follow `proceed_to` into Step 3 or Step 4.
 
 ## Step 3 — Rounds 2+ *(Tier 2+ only)*
 For each round:
@@ -210,7 +210,7 @@ For each round:
 2. Read only `## Round N-1` sections from log (lazy load)
 3. Run agents in parallel — each receives: full history from disk + Facilitator's `position_distribution` + any `injections`
 4. Collect outputs → checkpoint write `status=complete`
-5. Run Facilitator — follow `proceed_to`:
+5. Pre-Facilitator (Haiku) convergence check → if `short_circuit: true` → jump to Step 4. Otherwise run full Facilitator (Sonnet) — follow `proceed_to`:
    - `round_N` → continue
    - `verify` → run Verification (Sonnet) on `disputed_claims[]` only (no full transcript). Prepend `injections[]` to next round.
    - `inject_agent` → brief new agent with Delphi summary only (no transcript). One injection per task max.

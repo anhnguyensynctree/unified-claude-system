@@ -198,6 +198,7 @@ Always loaded. Sets operating mode, token minimization rules, memory routing, co
 
 Key behaviors it enforces:
 - No preamble, no restating the task, no post-task summaries
+- No hedging filler: "it's worth noting", "importantly", "ensure that", "Additionally", "Furthermore"
 - Read files at line ranges, not full files
 - Load rules only when domain is active
 - Compact after each major phase
@@ -238,7 +239,7 @@ Loaded on demand by CLAUDE.md when the work type changes. Zero token cost until 
 | Refactor | `refactor.md` | Clean code engineer, DRY-obsessed | refactoring or reducing tech debt |
 | Performance | `performance.md` | Performance engineer, profiler-first | profiling, optimizing, benchmarking |
 | Data | `data.md` | Senior data engineer, pipeline-safety bias | data pipelines, ML, analytics |
-| Documentation | `docs.md` | Technical writer with developer empathy | writing docs, runbooks, ADRs |
+| Documentation | `docs.md` | Technical writer with developer empathy | writing docs, runbooks, ADRs — includes human writing pattern enforcement (strips filler, corporate word pairs, content inflation) |
 
 **review.md** enforces structured output:
 ```
@@ -507,7 +508,9 @@ Without `/oms-start`, `/oms` will refuse to run — it requires project context 
 
 **Context loading is phase-gated and tier-gated** — Phase 1 loads router/memory/codemap, Phase 2 loads engine rules only at the tier that needs them. Personas receive only their scoped context, never everything.
 
-**OMS is for decisions. `/oms-implement` is for delivery.** `/oms` produces a synthesis with `action_items[]` — scope locked, decision settled. `/oms-implement` picks up that task log, implements item-by-item with TDD, then runs a two-part delivery validation: CTO reviews code quality and architecture alignment against `review.md`; QA checks each action item was fully satisfied with no scope creep. Issues are resolved or explicitly signed off before the task closes.
+**OMS is for decisions. `/oms-implement` is for delivery.** `/oms` produces a synthesis with `action_items[]` — scope locked, decision settled. `/oms-implement` picks up that task log, runs a dependency analysis across action items, dispatches independent items as parallel worktree agents (Sonnet each), then merges and runs the full test suite. Sequential items execute after their dependencies land. Delivery validation: CTO reviews code quality and architecture alignment against `review.md`; QA checks each action item was fully satisfied with no scope creep. Issues are resolved or explicitly signed off before the task closes.
+
+**OMS routing is tiered for cost.** The Router uses each agent's `routing_hint` (one-sentence capability declaration) to justify roster inclusion — no keyword matching. Before dispatch, an overlap scan checks every agent pair for shared domain authority and names the boundary. Between rounds, a Haiku pre-facilitator check short-circuits to synthesis when agents have converged — the full Sonnet Facilitator only fires when genuine disagreement or failure modes require it. Per-agent injections (capitulation prompts, coverage gap briefings) route through `targeted_injections` — never broadcast to the full roster.
 
 **Agent directory:** `~/.claude/agents/` — see [OMS Agents](#oms-agents) section.
 
