@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo|pytest)' && echo '[Hook] Long-running process detected — consider using run_in_background or a separate terminal' >&2 || true"
+            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo)' && echo '[Hook] Long-running process detected — consider using run_in_background or a separate terminal' >&2 || true"
           }
         ]
       },
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' && echo \"$FILE\" | grep -qvE '(README|CLAUDE|codemap|plan-|research-|review-|session|\\.claude/|references/|docs/|specs/|decisions/|packages/agents/)' && echo 'Blocked: avoid creating loose .md files. Only README.md, CLAUDE.md, .claude/ files, and packages/agents/ system files are allowed.' >&2 && exit 2 || true"
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' && echo \"$FILE\" | grep -qvE '(README|CLAUDE|codemap|plan-|research-|review-|session|\\.claude/|references/|docs/|specs/|decisions/|packages/agents/|logs/tasks/)' && echo 'Blocked: avoid creating loose .md files. Only README.md, CLAUDE.md, .claude/ files, and packages/agents/ system files are allowed.' >&2 && exit 2 || true"
           }
         ]
       },
@@ -58,15 +58,6 @@
           {
             "type": "command",
             "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.(ts|tsx|js|jsx)$' && npx prettier --write \"$FILE\" 2>/dev/null || true"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.(ts|tsx)$' && npx tsc --noEmit --skipLibCheck 2>&1 | head -20 >&2 || true"
           }
         ]
       },

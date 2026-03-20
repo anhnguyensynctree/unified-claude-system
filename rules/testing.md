@@ -62,6 +62,18 @@ For regular tasks: pass@1 is sufficient.
 - Test names describe behavior: `it('returns null when user is unauthenticated')`
 - One assertion concept per test — avoid multi-scenario `it` blocks
 
+## Mock Stability — React Hook Mocks
+Any mock that returns an object/function used in a `useEffect` dependency array MUST be a stable reference:
+```ts
+// BAD — new object every render → infinite re-render loop if used in useEffect deps
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush, back: vi.fn() }) }));
+
+// GOOD — stable reference
+const mockRouter = { push: mockPush, back: vi.fn() };
+vi.mock("next/navigation", () => ({ useRouter: () => mockRouter }));
+```
+Failure mode: silent hang after N passing tests — NO error message. `act()` waits for the loop to drain (never happens). Always use the stable pattern for `useRouter`, `usePathname`, and any custom hook whose return value is listed as a `useEffect` dependency.
+
 ## What Not To Test
 - Implementation details — test user-visible behavior
 - Third-party library internals

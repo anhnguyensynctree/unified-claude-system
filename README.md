@@ -123,6 +123,7 @@ With this:      Claude already knows. Every session, from the first message.
 │   │   ├── commands.ts          ← Action handlers (click, fill, screenshot, navigate)
 │   │   └── shaper.ts            ← Structured response builder
 │   ├── oms/SKILL.md             ← One-Man-Show multi-agent orchestration engine
+│   ├── oms-implement/SKILL.md   ← Execute OMS action_items[] with CTO/QA delivery validation
 │   ├── oms-train/SKILL.md       ← Agent persona training workflow
 │   ├── oms-capture/SKILL.md     ← Capture real OMS failures as training scenarios
 │   ├── oms-start/SKILL.md       ← Bootstrap OMS context for a new project
@@ -494,18 +495,19 @@ The OMS (One-Man-Show) engine — a multi-agent discussion system that simulates
 
 Without `/oms-start`, `/oms` will refuse to run — it requires project context to route tasks correctly.
 
-**Four skills:**
+**Five skills:**
 
 | Skill | Command | Purpose |
 |---|---|---|
 | `oms/SKILL.md` | `/oms <intent>` | Run a full multi-agent discussion |
+| `oms-implement/SKILL.md` | `/oms-implement [task-id]` | Execute `action_items[]` from a synthesis with CTO + QA delivery validation |
 | `oms-start/SKILL.md` | `/oms-start` | Initialize OMS context for current project |
 | `oms-train/SKILL.md` | `/oms-train [ids]` | Run training scenarios against personas |
 | `oms-capture/SKILL.md` | `/oms-capture` | Capture a real failure as a training scenario |
 
 **Context loading is phase-gated and tier-gated** — Phase 1 loads router/memory/codemap, Phase 2 loads engine rules only at the tier that needs them. Personas receive only their scoped context, never everything.
 
-**OMS scope:** decisions only — "what should we build and why?" Implementation follows separately via direct coding after OMS produces `action_items[]`.
+**OMS is for decisions. `/oms-implement` is for delivery.** `/oms` produces a synthesis with `action_items[]` — scope locked, decision settled. `/oms-implement` picks up that task log, implements item-by-item with TDD, then runs a two-part delivery validation: CTO reviews code quality and architecture alignment against `review.md`; QA checks each action item was fully satisfied with no scope creep. Issues are resolved or explicitly signed off before the task closes.
 
 **Agent directory:** `~/.claude/agents/` — see [OMS Agents](#oms-agents) section.
 
@@ -1117,6 +1119,24 @@ git diff origin/main -- settings.json CLAUDE.md
 
 # Compress memory when it grows
 /consolidate-memory
+```
+
+**OMS workflow — decision → delivery:**
+```bash
+# 1. Bootstrap OMS for a new project (once per project)
+/oms-start
+
+# 2. Run a multi-agent discussion to settle the approach
+/oms how should we handle optimistic locking for concurrent reservations
+
+# 3. Implement the action_items[] from the synthesis
+/oms-implement 2026-03-19-optimistic-locking
+
+# 4. Capture a failure as a training scenario (if something went wrong)
+/oms-capture
+
+# 5. Run training scenarios to validate agent personas
+/oms-train --failing
 ```
 
 ---

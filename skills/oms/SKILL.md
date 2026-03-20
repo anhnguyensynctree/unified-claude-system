@@ -153,7 +153,7 @@ Log path: `logs/tasks/[task-id].md`
 **OMS is for decisions, not execution.** It answers: "What should we build and why?" — not "How do we build it right now?"
 
 - `/oms <task>` → produces a synthesis with `action_items[]`
-- Implementation follows separately: direct coding, or `/oms-implement` (future skill — runs post-synthesis only)
+- Implementation follows separately: direct coding, or `/oms-implement` (runs post-synthesis only)
 - Never invoke `/oms implement ...` — implementation inputs are wasted ceremony after architecture is settled
 - If the task is already decided and you have `action_items`: skip OMS entirely, go implement
 
