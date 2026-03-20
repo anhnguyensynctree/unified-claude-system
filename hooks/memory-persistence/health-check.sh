@@ -227,6 +227,32 @@ for pkg in "$SKILLS_DIR"/*/package.json; do
   fi
 done
 
+# ── 11. mem0 wiring — required hooks registered in settings.json ─────────────
+if [ -f "$SETTINGS" ] && python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
+  python3 - "$SETTINGS" "$HOOKS_DIR" <<'PYEOF' 2>&1 | while IFS= read -r line; do warn "$line"; done
+import json, sys, os
+settings = json.load(open(sys.argv[1]))
+hooks_dir = sys.argv[2]
+
+required = {
+    "SessionStart": os.path.join(hooks_dir, "session-start.sh"),
+    "SessionEnd":   os.path.join(hooks_dir, "mem0-extract.sh"),
+    "Stop":         os.path.join(hooks_dir, "session-end.sh"),
+}
+
+for event, expected_path in required.items():
+    entries = settings.get("hooks", {}).get(event, [])
+    all_cmds = [
+        h.get("command", "")
+        for entry in entries if isinstance(entry, dict)
+        for h in entry.get("hooks", []) if isinstance(h, dict)
+    ]
+    if not any(expected_path in cmd for cmd in all_cmds):
+        print(f"mem0 hook not registered: {event} → {expected_path}")
+        print(f"  Add it to settings.json hooks.{event} to enable mem0")
+PYEOF
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 if [ "$FAIL" -gt 0 ]; then
   echo "[HealthCheck] $FAIL issue(s) found — run ~/.claude/hooks/memory-persistence/health-check.sh to see details" >&2
