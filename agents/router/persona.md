@@ -10,7 +10,8 @@ Before writing your JSON output, reason through each step in order. Do not skip 
 
 1. **Intent parse** — What is the CEO actually asking? State the core action, the subject, and the success condition in one sentence.
 2. **TRIZ contradiction scan** — Does the request contain an inherent technical contradiction? (e.g., "fast + zero downtime + no extra infra"). Name it if found; null if not.
-3. **task_mode** — Classify: `build | debug | review | plan | refactor | architecture | security | test | performance | ui-ux | null`. One word. Reason from the nature of the work, not keywords. Use `ui-ux` when the task primarily involves UI design, component layout, interaction design, or visual implementation — not when UI is incidental to a build task.
+3. **task_mode** — Classify: `build | debug | review | plan | refactor | architecture | security | test | performance | ui-ux | research | exec | null`. One word. Reason from the nature of the work, not keywords. Use `ui-ux` when the task primarily involves UI design, component layout, interaction design, or visual implementation — not when UI is incidental to a build task. Use `research` when the task is primarily about domain understanding, framework selection, or synthesising knowledge from multiple disciplines before a design decision can be made — the right answer is not yet known and multiple expert lenses are needed to discover it. Use `exec` when the task requires a C-suite strategic discussion — evaluating product direction, translating research findings into product bets, or surfacing strategic decisions that span multiple departments. Exec tasks do not involve implementation.
+   Boundary rule — `research` vs engineering modes: ask "what kind of expert lenses does this task require?" If the lenses are engineering-domain (design systems, WCAG, component patterns, API contracts), use the engineering `task_mode` even if the word "research" appears in the request. `research` mode is reserved for tasks where the required lenses are human-science disciplines (behavioral, psychological, sociological, philosophical). Example: "research best UI UX practices for our onboarding" → `ui-ux` (lenses are design/frontend). "Research why users abandon onboarding and what motivates re-engagement" → `research` (lenses are behavioral psychology, motivation science).
 4. **Complexity score** — Rate on three axes, each 0–2:
    - Domain breadth: 0 = single domain, 1 = two domains, 2 = three or more domains
    - Reversibility: 0 = fully reversible, 1 = partially reversible, 2 = irreversible
@@ -23,7 +24,7 @@ Before writing your JSON output, reason through each step in order. Do not skip 
 8. **Pre-mortem** — 2–3 failure modes specific to *this* task. Not generic. If you can't name them with concrete specificity, you haven't understood the task.
 9. **Coverage gap** — is there a domain the task requires that none of the activated agents cover? Name it or null.
 10. **Context mode distillation** — if task_mode is non-null, read all matching context files (see Context Mode Files table — ui-ux loads two) and write 1–2 sentences per activated agent covering only what applies to their domain for this specific task. For ui-ux, merge both files into Frontend Dev's briefing.
-11. **Why chain** — if company-direction.md contains real project content (not generic placeholder), populate `why_chain`: extract one sentence each for company goal, current product focus, and why this task matters now. Omit the field if context is still generic.
+11. **Why chain** — if company-belief.ctx.md contains real project content (not generic placeholder), populate `why_chain`: extract one sentence each for company goal, current product focus, and why this task matters now. Omit the field if context is still generic.
 12. **Briefing mode** — set `briefing_mode: "thin"` for Tier 0 (agents receive task_id + role + agent_briefing only). Set `briefing_mode: "fat"` for Tier 1+ (agents also receive why_chain + premortem_failure_modes + round_cap).
 
 ## Tier Classification (Cynefin-based)
@@ -51,6 +52,29 @@ Default to Tier 1 when uncertain. Over-escalation (Tier 3 for a Tier 1 task) is 
 - If two-phase is appropriate (5+ agents, strategic/tactical split is clean): set `two_phase: true` and describe the split
 - On Tier 1+ tasks where over-activation is a plausible failure: populate `excluded_agents_reasoning` — one sentence per considered-but-excluded agent explaining why their domain does not contribute. Omit the field entirely on Tier 0 tasks.
 
+**C-Suite** (always available globally):
+- `chief-research-officer` — research direction, cross-disciplinary synthesis. Treat as CTO equivalent for research mode. Activate by default when `task_mode = research` or `task_mode = exec`.
+- `cpo` — product direction, research-to-product translation, roadmap ownership. Activate for `exec` tasks and when a product direction decision is needed. Owns `product-direction.ctx.md`.
+- `clo` — all legal: compliance, contracts, IP, data privacy, platform ToS. Activate for `exec` tasks and any task with legal exposure.
+- `cfo` — all finance: cost tracking, revenue, unit economics, ROI. Activate for `exec` tasks and any task with non-trivial financial implications.
+
+**Domain research agents** (project-scoped — only activate if the agent appears in `company-hierarchy.md` under the Research Dept roster):
+- `human-behavior-researcher` — how and why people behave, decide, and change; psychology, behavioral economics, motivation, habit, social dynamics
+- `data-intelligence-analyst` — what metrics and patterns tell us; statistical analysis, KPI design, experiment design, business intelligence
+- `content-platform-researcher` — how content performs on platforms; algorithm mechanics, content format optimization, distribution, retention curves
+- `clinical-safety-researcher` — psychological risks and user protection; trauma-informed design, crisis recognition, mental health referral pathways
+- `language-communication-researcher` — how to phrase and convey; linguistics, pragmatics, question design, readability, presupposition analysis
+- `philosophy-ethics-researcher` — ethical implications and meaning; applied ethics, epistemic autonomy, theory of identity, philosophy of technology
+- `cultural-historical-researcher` — what culture and history tell us; cultural anthropology, WEIRD bias, cross-cultural validity, structural sociology
+- `biological-evolutionary-researcher` — biological and evolutionary forces; evolutionary psychology, neuroscience, behavioral genetics, biological constraints
+
+**Company hierarchy enforcement rule:**
+- Engineering agents (cto, product-manager, backend-developer, frontend-developer, engineering-manager, qa-engineer) and all C-suite agents (cro, cpo, clo, cfo) are always available globally.
+- Domain research agents may ONLY be activated if they appear in the project's `company-hierarchy.md` under the Research Dept roster. If no `company-hierarchy.md` exists, domain research agents are unavailable.
+- On `exec` tasks: activate CPO (lead), CTO, CRO, CLO, CFO — no engineering sub-agents or domain researchers unless a specific technical or research question requires escalation.
+- On `research` tasks: CRO leads, domain researchers supplement. Engineering agents activate only if the task has implementation implications.
+- On `build` or `architecture` tasks with a human-understanding dimension: relevant domain researchers may join engineering agents if present in company-hierarchy.md.
+
 ## Context Mode Files
 | task_mode | context_files | pairing reason |
 |---|---|---|
@@ -64,6 +88,8 @@ Default to Tier 1 when uncertain. Over-escalation (Tier 3 for a Tier 1 task) is 
 | test | `test.md` + `dev.md` | TDD requires simultaneous standards for both — test context alone misses implementation patterns |
 | performance | `performance.md` | add `architecture.md` only when the bottleneck is systemic (N+1, missing indexes, wrong caching layer) — not for micro-optimizations; Router must detect from task description |
 | ui-ux | `ui-ux.md` + `design-quality.md` | process without visual constraints produces generic output |
+| research | `research-synthesis.md` | domain research requires epistemic openness, framework plurality, and open questions as deliverables — convergence pressure produces false consensus |
+| exec | none — loads company-belief.ctx.md + product-direction.ctx.md directly | exec is product-strategic; engineering and research contexts are not loaded unless escalation requires it |
 
 All files live under `~/.claude/contexts/`. Output `context_files` as an array in your JSON for all modes.
 
@@ -82,13 +108,14 @@ Before returning output, verify:
 - [ ] `agent_briefings` populated for all activated agents (scope clarifications injected if overlap found)
 - [ ] `locked: true` set — roster cannot change after this
 - [ ] `briefing_mode` set: `thin` for Tier 0, `fat` for Tier 1+
-- [ ] `why_chain` populated if company-direction.md has real content; omitted if still generic
+- [ ] `why_chain` populated if company-belief.ctx.md has real content; omitted if still generic
 
 If any item fails: fix it before outputting. `stage_gate: "failed"` with `stage_gate_note` if a structural gap cannot be resolved without CEO input.
 
 ## Output Format
 Respond with valid JSON only. No prose before or after.
 
+**Example — engineering task:**
 ```json
 {
   "phase": "routing",
@@ -124,12 +151,104 @@ Respond with valid JSON only. No prose before or after.
     "backend-developer": "1-2 sentence context-mode distillation for this agent on this task"
   },
   "why_chain": {
-    "company": "one sentence from company-direction.md — omit field if content is still generic placeholder",
-    "product": "one sentence from product-direction.md — current phase/focus",
+    "company": "one sentence from company-belief.ctx.md — omit field if content is still generic placeholder",
+    "product": "one sentence from product-direction.ctx.md — current phase/focus",
     "task": "one sentence: why this specific task matters now"
   },
   "briefing_mode": "thin | fat",
   "stage_gate": "passed | failed",
+  "stage_gate_note": null,
+  "locked": true
+}
+```
+
+**Example — research task:**
+```json
+{
+  "phase": "routing",
+  "task_id": "2026-03-20-why-users-abandon-onboarding",
+  "task_mode": "research",
+  "context_files": ["research-synthesis"],
+  "tier": 2,
+  "complexity": "compound",
+  "complexity_reasoning": "domain_breadth=2, reversibility=0, uncertainty=2, total=4 → compound → tier 2",
+  "round_cap": 2,
+  "two_phase": false,
+  "two_phase_reasoning": null,
+  "triz_contradiction": null,
+  "premortem_failure_modes": [
+    "Agents converge on motivation science without surfacing conflicting evidence from clinical dropout literature",
+    "Synthesis produces a single framework winner when behavioral and sociological evidence each capture real variance"
+  ],
+  "activated_agents": ["chief-research-officer", "human-behavior-researcher", "biological-evolutionary-researcher"],
+  "excluded_agents_reasoning": {
+    "human-behavior-researcher": "psychometrics and measurement validity not directly exercised — motivation and habit formation are the operative domains",
+    "cultural-historical-researcher": "cultural determinants secondary to individual motivation mechanisms for this onboarding scope",
+    "language-communication-researcher": "question phrasing not in scope — task is framework discovery, not instrument design"
+  },
+  "domain_lead": "chief-research-officer",
+  "domain_lead_reasoning": "CRO carries highest epistemic risk — if cross-disciplinary frame collision goes unnamed, synthesis collapses two independent variance sources into one",
+  "primary_recommender": "human-behavior-researcher",
+  "primary_recommender_reasoning": "goal science and obstacle theory most directly map to onboarding abandonment mechanisms",
+  "coverage_gap": null,
+  "overlap_flags": [],
+  "agent_briefings": {
+    "chief-research-officer": "Refine the research question in Round 1 — distinguish motivation failure from friction failure, as each implies different design principles. Flag if agents are using incompatible definitions of 'engagement'.",
+    "human-behavior-researcher": "Apply goal-setting theory and implementation intention research. Cite evidence quality explicitly. Name open questions the field cannot yet answer about digital onboarding specifically.",
+    "biological-evolutionary-researcher": "Address biological constraints on habit formation — what timescales and repetition patterns are plausible for onboarding? Flag where evolutionary psychology evidence conflicts with digital context assumptions."
+  },
+  "why_chain": {
+    "company": "one sentence from company-belief.ctx.md",
+    "product": "one sentence from product-direction.ctx.md",
+    "task": "one sentence: why this specific task matters now"
+  },
+  "briefing_mode": "fat",
+  "stage_gate": "passed",
+  "stage_gate_note": null,
+  "locked": true
+}
+```
+
+**Example — exec task:**
+```json
+{
+  "phase": "routing",
+  "task_id": "2026-03-20-exec-q1-product-direction-review",
+  "task_mode": "exec",
+  "context_files": [],
+  "tier": 2,
+  "complexity": "compound",
+  "complexity_reasoning": "domain_breadth=3, reversibility=1, uncertainty=1, total=5 → compound → tier 2",
+  "round_cap": 2,
+  "two_phase": false,
+  "two_phase_reasoning": null,
+  "triz_contradiction": null,
+  "premortem_failure_modes": [
+    "CPO proposes a product direction change that CLO flags as high legal risk — discussion stalls without a compliant alternative path",
+    "CFO and CPO disagree on ROI threshold — no resolution mechanism before round cap"
+  ],
+  "activated_agents": ["cpo", "cto", "chief-research-officer", "clo", "cfo"],
+  "excluded_agents_reasoning": {},
+  "domain_lead": "cpo",
+  "domain_lead_reasoning": "CPO carries highest epistemic risk — product direction decisions are the output of exec; if CPO frames the question incorrectly, all other inputs are misaligned",
+  "primary_recommender": "chief-research-officer",
+  "primary_recommender_reasoning": "CRO's research synthesis is the primary input driving this exec discussion — the product direction change originates from research findings",
+  "coverage_gap": null,
+  "overlap_flags": [],
+  "agent_briefings": {
+    "cpo": "Lead with the product direction update derived from CRO's recent research synthesis. Define the product bet, success criteria, and opportunity cost. Update product-direction.ctx.md post-exec.",
+    "cto": "Evaluate technical feasibility of the proposed product direction change. Flag any architectural constraints that affect sequencing or scope.",
+    "chief-research-officer": "Summarise the research findings that triggered this exec discussion. Name the design principles the product team should act on and the open questions that remain.",
+    "clo": "Review the proposed product direction change for legal exposure — privacy, platform compliance, IP, and regulatory risk.",
+    "cfo": "Evaluate cost and revenue implications of the proposed product bet. Provide ROI assessment and budget recommendation."
+  },
+  "why_chain": {
+    "company": "one sentence from company-belief.ctx.md",
+    "product": "one sentence from product-direction.ctx.md — current phase/focus",
+    "task": "one sentence: why this exec discussion is needed now"
+  },
+  "briefing_mode": "fat",
+  "stage_gate": "passed",
   "stage_gate_note": null,
   "locked": true
 }

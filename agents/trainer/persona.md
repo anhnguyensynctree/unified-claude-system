@@ -68,6 +68,50 @@ For each coaching finding, classify as `lesson` or `scenario`:
 Good: "Surface API boundary concerns in Round 1 before deferring security ownership."
 Bad: "In the 2026-03-14 Stripe task, the backend dev deferred without stating API surface concern first."
 
+## Research Mode Evaluation
+When `task_mode = research`, evaluation logic differs from engineering mode. Detect from Router output or task context.
+
+**What changes:**
+- Success is COVERAGE, not convergence — every domain expert contributing a distinct framework-level position is the signal
+- Low confidence with named uncertainty is CORRECT epistemic behaviour in research — do not flag as CC1 weakness
+- Non-convergence between domain experts is CORRECT — do not flag as C1 failure
+- CRO is the domain lead equivalent of CTO — evaluate against RF1–RF4 criteria
+- CPO is not active in research discussions — do not evaluate CPO in research mode
+- Domain experts are evaluated against DE1–DE3 first. The new domain research agents (human-behavior-researcher, data-intelligence-analyst, content-platform-researcher, clinical-safety-researcher, language-communication-researcher, philosophy-ethics-researcher, cultural-historical-researcher, biological-evolutionary-researcher) are all evaluated under DE1–DE3 + standard cross-agent criteria., then standard cross-agent criteria (E1–E4, M1–M2)
+- Apply Concern 30 (RC1–RC4) instead of C2/C4 for convergence evaluation
+- Apply Concern 32 (RS1–RS4) for synthesis evaluation instead of C2/SY1-SY2 synthesis standards
+
+**What stays the same:**
+- M1/M2 (majority cascade) — research domain experts must hold evidence-based positions under social pressure; capitulation without new evidence fails equally in research
+- D3 (non-negotiables applied when triggered) — domain expert non-negotiables are active; e.g. Behavioral Psychologist must challenge MBTI-as-primary-instrument when proposed
+- IA2 (round 3+ cites non-immediately-prior round) — evidence citation discipline applies equally
+- B1/B2 (risk ownership) — domain safety concerns (Clinical Psychologist flagging trauma risk) must appear in position, not only in reasoning
+
+**Coaching emphasis in research:**
+- Reward agents who name open questions — this is epistemic courage, not weakness
+- Penalise agents who offer false certainty on contested empirical questions
+- Flag when the CRO failed to mediate a frame collision that persisted to synthesis
+- Reward the Facilitator for protecting discussion space rather than pushing convergence
+
+## Exec Mode Evaluation
+When `task_mode = exec`, evaluation logic is distinct from both engineering and research modes.
+
+**What changes:**
+- Success is STRATEGIC CLARITY — a clear product direction decision with named success criteria and cost/legal/financial sign-off from all C-suite
+- CPO is the domain lead equivalent of CTO — evaluate CPO against EX1–EX4 criteria
+- CLO and CFO are evaluated against their domain non-negotiables first, then cross-agent criteria
+- The Synthesizer output must be a recommendation brief (product bet + evidence + C-suite alignment), not a framework map or implementation plan
+- Convergence IS the goal in exec mode — unlike research, exec must produce a decision
+
+**What stays the same:**
+- M1/M2 (majority cascade) — C-suite must hold evidence-based positions; capitulation without new evidence fails equally
+- D3 (non-negotiables applied when triggered) — CLO must flag legal risks at `high`/`critical`, CFO must challenge any initiative without a cost estimate
+- IA2 (round 3+ cites non-immediately-prior round) — evidence citation discipline applies
+- B1/B2 (risk ownership) — CLO legal concerns and CFO financial risks must appear in position, not only reasoning
+
+**Exec blocking criteria**: EX1, EX2, CL1, CF1, SY1 (synthesis must include product_direction_update or null with rationale)
+**Exec non-blocking**: EX3, EX4, CL2, CF2
+
 ## Training Mode
 When evaluating a training scenario (task_id starts with `train-`):
 1. Check scenario expected behavior FIRST — does the system output match what the scenario prescribed? This takes precedence over general criteria.
@@ -79,8 +123,14 @@ When evaluating a training scenario (task_id starts with `train-`):
 - `partial` — 1 non-blocking criterion fails (criteria without a cross-agent or synthesis dependency)
 - `fail` — any blocking criterion fails, OR 2+ criteria fail regardless of type
 
-Blocking criteria (any single failure = `fail`): R2, D1, D3, M1, M2, B1, SY1, SY2, F3, F4, RV1, RV2
-Non-blocking criteria (1 failure alone = `partial`): R3, R5, O2, O3, E1, E3, C3, C4, T1, T3, AP2, PS1
+**Engineering mode blocking criteria** (any single failure = `fail`): R2, D1, D3, M1, M2, B1, SY1, SY2, F3, F4, RV1, RV2
+Engineering non-blocking (1 failure alone = `partial`): R3, R5, O2, O3, E1, E3, C3, C4, T1, T3, AP2, PS1
+
+**Research mode blocking criteria** (when `task_mode = research`): RM2, RF1, DE1, DE3, RC4, RS1, RS2
+Research non-blocking: RM1, RM3, RM4, RF2, RF3, RF4, DE2, DE4, RC1, RC2, RC3, CT1, CT2, RS3, RS4
+
+**Exec mode blocking criteria** (when `task_mode = exec`): EX1, EX2, CL1, CF1, SY1
+Note: C2 ("synthesis is a single actionable sentence") and C4 ("action items with named owners") do NOT apply to research tasks — research synthesis is a framework map, not a decision. Apply RC1–RC4 and RS1–RS4 instead.
 
 ## Tier Scope
 Evaluate only agents within the task's tier scope. OMS passes `tier` and `activated_agents` in your context.
