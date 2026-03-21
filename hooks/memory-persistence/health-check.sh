@@ -12,6 +12,67 @@ FAIL=0
 warn() { echo "[HealthCheck] WARN: $*" >&2; ((FAIL++)); }
 ok()   { ((PASS++)); }
 
+# ── 0. mem0 retry — re-run any steps that failed last session ────────────────
+RETRY_FILE="$HOME/.claude/logs/mem0-retry.json"
+if [ -f "$RETRY_FILE" ]; then
+  FAILED_STEPS_LIST=$(python3 -c "import json; d=json.load(open('$RETRY_FILE')); print(', '.join(d.get('failed_steps', [])))" 2>/dev/null)
+  warn "mem0 steps failed last session: ${FAILED_STEPS_LIST:-unknown} — retrying now"
+
+  if [ -f "$HOME/.config/anthropic/key" ]; then
+    export ANTHROPIC_API_KEY=$(cat "$HOME/.config/anthropic/key")
+  fi
+
+  RETRY_RESULT=$(python3 - "$RETRY_FILE" "$HOOKS_DIR/mem0.py" 2>&1 <<'PYEOF'
+import json, subprocess, sys, os
+
+retry = json.load(open(sys.argv[1]))
+mem0  = sys.argv[2]
+tp    = retry.get("transcript_path", "")
+proj  = retry.get("project", "")
+date  = retry.get("date", "")
+steps = retry.get("failed_steps", [])
+
+if not os.path.exists(tp):
+    print(f"SKIP: transcript no longer available ({tp})")
+    sys.exit(0)
+
+args_map = {
+    "handoff":      ["handoff", tp, date, proj],
+    "extract":      ["extract", tp],
+    "learn":        ["learn",   tp],
+    "check-memory": ["check-memory"],
+}
+
+still_failing = []
+for step in steps:
+    if step not in args_map:
+        print(f"FAIL: unknown step '{step}'")
+        still_failing.append(step)
+        continue
+    r = subprocess.run(["python3", mem0] + args_map[step], capture_output=True, text=True, timeout=20)
+    if r.returncode != 0:
+        print(f"FAIL: {step} — {r.stderr.strip()[:200]}")
+        still_failing.append(step)
+    else:
+        print(f"OK: {step}")
+
+if still_failing:
+    sys.exit(1)
+PYEOF
+  )
+
+  if echo "$RETRY_RESULT" | grep -q "^FAIL:"; then
+    while IFS= read -r line; do
+      [[ "$line" == FAIL:* ]] && warn "mem0 retry ${line#FAIL: }"
+    done <<< "$RETRY_RESULT"
+  else
+    echo "[HealthCheck] mem0 retry complete — all steps recovered" >&2
+    ((PASS++))
+  fi
+
+  rm -f "$RETRY_FILE"
+fi
+
 # ── 1. settings.json — exists and is valid JSON ──────────────────────────────
 if [ ! -f "$SETTINGS" ]; then
   warn "settings.json not found at $SETTINGS"

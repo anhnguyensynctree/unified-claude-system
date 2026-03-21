@@ -297,6 +297,8 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 - mem0 fact extraction (Haiku) — deduplicates against existing facts, auto-consolidates if >40
 - Pattern extraction into topic files (`topics/*.md`, `insights.md`)
 - Memory check — consolidates any topic file over 100 lines via Haiku
+- Each step has a 12s hard timeout; exits immediately when all complete (60s ceiling total)
+- Failed/timed-out steps written to `~/.claude/logs/mem0-retry.json` for retry on next session start
 
 ### Memory System — Tiered
 
@@ -418,6 +420,7 @@ A self-maintaining integrity validator for the entire unified Claude system. Sil
 
 | Check | What it catches |
 |---|---|
+| mem0 retry | Re-runs steps that failed/timed out last session; surfaces failures via `WARN` |
 | `settings.json` schema | Missing `matcher` fields, malformed hook objects, missing `type` or `command` |
 | Hook command paths | Scripts that have been moved, deleted, or lost execute permission |
 | Shell script syntax | `bash -n` on every `.sh` in the hooks directory |
