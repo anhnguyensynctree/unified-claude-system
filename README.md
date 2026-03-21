@@ -28,6 +28,7 @@ Every Claude Code session starts cold. You re-explain your stack, your conventio
 - **Automated quality gates** — catches `console.log`, runs TypeScript checks, enforces test coverage in real time
 - **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — never overpay
 - **Continuous learning** — patterns discovered during work are extracted and reused in future sessions
+- **[OMS](#oms--one-man-show)** — multi-agent discussion engine that convenes a virtual product team for high-stakes decisions, then validates delivery
 
 ```
 Without this:   "Use pnpm. TDD. Conventional commits. No console.log. 80% coverage minimum."
@@ -490,34 +491,7 @@ Why this matters: without a codemap, Claude re-explores the project on every ses
 
 #### `skills/oms/` — Multi-Agent Orchestration
 
-The OMS (One-Man-Show) engine — a multi-agent discussion system that simulates a full product team inside a single Claude session. Invoked via `/oms <intent>`.
-
-**How it works:** a Router agent classifies the task into a tier (0–3) and activates only the personas needed. A Facilitator drives structured rounds, a Synthesizer produces a traceable decision, and a Trainer evaluates agent behavior post-discussion.
-
-**Setup — run once per project:**
-```bash
-/oms-start   # bootstraps company + product direction ctx files for the current project
-```
-
-Without `/oms-start`, `/oms` will refuse to run — it requires project context to route tasks correctly.
-
-**Five skills:**
-
-| Skill | Command | Purpose |
-|---|---|---|
-| `oms/SKILL.md` | `/oms <intent>` | Run a full multi-agent discussion |
-| `oms-implement/SKILL.md` | `/oms-implement [task-id]` | Execute `action_items[]` from a synthesis with CTO + QA delivery validation |
-| `oms-start/SKILL.md` | `/oms-start` | Initialize OMS context for current project |
-| `oms-train/SKILL.md` | `/oms-train [ids]` | Run training scenarios against personas |
-| `oms-capture/SKILL.md` | `/oms-capture` | Capture a real failure as a training scenario |
-
-**Context loading is phase-gated and tier-gated** — Phase 1 loads router/memory/codemap, Phase 2 loads engine rules only at the tier that needs them. Personas receive only their scoped context, never everything.
-
-**OMS is for decisions. `/oms-implement` is for delivery.** `/oms` produces a synthesis with `action_items[]` — scope locked, decision settled. `/oms-implement` picks up that task log, runs a dependency analysis across action items, dispatches independent items as parallel worktree agents (Sonnet each), then merges and runs the full test suite. Sequential items execute after their dependencies land. Delivery validation: CTO reviews code quality and architecture alignment against `review.md`; QA checks each action item was fully satisfied with no scope creep. Issues are resolved or explicitly signed off before the task closes.
-
-**OMS routing is tiered for cost.** The Router uses each agent's `routing_hint` (one-sentence capability declaration) to justify roster inclusion — no keyword matching. Before dispatch, an overlap scan checks every agent pair for shared domain authority and names the boundary. Between rounds, a Haiku pre-facilitator check short-circuits to synthesis when agents have converged — the full Sonnet Facilitator only fires when genuine disagreement or failure modes require it. Per-agent injections (capitulation prompts, coverage gap briefings) route through `targeted_injections` — never broadcast to the full roster.
-
-**Agent directory:** `~/.claude/agents/` — see [OMS Agents](#oms-agents) section.
+See [OMS — One-Man-Show](#oms--one-man-show) for the full breakdown.
 
 #### `skills/browse/` — Persistent Browser Daemon
 
@@ -709,6 +683,77 @@ Disables remote control of Claude Code — prevents any external process or MCP 
 TypeScript LSP, code-review, and security-guidance plugins are scoped **per package** in per-project `settings.json` — only loaded where needed.
 
 </details>
+
+---
+
+## OMS — One-Man-Show
+
+> A multi-agent discussion engine that simulates a full product team inside a single Claude session. When the decision matters, don't ask one AI — convene a room.
+
+The core problem OMS solves: Claude giving you a single perspective. On complex or cross-domain questions, a single answer is a single blind spot. OMS activates a roster of specialized personas — each arguing from their own domain — runs structured rounds, then produces a traceable synthesis. Minority positions are steelmanned. Reopen conditions are defined. The output isn't an AI answer; it's a decision audit trail.
+
+### When to use it
+
+- Architecture decisions that cut across security, performance, and delivery
+- High-stakes changes where a wrong call is expensive to reverse
+- Research questions where the right framework is itself unknown
+- Strategic product direction where engineering, product, and business pull differently
+
+For routine tasks — a bug fix, a simple feature — just ask Claude directly. OMS is for decisions where you'd normally call a meeting.
+
+### Skill suite
+
+| Command | Phase | What it does |
+|---|---|---|
+| `/oms-start` | Setup | Initialize OMS for a project — run once before anything else |
+| `/oms <intent>` | Discussion | Run a multi-agent discussion, get a synthesis with `action_items[]` |
+| `/oms exec` | Strategic | C-suite discussion for product direction decisions |
+| `/oms-implement [task-id]` | Delivery | Execute `action_items[]` with CTO code review + QA requirement check |
+| `/oms-capture` | Learning | Capture a real failure as a training scenario |
+| `/oms-train [ids]` | Maintenance | Run scenarios against agent personas |
+| `/oms audit` | Maintenance | On-demand token and context audit across OMS |
+
+### Modes
+
+**Engineering** (default) — technical tasks. The system classifies the task by complexity and activates only the personas the task warrants. A button label change gets one agent. A database migration gets five. Complexity drives cost, not the other way around.
+
+**Research** — activated when the task requires domain expertise rather than engineering judgment. "How should we design our question bank?" routes to behavioral scientists, clinical safety researchers, philosophers, and others — not the engineering team. Research mode produces a framework map of where the field agrees, where it conflicts, and what remains unknown. It does not force a single answer when the domain doesn't have one.
+
+**Exec** — strategic product direction. C-suite discussion producing a 3–5 bullet summary for the CEO and updating the project's product direction file.
+
+### Discussion → Delivery
+
+OMS produces a decision. `/oms-implement` executes it.
+
+`/oms` locks scope and outputs `action_items[]` with assignees, rationale, and reopen conditions. `/oms-implement` picks up that task log, dispatches independent items as parallel agents, merges results, runs the full test suite, and validates delivery — CTO checks code quality, QA checks requirement fidelity. Nothing closes until both sign off.
+
+### Workflow
+
+```bash
+# Once per project
+/oms-start
+
+# Settle a technical decision
+/oms how should we handle optimistic locking for concurrent reservations
+
+# Implement what was decided
+/oms-implement 2026-03-19-optimistic-locking
+
+# If an agent behaved badly, capture it
+/oms-capture
+
+# Research mode — domain knowledge questions
+/oms how should we design the question bank to maximize honest self-reflection
+
+# Strategic direction
+/oms exec Q2 roadmap priorities given current retention data
+```
+
+### Project setup
+
+`/oms-start` ingests any starting material — CLAUDE.md, README, PRD, raw notes — asks which departments are active (engineering only, or also research / legal / finance), runs a short intake questionnaire, and generates the context files OMS needs to route tasks correctly.
+
+Without `/oms-start`, `/oms` will refuse to run.
 
 ---
 
@@ -1258,24 +1303,6 @@ git diff origin/main -- settings.json CLAUDE.md
 
 # Explore design directions before committing
 /stitch variants login --range REIMAGINE --count 3
-```
-
-**OMS workflow — decision → delivery:**
-```bash
-# 1. Bootstrap OMS for a new project (once per project)
-/oms-start
-
-# 2. Run a multi-agent discussion to settle the approach
-/oms how should we handle optimistic locking for concurrent reservations
-
-# 3. Implement the action_items[] from the synthesis
-/oms-implement 2026-03-19-optimistic-locking
-
-# 4. Capture a failure as a training scenario (if something went wrong)
-/oms-capture
-
-# 5. Run training scenarios to validate agent personas
-/oms-train --failing
 ```
 
 ---
