@@ -287,11 +287,20 @@ def extract(transcript_path: str):
     consolidate(facts_path)
 
 
-def get_git_diff(cwd: str) -> str:
+def get_git_diff(cwd: str, transcript_path: str) -> str:
     import subprocess
+    import os
     try:
+        # Anchor to when this session's transcript file was created
+        session_start = int(os.path.getctime(transcript_path))
+        # Find the last commit SHA before the session started
+        base = subprocess.run(
+            ["git", "log", f"--before={session_start}", "--format=%H", "-1"],
+            capture_output=True, text=True, cwd=cwd, timeout=5
+        ).stdout.strip()
+        ref = f"{base}..HEAD" if base else "HEAD~10..HEAD"
         result = subprocess.run(
-            ["git", "diff", "HEAD~5", "HEAD", "--stat", "--diff-filter=ACDMR"],
+            ["git", "diff", ref, "--stat", "--diff-filter=ACDMR"],
             capture_output=True, text=True, cwd=cwd, timeout=5
         )
         return result.stdout.strip()[:1500] if result.stdout else ""
@@ -314,7 +323,7 @@ def handoff(transcript_path: str, date: str, project: str = "unknown"):
         return
 
     cwd = get_cwd_from_transcript(transcript_path)
-    git_diff = get_git_diff(cwd) if cwd else ""
+    git_diff = get_git_diff(cwd, transcript_path) if cwd else ""
     diff_section = f"\n\n<git_changes>\n{git_diff}\n</git_changes>" if git_diff else ""
 
     try:
