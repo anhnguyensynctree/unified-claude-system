@@ -14,6 +14,7 @@ Orchestrates the one-man-show multi-agent discussion engine. Invoked via `/oms` 
 | `/oms read <file/url>` | **Onboard** — team reads material, surfaces questions |
 | `/oms discover` | **Discover** — explicit project bootstrap |
 | `/oms add <role> to the team` | **Task** — route to CTO + EM |
+| `/oms exec` | **Exec** — C-suite strategic discussion; auto-triggered at milestones |
 
 ---
 
@@ -30,7 +31,7 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 
 **If exists:** skip entirely.
 
-**Company context check:** if `.claude/agents/company-direction.ctx.md` does not exist in the current project, tell CEO: "Run `/oms-start` to initialize project context before routing this task." — then stop. Do not proceed to Step 1 until it exists.
+**Company context check:** if `.claude/agents/company-belief.ctx.md` does not exist in the current project, tell CEO: "Run `/oms-start` to initialize project context before routing this task." — then stop. Do not proceed to Step 1 until it exists.
 
 ---
 
@@ -44,8 +45,10 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 - Project memory + topic files (if exists)
 - `.claude/codemap.md` (if exists)
 - All project `.claude/agents/*.ctx.md` files
+- `.claude/agents/company-hierarchy.md` (if exists) — defines active departments and rostered agents; pass to Router as `project_active_departments` and `project_available_agents`
+- `.claude/agents/research.ctx.md` (if exists) — project-specific research context; inject into all domain expert agent briefings on `research` tasks
 
-> Note: `~/.claude/agents/shared-context/product/company-direction.md` describes the OMS system itself — never load it for project tasks. Project direction lives in `.claude/agents/company-direction.ctx.md`.
+> Note: `~/.claude/agents/shared-context/product/company-direction.md` describes the OMS system itself — never load it for project tasks. Project direction lives in `.claude/agents/company-belief.ctx.md`.
 
 **Phase 2 — post-Router (tier-gated):**
 - Tier 1+: `~/.claude/agents/engine/discussion-rules.md`
@@ -63,14 +66,30 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 | facilitator | all | — |
 | synthesizer | none (reads from disk log) | — |
 | cto | architecture.md, tech-stack.md, cross-agent-patterns.md | — |
-| product-manager | company-direction.ctx.md, product-direction.ctx.md | — |
-| engineering-manager | architecture.md, company-direction.ctx.md | — |
+| product-manager | company-belief.ctx.md, product-direction.ctx.md | — |
+| engineering-manager | architecture.md, company-belief.ctx.md | — |
 | backend-developer | tech-stack.md, architecture.md | ✓ |
 | frontend-developer | tech-stack.md | ✓ |
 | qa-engineer | tech-stack.md | ✓ |
 | trainer | none — receives validation-criteria.md | — |
+| chief-research-officer | research-synthesis.md, research.ctx.md (if exists) | — |
+| human-behavior-researcher | research-synthesis.md, research.ctx.md (if exists) | — |
+| data-intelligence-analyst | research-synthesis.md, research.ctx.md (if exists) | — |
+| content-platform-researcher | research-synthesis.md, research.ctx.md (if exists) | — |
+| clinical-safety-researcher | research-synthesis.md, research.ctx.md (if exists) | — |
+| language-communication-researcher | research-synthesis.md, research.ctx.md (if exists) | — |
+| philosophy-ethics-researcher | research-synthesis.md, research.ctx.md (if exists) | — |
+| cultural-historical-researcher | research-synthesis.md, research.ctx.md (if exists) | — |
+| biological-evolutionary-researcher | research-synthesis.md, research.ctx.md (if exists) | — |
+| cpo | company-belief.ctx.md, product-direction.ctx.md | — |
+| clo | company-belief.ctx.md | — |
+| cfo | company-belief.ctx.md | — |
 
 **Context mode**: Router detects `task_mode` and outputs `context_files[]`. Most modes map to one file; four modes always pair two: `ui-ux` (ui-ux + design-quality), `security` (security + architecture), `test` (test + dev), `refactor` (refactor + test). `performance` conditionally adds `architecture.md` only when the bottleneck is systemic. Router reads all context files once and distills per-agent `agent_briefings` (1–2 sentences each). Never pass full context files to agents.
+
+| Mode | Context files loaded | Rationale |
+|---|---|---|
+| exec | `company-belief.ctx.md` + `product-direction.ctx.md` | exec discussions require company vision + current product state; no engineering or research context loaded unless escalation requires it |
 
 ---
 
@@ -110,6 +129,9 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 | trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | `trainer/MEMORY.md` | Sonnet | Step 6 — always |
 
 ### Discussion Roster (V1)
+
+**Engineering agents** — activated for `build`, `architecture`, `debug`, `plan`, `refactor`, `security`, `test`, `performance`, `ui-ux` tasks:
+
 | Role | File | Lessons | ctx | Memory |
 |---|---|---|---|---|
 | cto | `~/.claude/agents/cto/persona.md` | `cto/lessons.md` | `cto.ctx.md` | `cto/MEMORY.md` |
@@ -118,6 +140,40 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 | frontend-developer | `~/.claude/agents/frontend-developer/persona.md` | `frontend-developer/lessons.md` | `frontend-developer.ctx.md` | `frontend-developer/MEMORY.md` |
 | backend-developer | `~/.claude/agents/backend-developer/persona.md` | `backend-developer/lessons.md` | `backend-developer.ctx.md` | `backend-developer/MEMORY.md` |
 | qa-engineer | `~/.claude/agents/qa-engineer/persona.md` | `qa-engineer/lessons.md` | `qa-engineer.ctx.md` | `qa-engineer/MEMORY.md` |
+
+**Research C-Suite** — activated for all `research` tasks and `exec` tasks as domain lead:
+
+| Role | File | Lessons | Memory | Domain |
+|---|---|---|---|---|
+| chief-research-officer | `~/.claude/agents/chief-research-officer/persona.md` | `chief-research-officer/lessons.md` | `chief-research-officer/MEMORY.md` | Research direction, cross-disciplinary synthesis, research-to-product translation |
+
+**New C-Suite** — activated for `exec` tasks and tasks within their domain scope:
+
+| Role | File | Lessons | Memory | Domain |
+|---|---|---|---|---|
+| cpo | `~/.claude/agents/cpo/persona.md` | `cpo/lessons.md` | `cpo/MEMORY.md` | Product direction, research-to-product translation, roadmap ownership |
+| clo | `~/.claude/agents/clo/persona.md` | `clo/lessons.md` | `clo/MEMORY.md` | All legal — compliance, contracts, IP, privacy, platform ToS |
+| cfo | `~/.claude/agents/cfo/persona.md` | `cfo/lessons.md` | `cfo/MEMORY.md` | All finance — cost tracking, revenue, P&L, unit economics |
+
+**Domain Research Agents** — project-scoped; only available if declared in `.claude/agents/company-hierarchy.md`. PhD-equivalent, 40+ years expertise standard.
+
+Core research agents (likely in most research projects):
+| Role | File | Lessons | Memory | Research Question |
+|---|---|---|---|---|
+| human-behavior-researcher | `~/.claude/agents/human-behavior-researcher/persona.md` | `human-behavior-researcher/lessons.md` | `human-behavior-researcher/MEMORY.md` | How and why do people behave, decide, and change? |
+| data-intelligence-analyst | `~/.claude/agents/data-intelligence-analyst/persona.md` | `data-intelligence-analyst/lessons.md` | `data-intelligence-analyst/MEMORY.md` | What do our metrics and patterns actually tell us? |
+
+Domain specialist agents (project-scoped per company-hierarchy):
+| Role | File | Lessons | Memory | Research Question |
+|---|---|---|---|---|
+| content-platform-researcher | `~/.claude/agents/content-platform-researcher/persona.md` | `content-platform-researcher/lessons.md` | `content-platform-researcher/MEMORY.md` | How does content perform on this platform and why? |
+| clinical-safety-researcher | `~/.claude/agents/clinical-safety-researcher/persona.md` | `clinical-safety-researcher/lessons.md` | `clinical-safety-researcher/MEMORY.md` | What psychological risks exist and how do we protect users? |
+| language-communication-researcher | `~/.claude/agents/language-communication-researcher/persona.md` | `language-communication-researcher/lessons.md` | `language-communication-researcher/MEMORY.md` | How should this be phrased, structured, and conveyed? |
+| philosophy-ethics-researcher | `~/.claude/agents/philosophy-ethics-researcher/persona.md` | `philosophy-ethics-researcher/lessons.md` | `philosophy-ethics-researcher/MEMORY.md` | What are the ethical implications and what does this mean? |
+| cultural-historical-researcher | `~/.claude/agents/cultural-historical-researcher/persona.md` | `cultural-historical-researcher/lessons.md` | `cultural-historical-researcher/MEMORY.md` | What do culture, history, and social structures tell us? |
+| biological-evolutionary-researcher | `~/.claude/agents/biological-evolutionary-researcher/persona.md` | `biological-evolutionary-researcher/lessons.md` | `biological-evolutionary-researcher/MEMORY.md` | What biological and evolutionary forces shape this? |
+
+Domain research agents carry universal domain knowledge — no ctx.md. Project-specific context is injected via `.claude/agents/research.ctx.md` on research tasks. Domain researchers do not replace engineering agents on implementation tasks but may join them when the task has a human-understanding dimension.
 
 Each agent's effective prompt = persona.md + lessons.md + ctx.md (if exists) + MEMORY.md + `agent_briefings.[role]` from Router.
 
@@ -141,6 +197,31 @@ D. CEO answers questions. Router distributes answers to relevant agents.
 E. Each agent writes what they learned to their `MEMORY.md` under `## Onboarding: [project] | [date]`
 
 Trainer does not evaluate onboarding sessions.
+
+## Exec Mode — `/oms exec` or auto-triggered at milestone
+
+The executive discussion. C-suite meets to evaluate product direction, translate research insights into product bets, and surface strategic decisions. CEO is NOT in the room — exec produces a recommendation that goes TO the CEO.
+
+**Roster**: CPO (domain lead), CTO, CRO, CLO, CFO — all always active in exec discussions.
+**Facilitator**: always runs. Same open-discussion format as engineering tasks.
+**Synthesizer**: always runs. Output is a recommendation brief, not an implementation plan.
+**Trainer**: evaluates after every exec session.
+
+**Auto-trigger conditions** (Router detects and fires oms exec automatically):
+- A milestone defined in `product-direction.ctx.md` has been reached
+- Research has produced a synthesis that requires a product direction decision
+- Any C-suite agent raises a cross-department concern during a task discussion
+- CLO raises a `high` or `critical` legal risk in any discussion
+
+**Exec output to CEO** (3–5 bullets max):
+- What was decided and why (one sentence each)
+- Any tough decisions requiring CEO approval (escalated only if C-suite cannot resolve)
+- `product-direction.ctx.md` updated by CPO post-exec
+
+**Exec context** — Router loads for exec tasks:
+- `company-belief.ctx.md` (all C-suite read this)
+- `product-direction.ctx.md` (CPO leads, all read)
+- All department C-suite personas
 
 ---
 

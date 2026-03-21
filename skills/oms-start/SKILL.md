@@ -1,98 +1,209 @@
 ---
 name: oms-start
-description: Initialize OMS context for a project. Run once per project before using /oms. Writes company and product direction to project-scoped ctx files.
+description: Initialize OMS for a project. Ingests any starting material (idea, PRD, CLAUDE.md, raw notes), asks scope, runs departmental intake, and generates all project ctx files.
 ---
 # Skill: oms-start
 
-Bootstraps OMS for the current project by capturing CEO context and writing it to project-scoped ctx files. Run once before first `/oms` use, or to update existing context.
+Bootstraps OMS for the current project. Accepts any starting material — raw idea, PRD, CLAUDE.md, research notes, or URL summary. Generates all ctx files needed for OMS to run. Run once per project, or re-run on major pivot.
 
 ## When to Use
 - First time using `/oms` in a project
-- Project pivots or major scope change
-- CEO explicitly wants to update OMS context
+- Major pivot or scope change
+- Adding a new department to an existing project
+- CEO wants to update company belief or product direction
 
-## Steps
+## Step 1 — Check Existing Context
 
-### 1 — Check existing context
+Look for `.claude/agents/company-belief.ctx.md` in the current project.
 
-Look for `.claude/agents/company-direction.ctx.md` in the current project directory.
-
-**If it exists:** read it, then present to CEO:
+**If it exists**: read it and all other `.claude/agents/*.ctx.md` files. Present:
 ```
-Found existing OMS context for this project:
-[show current content summary]
+Found existing OMS context for [project]:
+- company-belief: [one line summary]
+- product-direction: [one line summary]
+- active departments: [list from company-hierarchy.md]
 
-Update it? (y/n)
+Update it? (y/n) — or specify what changed: pivot / new department / product update
 ```
-If no → skip to done. If yes → continue to Step 2.
+If no → skip to done.
+If yes → determine what changed and jump to the relevant step.
 
-**If not:** continue to Step 2.
+**If not**: continue to Step 2.
 
-### 2 — Ask CEO context questions
+## Step 2 — Ingest Starting Material
 
-Present all questions at once (single message, CEO answers in one reply):
+Auto-read whatever exists in the current directory:
+- `CLAUDE.md` → extract product description, stack, constraints
+- `package.json` / `pyproject.toml` / `Cargo.toml` → extract tech stack
+- Any file the CEO names: PRD, spec doc, research notes, README
+- If CEO pastes raw text: accept it as-is
+
+If nothing exists and CEO provides no material: ask for a one-paragraph description of what they are building. Accept anything — rough idea, vision, half-baked concept. Do not require polish.
+
+Summarise what was ingested in one sentence before proceeding.
+
+## Step 3 — Scope Declaration
+
+Ask ONE question. Present as a numbered list:
 
 ```
-Setting up OMS for this project. Answer these to initialize:
+What departments are active in this project?
 
-1. What are you building? (one sentence — product, service, or personal project)
-2. Who is it for? (target user, or yourself)
-3. Current phase? (idea / MVP / live / scaling)
-4. Tech stack? (frameworks, database, deployment)
-5. What is explicitly out of scope right now?
-6. Strategic constraints? (solo builder, no external funding, specific timeline, etc.)
-7. What is the product focus / top priorities right now? (2–3 bullet points)
+[1] Engineering only — software product, no research dimension
+[2] Engineering + Research — requires domain expert knowledge (behavioral science, content strategy, platform research, etc.)
+[3] Engineering + Research + Legal — has compliance, privacy, or platform ToS exposure
+[4] All departments — Engineering, Research, Legal, Finance
+[5] Custom — describe which departments
+
+Note: Engineering is always included. Legal and Finance can be added to any combination.
 ```
 
-### 3 — Write project-scoped ctx files
+CEO answers with a number or description. Router enforces activation from this point.
 
-Write two files inside the **current project's** `.claude/agents/` directory:
+## Step 4 — Departmental Intake (parallel)
 
-**`.claude/agents/company-direction.ctx.md`**
+Based on scope answer, run intake questions from each active department's lead. Present ALL questions in ONE message — CEO answers everything at once.
+
+**Engineering (always — asked by CTO perspective):**
+1. What are you building? (one sentence — core function)
+2. Who is it for? (target user and their primary need)
+3. Tech stack? (frameworks, database, AI services, deployment)
+4. Current phase? (idea / prototype / MVP / live / scaling)
+5. Biggest technical constraint right now?
+6. What is explicitly out of scope?
+
+**Research (if active — asked by CRO perspective):**
+7. What domains of knowledge does this product depend on? (e.g., behavioral psychology, content strategy, linguistics)
+8. What is the core research question the product is trying to answer about its users?
+9. Are there known risks to user wellbeing or safety that research should monitor?
+10. Which of these researcher types are relevant? (human behavior, data intelligence, content/platform, clinical safety, language/communication, philosophy/ethics, cultural/historical, biological/evolutionary)
+
+**Legal (if active — asked by CLO perspective):**
+11. What jurisdictions will users be in? (affects privacy law)
+12. Does the product collect personal data? If so, what kind?
+13. What platforms will you distribute on? (App Store, YouTube, etc.)
+14. Any known IP, licensing, or content rights considerations?
+
+**Finance (if active — asked by CFO perspective):**
+15. What is the revenue model? (subscription, ads, one-time, freemium, etc.)
+16. What are the primary cost drivers? (API calls, infrastructure, content production)
+17. What financial milestone would trigger a CEO milestone report?
+
+## Step 5 — Generate Ctx Files
+
+Write all files to `.claude/agents/` in the current project. Create the directory if it does not exist.
+
+### Always generate:
+
+**`company-belief.ctx.md`** — stable company vision, changes rarely:
 ```markdown
-# Company Direction — [Project Name]
+# Company Belief — [Project Name]
 
 ## What We Are Building
-[Answer to Q1]
+[From Q1 — one sentence]
 
-## Who It's For
-[Answer to Q2]
+## Who It Is For
+[From Q2 — target user and their need]
 
-## Current Phase
-[Answer to Q3]
-
-## Tech Stack
-[Answer to Q4]
-
-## Out of Scope
-[Answer to Q5]
+## Our Operating Belief
+[Synthesized from all intake: the core bet the company is making about the world — what must be true for this product to succeed]
 
 ## Strategic Constraints
-[Answer to Q6]
+[From Q5, Q6 — what shapes every decision]
+
+## Out of Scope
+[From Q6 — what we are deliberately not doing]
 ```
 
-**`.claude/agents/product-direction.ctx.md`**
+**`product-direction.ctx.md`** — current state, updated by CPO after exec discussions:
 ```markdown
 # Product Direction — [Project Name]
 
+## Current Phase
+[From Q4]
+
 ## Current Priorities
-[Answer to Q7]
+[Top 2–3 things being worked on right now]
+
+## Next Milestone
+[What constitutes the next meaningful checkpoint — what changes after it is reached]
+
+## Decisions on Record
+[Major product decisions made to date — appended by CPO after exec discussions]
 ```
 
-### 4 — Confirm
+**`company-hierarchy.md`** — department structure and rostered agents:
+```markdown
+# Company Hierarchy — [Project Name]
+
+## Active Departments
+[List from scope declaration — always includes engineering]
+
+## Engineering Dept
+Standard roster: cto, product-manager, backend-developer, frontend-developer, engineering-manager, qa-engineer
+All available by default for engineering tasks.
+
+## Research Dept
+[Only if research active]
+### C-Suite
+- chief-research-officer (always active when research dept is active)
+
+### Rostered Researchers
+[From Q10 — list the relevant researcher agents by name]
+
+## Legal Dept
+[Only if legal active]
+- clo (singleton — covers all legal)
+
+## Finance Dept
+[Only if finance active]
+- cfo (singleton — covers all finance)
+```
+
+### Generate only if research is active:
+
+**`research.ctx.md`** — project-specific research context:
+```markdown
+# Research Context — [Project Name]
+
+## Core Research Question
+[From Q8]
+
+## Key Domains
+[From Q7]
+
+## Safety Considerations
+[From Q9 — null if none identified]
+
+## Known Research Constraints
+[What the team already knows vs. what must be discovered]
+```
+
+### Generate only if engineering ctx makes sense (project has a meaningful stack):
+
+**`cto.ctx.md`**, **`backend-developer.ctx.md`**, **`frontend-developer.ctx.md`** — brief project-specific context per agent, max 10 lines each.
+
+## Step 6 — Confirm
 
 Tell CEO:
 ```
-OMS context initialized. Files written to .claude/agents/:
-- company-direction.ctx.md
-- product-direction.ctx.md
+OMS initialized for [project name].
 
-These load automatically in every /oms run via Phase 1 ctx file glob.
+Files written to .claude/agents/:
+[list files written]
+
+Active departments: [list]
+[If research] Rostered researchers: [list agent names]
+
 Run /oms <task> to start.
+Run /oms exec for a strategic C-suite discussion.
+Run /oms-start again if the project pivots or a new department is needed.
 ```
 
 ## Rules
-- **Never write to `~/.claude/agents/shared-context/`** — those are global OMS system files
-- **Always write to the current project's `.claude/agents/`** — never global
-- If `.claude/agents/` does not exist in the current project, create it
-- Keep files under 30 lines — dense and scannable, no filler
+- **Never write to `~/.claude/agents/`** — all files go to the current project's `.claude/agents/`
+- **Never write `company-direction.ctx.md`** — it is now `company-belief.ctx.md`
+- **Never write `project-roster.md`** — it is now `company-hierarchy.md`
+- If `.claude/agents/` does not exist: create it
+- Keep all generated files under 40 lines — dense and scannable
+- Do not generate files for inactive departments
