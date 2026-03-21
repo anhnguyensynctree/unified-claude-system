@@ -117,7 +117,7 @@ Never guess a tool or skill's API — read its llms.txt first before using.
 | /stitch | ~/.claude/skills/stitch/llms.txt | Any UI generation, screen design, component implementation |
 | /browse | ~/.claude/skills/browse/llms.txt | Test or verify live URLs, localhost apps, authenticated flows, UI screenshots |
 | /oms | ~/.claude/skills/oms/llms.txt | Architecture decisions, multi-domain tasks, high-stakes changes, research synthesis |
-| rv (remotion) | ~/code/tools/remotion/llms.txt | Render short-form videos — scenes, fonts, transitions, stills |
+| rv (remotion) | ~/code/tools/remotion/llms.txt | Render any video — ShortVideo (9:16), LandscapeVideo (16:9), Audiogram (1:1) |
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation
