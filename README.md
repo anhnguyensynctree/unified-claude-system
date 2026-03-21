@@ -122,6 +122,11 @@ With this:      Claude already knows. Every session, from the first message.
 │   │   ├── state.ts             ← Browser/context lifecycle management
 │   │   ├── commands.ts          ← Action handlers (click, fill, screenshot, navigate)
 │   │   └── shaper.ts            ← Structured response builder
+│   ├── stitch/                  ← AI UI generation — Google Stitch wrapper (/stitch)
+│   │   ├── SKILL.md             ← Trigger rules and autonomous workflow
+│   │   ├── stitch.mjs           ← CLI entrypoint
+│   │   ├── llms.txt             ← Machine-readable skill reference
+│   │   └── lib/                 ← Backends, prompt builder, manifest, diff, device detection
 │   ├── oms/SKILL.md             ← One-Man-Show multi-agent orchestration engine
 │   ├── oms-implement/SKILL.md   ← Execute OMS action_items[] with CTO/QA delivery validation
 │   ├── oms-train/SKILL.md       ← Agent persona training workflow
@@ -880,7 +885,31 @@ Install these plugins:
 
 The `settings.json` already has these configured — installing them activates them.
 
-### Step 9 — Verify hooks are wired
+### Step 9 — Set up Stitch (optional — for AI UI generation)
+
+The `/stitch` skill requires Node.js dependencies and a Stitch API key. Skip this if you don't plan to use AI UI generation.
+
+```bash
+# Install dependencies
+cd ~/.claude/skills/stitch && npm install
+
+# Store Stitch API key (get from stitch.withgoogle.com → Settings → API Keys)
+mkdir -p ~/.config/stitch
+echo "your-key-here" > ~/.config/stitch/key
+chmod 600 ~/.config/stitch/key
+```
+
+Optional — make `stitch` available as a global CLI:
+```bash
+ln -sf ~/.claude/skills/stitch/stitch.mjs ~/bin/stitch
+```
+
+Verify:
+```bash
+node ~/.claude/skills/stitch/stitch.mjs list
+```
+
+### Step 10 — Verify hooks are wired
 
 Open Claude Code. You should see in the session start output:
 ```
@@ -890,7 +919,7 @@ Open Claude Code. You should see in the session start output:
 
 If you see that block, the session-start hook is running correctly.
 
-### Step 10 — First session
+### Step 11 — First session
 
 Run your first command:
 ```
@@ -1099,7 +1128,19 @@ bash ~/.claude/hooks/memory-persistence/session-start.sh
 
 You should see `## Project Memory` in the output with no errors.
 
-### Step 11 — Install Claude Code plugins
+### Step 11 — Set up Stitch (optional — for AI UI generation)
+
+```bash
+cd ~/.claude/skills/stitch && npm install
+
+mkdir -p ~/.config/stitch
+echo "your-key-here" > ~/.config/stitch/key
+chmod 600 ~/.config/stitch/key
+```
+
+Get your API key from stitch.withgoogle.com → Settings → API Keys.
+
+### Step 12 — Install Claude Code plugins
 
 Open Claude Code (inside WSL) and run:
 ```
@@ -1112,7 +1153,7 @@ Install:
 - `mgrep@Mixedbread-Grep`
 - `pyright-lsp@claude-plugins-official` (if you use Python)
 
-### Step 12 — First session
+### Step 13 — First session
 
 Run:
 ```
@@ -1202,6 +1243,21 @@ git diff origin/main -- settings.json CLAUDE.md
 
 # Compress memory when it grows
 /consolidate-memory
+```
+
+**UI workflow — design before code:**
+```bash
+# First use in a project — infer style config from docs
+/stitch init --auto
+
+# Before implementing a screen that doesn't exist yet
+/stitch "dashboard with sidebar and activity feed"
+
+# Iterate on an existing screen
+/stitch update dashboard "make sidebar collapsible"
+
+# Explore design directions before committing
+/stitch variants login --range REIMAGINE --count 3
 ```
 
 **OMS workflow — decision → delivery:**
