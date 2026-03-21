@@ -167,7 +167,7 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/memory-persistence/mem0-extract.sh",
-            "async": true
+            "timeout": 90
           }
         ]
       }
@@ -192,6 +192,6 @@
   "skipDangerousModePermissionPrompt": true,
   "voiceEnabled": true,
   "env": {
-    "CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS": "30000"
+    "CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS": "90000"
   }
 }
