@@ -136,6 +136,74 @@ Router selects profile from task context. When uncertain: `product`.
 
 ---
 
+## Stitch Prompt Engineering — Always Apply When Generating UI
+
+Stitch has no persistent style memory. Style context must be injected into every prompt via `stitch init` + prompt-builder. The prompt-builder handles this automatically — these rules apply when you craft prompts manually.
+
+### Canonical Prompt Format (from google-labs-code/stitch-skills)
+
+```
+[One-line vibe + purpose statement. Design reference: <brand>. <aesthetic> aesthetic.]
+
+DESIGN SYSTEM (REQUIRED):
+- Platform: Web, Desktop-first
+- Theme: Light, modern minimal, focused
+- Background: Descriptive Name (#hex)
+- Surface: Descriptive Name (#hex) for containers
+- Primary Accent: Descriptive Name (#hex) for CTAs and links
+- Text Primary: Descriptive Name (#hex)
+- Text Secondary: Descriptive Name (#hex)
+- Typography: [font name + weight] for headings; [font] for body
+- Buttons: [shape + radius], [interaction note]
+- Cards: [radius + shadow description]
+
+Avoid: [negative constraints]
+
+PAGE STRUCTURE:
+1. Header: [explicit layout description]
+2. Hero Section: [headline + CTA]
+3. [Section]: [component breakdown]
+```
+
+### Vocabulary: Vague → Professional
+
+| Vague | Professional |
+|---|---|
+| "menu at top" | "sticky navigation bar with logo left and nav items right" |
+| "big photo" | "high-impact hero section with full-width imagery and overlay headline" |
+| "list of things" | "responsive card grid with hover states and subtle elevation" |
+| "button" | "primary call-to-action button with micro-interactions and active state" |
+| "sidebar" | "collapsible side navigation with icon-label pairings and active highlight" |
+| "modern" | "clean, minimal, generous whitespace, high-contrast typography" |
+| "professional" | "sophisticated, trustworthy, subtle shadows, restricted premium palette" |
+| "luxury" | "elegant, spacious, fine lines, serif headers, high-fidelity photography" |
+| "dark mode" | "electric, high-contrast accents on deep slate near-black backgrounds" |
+
+### Aesthetic Anchors (encode color + type + mood simultaneously)
+- `marketing`: `"editorial"`, `"Japandi"`, `"vibrant editorial"`, `"bold typographic"`
+- `product`: `"modern minimal"`, `"dark minimal"`, `"warm professional"`, `"focused"`
+- `dense`: `"functional minimal"`, `"developer-focused"`, `"monochrome precise"`
+
+### Brand References (compressed style packages)
+- `"similar to Linear"` — dark, focused, grid-based, strong type hierarchy
+- `"similar to Notion"` — minimal, clean, monochrome, information-dense
+- `"similar to Vercel"` — high-contrast dark, editorial, precise spacing
+- `"similar to Stripe"` — clean, trustworthy, balanced color, premium
+
+### Variants Workflow
+```
+REIMAGINE → early ideation, dramatic exploration (use first)
+EXPLORE   → moderate variation, finding direction (default)
+REFINE    → conservative polish of near-final layout
+```
+Usage: `stitch variants <screen> --range REIMAGINE --count 3`
+Then promote the best with: `stitch update <screen> "<refinement>"`
+
+### Update Rules (prevents full layout regeneration)
+- One change per update prompt — never combine layout + content + style changes
+- prompt-builder appends `"Please refrain from altering any other functionalities or design elements"` automatically
+- Prompt limit: 4,500 chars (Stitch truncates at 5,000 and silently drops components)
+
 ## Pre-Output Checklist
 
 - [ ] Profile selected: `marketing` / `product` / `dense`

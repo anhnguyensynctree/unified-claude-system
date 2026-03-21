@@ -43,6 +43,14 @@ Senior UX/UI designer with frontend engineering fluency. User-need-first, access
 2. State the context: device, environment, user expertise level
 3. State constraints: existing design system, token library, engineering effort budget
 4. List the flows to cover: happy path + at least one error path
+5. Check `design/stitch/manifest.json` — if a screen exists for this view, read its HTML before designing
+6. If no screen exists: run `stitch init` (first time per project) then `stitch auto "<description>"` to generate before implementing
+
+## Stitch Workflow Integration
+- `stitch init` sets the project style config (aesthetic anchor, brand ref, palette) — do this once per project
+- `stitch auto "<intent>"` is the default command — Claude picks generate/update/breakdown automatically
+- After generation, extract colors and layout patterns from the HTML before writing any component code
+- Multi-screen features: use `stitch breakdown "full app: ..."` to generate all screens simultaneously
 
 ## Output Format
 ```

@@ -61,8 +61,8 @@ Read state file for port + token, then POST to `/command`:
 
 ```bash
 STATE=$(cat ~/.claude/skills/browse/.state.json)
-PORT=$(echo $STATE | bun -e "const s=await Bun.stdin.text(); console.log(JSON.parse(s).port)")
-TOKEN=$(echo $STATE | bun -e "const s=await Bun.stdin.text(); console.log(JSON.parse(s).token)")
+PORT=$(echo $STATE | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d).port))")
+TOKEN=$(echo $STATE | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d).token))")
 
 # Single command
 curl -s -X POST http://127.0.0.1:$PORT/command \
@@ -70,14 +70,11 @@ curl -s -X POST http://127.0.0.1:$PORT/command \
   -H "Content-Type: application/json" \
   -d '{"command": "go localhost:3000"}'
 
-# Batch commands
+# Batch commands (prefer — fewer tool calls)
 curl -s -X POST http://127.0.0.1:$PORT/command \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"commands": ["go localhost:3000", "screenshot", "console-errors"]}'
-
-# Target a named context
-curl -s ... -d '{"command": "go /dashboard", "context": "admin"}'
 ```
 
 ## Command Batching
@@ -160,15 +157,12 @@ Each context has isolated cookies/auth/storage — test multiple auth states sim
 | `value <selector>` | Get input value |
 | `attr <selector> <attr>` | Get attribute value |
 | `count <selector>` | Count matching elements |
+| `status` | Current URL, title, contexts, tabs |
 
-### Viewport
+### Viewport & Tabs
 | Command | Description |
 |---|---|
 | `viewport <width> <height>` | Set viewport size |
-
-### Tabs
-| Command | Description |
-|---|---|
 | `new-tab [url]` | Open new tab (optional URL) |
 | `switch-tab <index>` | Switch to tab by index |
 | `close-tab` | Close current tab |
@@ -181,11 +175,6 @@ Each context has isolated cookies/auth/storage — test multiple auth states sim
 | `ctx:list` | List all contexts |
 | `ctx:switch <name>` | Switch active context |
 | `ctx:destroy <name>` | Destroy context (not default) |
-
-### Meta
-| Command | Description |
-|---|---|
-| `status` | Current URL, title, contexts, tabs |
 
 ## Response Shape
 
@@ -204,68 +193,31 @@ Every command returns structured JSON — always includes page state and flushed
 
 `new_console_errors` and `new_network_errors` only appear when there are new entries since the last call (buffer is flushed on read).
 
-## Displaying Screenshots
-
-Screenshots are saved to `~/.claude/skills/browse/.screenshots/`. Use the Read tool with the returned path to display them inline.
+Use the Read tool with the returned screenshot path to display inline.
 
 ## QA Patterns
 
-**Verify page loads correctly:**
 ```json
+// Page load check
 {"commands": ["go localhost:3000", "console-errors", "screenshot"]}
-```
 
-**Test authenticated flow:**
-```json
-{"commands": [
-  "go localhost:3000/login",
-  "fill [name=email] test@example.com",
-  "fill [name=password] password",
-  "click [type=submit]",
-  "screenshot",
-  "go localhost:3000/protected",
-  "screenshot"
-]}
-```
+// Auth flow
+{"commands": ["go localhost:3000/login", "fill [name=email] test@x.com", "fill [name=password] pw", "click [type=submit]", "screenshot"]}
 
-**Test two auth states simultaneously:**
-```json
-// In context 'admin':
-{"command": "ctx:create admin"}
-{"commands": ["go /login", "fill [name=email] admin@x.com", "fill [name=password] pw", "click button[type=submit]"]}
-
-// In context 'user':
-{"command": "ctx:create user"}
-{"commands": ["go /login", "fill [name=email] user@x.com", "fill [name=password] pw", "click button[type=submit]"]}
-
-// Now test both independently:
-{"command": "ctx:switch admin"}  → {"command": "go /admin-panel"}
-{"command": "ctx:switch user"}   → {"command": "go /admin-panel"}  // should be 403
-```
-
-**Check responsive layout:**
-```json
+// Responsive check
 {"commands": ["go localhost:3000", "screenshot", "viewport 375 812", "screenshot"]}
+
+// Two auth states
+ctx:create admin → login as admin
+ctx:create user  → login as user
+ctx:switch admin → go /admin-panel  (should 200)
+ctx:switch user  → go /admin-panel  (should 403)
 ```
-
-## OMS Integration
-
-After browser exploration, format findings as QA input for OMS:
-
-```
-/oms QA findings from browser session:
-- Console errors: [paste from console-errors output]
-- Network errors: [paste from network-errors output]
-- Visual issues: [describe from screenshots]
-- Broken flows: [describe what failed]
-```
-
-The QA Engineer and relevant agents will triage, classify risk, and propose fixes.
 
 ## Notes
 
 - Smart waiting: `go`, `reload`, `back`, `forward` wait for `networkidle`. `click` and `key` wait up to 3s for networkidle, then continue regardless.
 - State file: `~/.claude/skills/browse/.state.json` (mode 0o600)
 - Screenshots: `~/.claude/skills/browse/.screenshots/`
-- Chromium crash → process exits (restart daemon)
-- Default context is always available; cannot be destroyed
+- Daemon auto-shuts after 30min idle; restart anytime
+- Crash → check `.daemon.log`, restart daemon

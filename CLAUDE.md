@@ -80,7 +80,8 @@ Unless told otherwise:
 Every .md costs tokens on load and shapes Claude's behavior. Rules for all .md writes:
 - Files under .claude/ — allowed only when improving workflow, rules, or memory; subject to strict quality gate below
 - README.md at project root — always allowed
-- Any .md in a project's docs/ folder — only allowed when docs context is active
+- Any .md in a project's docs/ folder — always allowed; docs/ is the base folder for all documentation writing
+- Any .md in a project's design/stitch/ folder — always allowed; managed exclusively by the /stitch skill
 - All other .md files anywhere — require explicit user request
 
 Quality gate — applies to every .md, especially files under .claude/:
@@ -95,7 +96,7 @@ When asked to review, audit, critique, or give feedback on code or a PR → read
 When asked to research, explore, investigate, or understand a codebase or topic → read ~/.claude/contexts/research.md and apply it
 When asked to implement, build, add, create, or develop a feature → read ~/.claude/contexts/dev.md and apply it
 When asked to write, fix, debug, run, or review tests, E2E, Playwright, Cypress, Vitest, Jest, or QA → read ~/.claude/contexts/test.md and apply it
-When asked to design, build, or review UI, UX, components, layouts, or interface flows → read ~/.claude/contexts/ui-ux.md AND ~/.claude/contexts/design-quality.md and apply both
+When asked to design, build, or review UI, UX, components, layouts, or interface flows → read ~/.claude/contexts/ui-ux.md AND ~/.claude/contexts/design-quality.md AND rules/design-system.md AND ~/.claude/skills/stitch/llms.txt; check design/stitch/manifest.json for existing screens; run stitch skill autonomously per llms.txt trigger rules before writing any component code
 When asked to design, plan, or review system architecture, backend design, APIs, or data models → read ~/.claude/contexts/architecture.md and apply it
 When asked to plan, break down, scope, or roadmap a sprint, project, feature, or milestone → read ~/.claude/contexts/plan.md and apply it
 When asked to audit, harden, review, or fix security, vulnerabilities, or auth → read ~/.claude/contexts/security.md and apply it
@@ -107,6 +108,16 @@ When asked to work on data pipelines, ETL, ML, analytics, transforms, or data en
 When asked to write, update, or generate documentation, runbooks, ADRs, changelogs, or API reference → read ~/.claude/contexts/docs.md and apply it
 When asked to test, verify, explore, or QA a live URL, staging environment, localhost app, or web interface → use /browse skill (persistent browser daemon — do NOT cold-start Playwright)
 When asked to check web design, UI layout, visual correctness, or how something looks in the browser → use /browse skill: screenshot first, then inspect, then report findings
+
+## Available Tools & Skills
+Never guess a tool or skill's API — read its llms.txt first before using.
+
+| Skill/Tool | llms.txt | When to use |
+|---|---|---|
+| /stitch | ~/.claude/skills/stitch/llms.txt | Any UI generation, screen design, component implementation |
+| /browse | ~/.claude/skills/browse/llms.txt | Test or verify live URLs, localhost apps, authenticated flows, UI screenshots |
+| /oms | ~/.claude/skills/oms/llms.txt | Architecture decisions, multi-domain tasks, high-stakes changes, research synthesis |
+| rv (remotion) | ~/code/tools/remotion/llms.txt | Render short-form videos — scenes, fonts, transitions, stills |
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation
@@ -133,3 +144,4 @@ Read only the relevant file:
 - Agents → rules/agents.md
 - Performance/tokens → rules/performance.md
 - API patterns → rules/patterns.md
+- Design system / UI generation → rules/design-system.md

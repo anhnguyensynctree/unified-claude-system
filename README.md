@@ -536,6 +536,85 @@ bun run server.ts &   # start daemon before using /browse
 
 **Use `/browse` when:** testing a live URL, verifying UI layout, navigating authenticated flows, or checking how something looks in the browser. Not a replacement for CI/CD E2E tests — this is for interactive Claude QA during development.
 
+#### `skills/stitch/` — AI UI Generation
+
+A Node.js skill that generates, iterates, and tracks UI screens using Google Stitch. Invoked via `/stitch`. Claude fires it autonomously before writing any component code — it is the source of truth for all front-end visual design.
+
+**Why:** Stitch generates pixel-accurate HTML screens from text prompts. Claude reads the output before implementing components, ensuring code matches the intended design rather than inventing UI patterns ad-hoc.
+
+**Setup:**
+```bash
+# 1. Install dependencies
+cd ~/.claude/skills/stitch && npm install
+
+# 2. Store Stitch API key (get from stitch.withgoogle.com → Settings → API Keys)
+mkdir -p ~/.config/stitch && echo "your-key-here" > ~/.config/stitch/key && chmod 600 ~/.config/stitch/key
+
+# 3. Optional: available as a global CLI via symlink
+ln -sf ~/.claude/skills/stitch/stitch.mjs ~/code/tools/stitch
+```
+
+**First use in a new project:**
+
+Claude runs `stitch init --auto` automatically. It reads `CLAUDE.md`, `README.md`, `PRD.md`, and `docs/**` to infer a style config, then presents a proposal:
+
+```
+DOCS_READ: .claude/CLAUDE.md, docs/PRD.md
+REASONING:
+  - profile: product — SaaS app context detected
+  - aesthetic: dark minimal — developer keywords detected
+  - brand reference: Linear — mentioned in CLAUDE.md
+PROPOSED_CONFIG: { "aestheticAnchor": "dark minimal", "brandReference": "similar to Linear", ... }
+```
+
+Claude presents this to you, you confirm or adjust, then it writes `design/stitch/manifest.json` with the locked config.
+
+**Autonomous workflow:**
+```
+You: "build the login page"
+Claude: checks design/stitch/manifest.json
+        → no login screen → stitch auto "login page with email and password"
+        → reads generated HTML → implements component matching the design
+
+You: "update the dashboard sidebar to be collapsible"
+Claude: finds dashboard screen in manifest
+        → stitch auto "make sidebar collapsible" --screen dashboard
+        → re-reads HTML → updates component
+```
+
+**Manual commands (when you want control):**
+```bash
+stitch init --auto                          # propose style config from project docs
+stitch init --aesthetic "Japandi" --brand "similar to Notion" --palette "warm neutrals"
+stitch auto "a checkout flow with order summary"   # Claude picks mode automatically
+stitch variants login --range REIMAGINE --count 3  # explore design directions
+stitch list                                         # show all tracked screens
+stitch status                                       # check which files exist on disk
+```
+
+**Variants workflow** (from official stitch-skills best practice):
+```
+REIMAGINE → early ideation, dramatic exploration  (use first, before committing)
+EXPLORE   → moderate variation, finding direction  (default)
+REFINE    → conservative polish of near-final layout
+```
+
+**Output per project:**
+```
+design/stitch/
+├── manifest.json         # screen registry + style config (source of truth)
+├── login.html            # latest generated HTML
+├── login.png             # screenshot
+├── login.v1.html         # archived previous version
+└── dashboard.html
+```
+
+**Key rules:**
+- `design/stitch/` is append-only via the skill — never edit HTML files manually
+- Claude reads manifest before every UI implementation task
+- Device type auto-detected from `package.json` deps and `CLAUDE.md` keywords
+- See `rules/design-system.md` for the full contract
+
 #### `bin/ctx-exec` — Large Output Filter
 
 Filters command output before it enters the context window. Use when a command produces >5KB output (test runs, build logs, `gh issue list`, `kubectl logs`).

@@ -253,6 +253,16 @@ for event, expected_path in required.items():
 PYEOF
 fi
 
+# ── 12. Stitch API key — exists and non-empty ────────────────────────────────
+STITCH_KEY_FILE="$HOME/.config/stitch/key"
+if [ ! -f "$STITCH_KEY_FILE" ]; then
+  warn "Stitch API key not found at $STITCH_KEY_FILE — /stitch skill will not work. Create it: mkdir -p ~/.config/stitch && echo 'your-key' > ~/.config/stitch/key && chmod 600 ~/.config/stitch/key"
+elif [ ! -s "$STITCH_KEY_FILE" ]; then
+  warn "Stitch API key file is empty at $STITCH_KEY_FILE"
+else
+  ok
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 if [ "$FAIL" -gt 0 ]; then
   echo "[HealthCheck] $FAIL issue(s) found — run ~/.claude/hooks/memory-persistence/health-check.sh to see details" >&2
