@@ -289,6 +289,118 @@ The trainer needs an objective standard, not just a subjective read of each disc
 
 ---
 
+---
+
+## Concern 27 — Research Mode Routing
+
+**RM1**: Router classifies `task_mode` as `research` when the task is exploratory, discovery-oriented, or requires cross-disciplinary synthesis before a design decision can be made. A research task classified as `plan` or `null` fails RM1.
+
+**RM2**: CRO is activated as domain lead for all `research` tasks. A research task without `chief-research-officer` in `activated_agents` fails RM2.
+
+**RM3**: Domain expert agents activated must all appear in the project's `company-hierarchy.md`. Activating a domain expert not in the company hierarchy fails RM3.
+
+**RM4**: For `research` tasks, Router outputs `context_files: ["research-synthesis"]`. Missing this file on a research task fails RM4.
+
+---
+
+## Concern 28 — CRO Research Framing
+
+**RF1**: CRO restates the research question with greater precision than the CEO input in Round 1, populating `research_question_refined`. A CRO Round 1 that merely echoes the CEO's framing without sharpening it fails RF1.
+
+**RF2**: CRO names 2–3 specific `critical_unknowns` in Round 1 — factual gaps the discussion must resolve. Generic statements ("we need to understand X better") fail RF2 — unknowns must be specific and resolvable in principle.
+
+**RF3**: CRO designates `highest_epistemic_risk` in Round 1 — the domain expert whose blindspot, if unchallenged, most threatens the design. Omitting this designation fails RF3.
+
+**RF4**: CRO's final-round output includes `actionability_check` — a judgment on whether emerging findings translate to design principles. Missing or empty `actionability_check` in the final round fails RF4.
+
+---
+
+## Concern 29 — Domain Expert Evidence Standards
+
+**DE1**: Domain experts cite specific frameworks, theories, or named empirical findings in every `reasoning[]` claim. Generic "research shows" or "studies suggest" without naming the source fails DE1. Every claim must be traceable.
+
+**DE2**: Domain expert outputs include `evidence_quality` field correctly populated using the taxonomy: `empirical | theoretical | clinical | mixed`. Missing field or using `empirical` for a theoretical claim fails DE2.
+
+**DE3**: Domain expert outputs include at least one entry in `open_questions`. An empty `open_questions` field signals false certainty or insufficient domain depth — research always has unresolved questions. Empty `open_questions` fails DE3.
+
+**DE4**: Domain expert positions are scoped to their declared domain. A Linguist taking a position on confidence model design fails DE4. Domain scope is defined by each agent's `## Domain` section.
+
+---
+
+## Concern 30 — Research Anti-Convergence
+
+These invert or replace the engineering convergence criteria (C1–C4) for `research` mode tasks. When `task_mode = research`, apply RC1–RC4 instead of C2 and C4.
+
+**RC1**: Facilitator in research mode uses COVERAGE as the stage-gate criterion — has each relevant framework been engaged? Using consensus (all agents agree) as the criterion for proceeding to synthesis fails RC1.
+
+**RC2**: Facilitator in research mode allows Rounds 3+ when not all frameworks have been engaged. Capping at Round 2 before full coverage is achieved fails RC2.
+
+**RC3**: Multiple valid frameworks coexisting in the synthesis is correct and expected. A Synthesizer that forces a single framework winner when the research question spans frameworks each capturing real variance fails RC3.
+
+**RC4**: Premature convergence in research is a higher-severity failure than in engineering. If agents converge by Round 2 without all declared domain experts contributing distinct framework-level positions, this fails RC4 — treated as blocking.
+
+---
+
+## Concern 31 — Cross-Disciplinary Tension Detection
+
+**CT1**: When two domain experts have conflicting positions, CRO must name the source of the conflict — framework difference, evidence difference, or epistemological difference — in the following round. Unresolved unexplained conflict persisting to synthesis fails CT1.
+
+**CT2**: Frame collisions (agents using different conceptual frameworks and talking past each other) must be distinguished from genuine substantive disagreement. Treating a frame collision as adjudicable disagreement and calling a winner fails CT2.
+
+**CT3**: Synthesis attributes positions to their framework origin — "from a measurement validity standpoint..." A synthesis that strips framework attribution and presents positions as floating opinions fails CT3.
+
+---
+
+## Concern 32 — Research Synthesizer Output
+
+**RS1**: Research Synthesizer populates `framework_map` with at least one entry per major framework domain represented in the discussion. A research synthesis missing `framework_map` fails RS1.
+
+**RS2**: Research Synthesizer populates `unresolved_questions` with at least one entry. A research synthesis with an empty `unresolved_questions` fails RS2 — the claim that research resolved all open questions in a domain is extraordinary and requires extraordinary justification.
+
+**RS3**: `design_principles` entries are stated at framework level, not implementation level. "Personality dimensions must be stored as continuous values, never collapsed to binary types" is framework level. "Use float8 columns" is implementation level and fails RS3.
+
+**RS4**: `confidence_note` accurately characterises epistemic status. A `confidence_note` claiming high certainty when multiple domain experts reported `evidence_quality: "theoretical"` or `"mixed"` fails RS4.
+
+---
+
+---
+
+## Concern 33 — Exec Mode — CPO Strategic Clarity
+
+**EX1**: CPO states the product bet with a named success criterion in Round 1. A CPO Round 1 that describes the initiative without defining what "this worked" looks like fails EX1.
+
+**EX2**: CPO updates `product_direction_update` field in the final round — either with the decision or with `null` and an explicit rationale for why no update is warranted. Missing or empty `product_direction_update` in final round fails EX2.
+
+**EX3**: CPO's `opportunity_cost` field is populated with a named alternative that was considered and deferred. Generic "other features" fails EX3.
+
+**EX4**: CPO integrates CTO feasibility constraints and CLO/CFO inputs before the final round position. Ignoring a `high`-severity CLO risk or a `do not proceed` CFO recommendation without named rebuttal fails EX4.
+
+---
+
+## Concern 34 — Exec Mode — CLO Legal Risk Surfacing
+
+**CL1**: CLO populates `legal_risks[]` with at least one entry per activated risk area in every round. An empty `legal_risks[]` on a task involving personal data collection, platform distribution, or AI-generated content fails CL1.
+
+**CL2**: CLO's `compliant_path` must be populated in the final round — CLO is not a blocker, it finds solutions. An empty `compliant_path` when legal risks exist fails CL2.
+
+---
+
+## Concern 35 — Exec Mode — CFO Financial Grounding
+
+**CF1**: CFO provides a `cost_estimate` with named assumptions in Round 1. A CFO Round 1 without a cost estimate on any initiative with non-trivial API, infrastructure, or operational costs fails CF1.
+
+**CF2**: CFO's `budget_recommendation` must be one of `proceed | proceed with constraint | do not proceed` with a one-sentence rationale. An empty or vague recommendation fails CF2.
+
+---
+
+## Concern 36 — Exec Synthesis Quality
+
+**ES1**: Exec Synthesizer produces a `recommendation_brief` with: the product bet, evidence from each C-suite agent (cited by agent + round), and a `product_direction_update`. Missing any of these fails ES1.
+
+**ES2**: Exec synthesis preserves any unresolved C-suite disagreement in a `dissent[]` field rather than suppressing it. Suppressing a `high`-severity CLO or CFO objection fails ES2 — treated as blocking.
+
+---
+
 ## Criteria Gap Log
 *Trainer appends here when behavior is observed that no criterion covers.*
 <!-- Format: [date] Gap: [description] Suggested criterion: [draft wording] -->

@@ -159,6 +159,29 @@ Each scenario tests a primary agent (or engine component) against specific valid
 
 ---
 
+---
+
+## Research Package
+*Goal: research mode routing, CRO framing quality, domain expert evidence standards, anti-convergence discipline, cross-disciplinary tension detection, research synthesis integrity*
+
+**Seeding strategy:** Research scenarios are NOT written synthetically. They are captured from real research sessions via `/oms-capture` after the discussion completes. Synthetic scenarios are unreliable because evaluating domain expert evidence quality requires genuine domain knowledge — a synthetic scenario cannot know whether a cited framework is correctly applied.
+
+**First scenarios:** Seed from the first real Sonai question bank research session. Run `/oms` on "design the TELOS question bank", then `/oms-capture` on any behavioral failures observed.
+
+**Expected behavior format for research scenarios:** Unlike engineering scenarios (which test for a specific correct answer), research scenarios test only behavioral compliance:
+- Did CRO refine the question in Round 1? (RF1)
+- Did domain experts cite specific frameworks? (DE1)
+- Did the Facilitator protect discussion space rather than push convergence? (RC1)
+- Did the Synthesizer produce a framework map with unresolved questions? (RS1, RS2)
+
+| # | Scenario | Difficulty | Criteria | What it tests | Source |
+|---|---|---|---|---|---|
+| R01 | *(pending — capture from first real research session)* | — | RM1–RM4, RF1–RF4, DE1–DE3 | Research routing + CRO framing + evidence standards | First real /oms research session |
+| R02 | *(pending)* | — | RC1–RC4, RS1–RS4 | Anti-convergence + research synthesizer output | — |
+| R03 | *(pending)* | — | CT1–CT3, D3 | Cross-disciplinary tension detection + domain expert non-negotiables | — |
+
+---
+
 ## Difficulty Distribution
 | Difficulty | Count |
 |---|---|
@@ -167,7 +190,9 @@ Each scenario tests a primary agent (or engine component) against specific valid
 | Advanced | 20 |
 
 ## Criteria Coverage
-All criteria from `validation-criteria.md` (Concerns 1–26) are covered by at least one scenario. Concerns with multi-scenario coverage: R2/R6 (10 scenarios), D1 (8), B1/B2 (4), AP1/AP2 (3), HD1/HD2 (3), E1 (5 scenarios covering 4 variants: parallel monologue, implicit disagreement, missing claim, Tier 1 escalation path).
+Engineering criteria from `validation-criteria.md` (Concerns 1–26) are covered by at least one scenario. Concerns with multi-scenario coverage: R2/R6 (10 scenarios), D1 (8), B1/B2 (4), AP1/AP2 (3), HD1/HD2 (3), E1 (5 scenarios covering 4 variants: parallel monologue, implicit disagreement, missing claim, Tier 1 escalation path).
+
+Research criteria (Concerns 27–32) are pending — scenarios R01–R03 will cover them once seeded from real research sessions. RM1–RM4, RF1–RF4, DE1–DE3, RC1–RC4, CT1–CT3, RS1–RS4 are currently untested.
 
 ## E1 Variant Coverage
 | Variant | Scenario |
