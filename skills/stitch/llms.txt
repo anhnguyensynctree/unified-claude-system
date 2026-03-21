@@ -1,0 +1,118 @@
+# Stitch Skill — LLM Reference
+
+AI UI generation skill. Generates/updates/iterates HTML screens via Google Stitch API.
+All commands: `node ~/.claude/skills/stitch/stitch.mjs <command> [args]`
+API key: `~/.config/stitch/key` (auto-loaded, never set in env)
+Output: `design/stitch/` in project root — manifest.json + <name>.html + <name>.png
+
+## Decision tree — always use `auto`, never pick mode manually
+
+```
+manifest.json missing?         → stitch init --auto  (then confirm with user)
+--screen hint + exists         → UPDATE
+prompt names existing screen   → UPDATE
+prompt = 2+ screens            → BREAKDOWN → generate each
+default                        → GENERATE
+```
+
+## Commands
+
+```bash
+stitch init --auto                                      # read docs, propose style config
+stitch init --aesthetic "X" --brand "X" --palette "X"  # apply confirmed config
+stitch auto "<intent>" [--screen <name>]                # auto-picks mode
+stitch generate "<prompt>"                              # new screen
+stitch update <name> "<change>"                         # edit existing screen (targeted)
+stitch breakdown "<full app: login, dashboard, ...>"    # multi-screen generation
+stitch variants <name> [--range REIMAGINE|EXPLORE|REFINE] [--count N] [--aspects LAYOUT,COLOR_SCHEME]
+stitch list                                             # show manifest
+stitch status                                           # check files on disk
+```
+
+## First use in a new project (no manifest.json)
+
+1. Run `stitch init --auto` — reads CLAUDE.md, README.md, PRD.md, docs/**, package.json
+2. Output includes DOCS_READ, REASONING, PROPOSED_CONFIG, ready-to-run init command
+3. Present proposal to user with reasoning, ask for confirmation/adjustments
+4. Run confirmed `stitch init --aesthetic "..." --brand "..." --palette "..."`
+5. If PROPOSAL_RESULT: no_docs — ask user 3 questions: aesthetic, brand reference, palette
+
+## init flags
+
+```
+--aesthetic   "dark minimal"          Visual anchor (encodes color+type+mood)
+--brand       "similar to Linear"     Design reference (one phrase = full style package)
+--palette     "deep slate, teal"      Color palette description
+--typography  "Satoshi, Geist Mono"   Typography spec
+--profile     product|marketing|dense Quality profile (default: product)
+--theme       "Light, modern"         Theme description
+--platform    "Web, Desktop-first"    Platform (auto-detected if omitted)
+--notes       "..."                   Extra constraints on all prompts
+```
+
+## Prompt quality rules (applied automatically by prompt-builder)
+
+- Every generate prompt outputs: vibe statement + DESIGN SYSTEM block + Avoid constraints
+- Every update prompt: targeted change + "Please refrain from altering any other functionalities or design elements"
+- Prompt limit: 4500 chars (Stitch truncates at 5000 and silently drops components)
+- One change per update — never bundle layout + content + style changes
+
+## Variants creative range
+
+```
+REIMAGINE  dramatic, experimental — use first on new screens to find direction
+EXPLORE    moderate variation — default
+REFINE     conservative polish — use when near-final
+```
+Workflow: REIMAGINE first → pick best direction → REFINE to production quality
+
+## Profiles → style vocabulary
+
+```
+marketing  editorial, asymmetric grids, expressive type, scroll reveals
+product    modern minimal, card-based, focused, 150-200ms transitions
+dense      functional minimal, table-first, zero animation, monospace data
+```
+
+## Limits
+
+- Free tier: 350 Gemini Flash / 50 Gemini Pro generations per month
+- Generation time: 2–10 minutes per screen
+- No persistent style memory in Stitch — style context injected on every prompt by prompt-builder
+- Variants: 1–5 per call
+
+## Output structure
+
+```
+design/stitch/
+├── manifest.json              # projectId, defaultDevice, styleConfig, screens[]
+├── <name>.html                # latest HTML (never edit manually)
+├── <name>.png                 # screenshot
+└── <name>.v<n>.html           # archived previous versions (never delete)
+```
+
+## manifest.json schema
+
+```json
+{
+  "projectId": "stitch-project-id",
+  "defaultDevice": "DESKTOP|MOBILE|TABLET|AGNOSTIC",
+  "styleConfig": {
+    "aestheticAnchor": "...", "brandReference": "...", "colorPalette": "...",
+    "typography": "...", "profile": "product|marketing|dense",
+    "theme": "...", "platform": "...", "notes": "..."
+  },
+  "screens": [{
+    "id": "screen-id", "name": "login", "prompt": "original prompt",
+    "deviceType": "DESKTOP", "version": 1, "updatedAt": "ISO date",
+    "htmlPath": "design/stitch/login.html", "imagePath": "design/stitch/login.png"
+  }]
+}
+```
+
+## Design system contract
+
+- Check manifest before implementing any UI component
+- Extract colors/spacing/layout from generated HTML before writing component code
+- Never invent UI patterns that contradict a Stitch screen
+- design/stitch/ is append-only via this skill — rule in rules/design-system.md

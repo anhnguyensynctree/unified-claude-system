@@ -1,0 +1,12 @@
+{
+  "name": "stitch-skill",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "stitch": "node stitch.mjs"
+  },
+  "dependencies": {
+    "@google/stitch-sdk": "latest"
+  }
+}
