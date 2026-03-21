@@ -1,0 +1,136 @@
+# Browse Skill — LLM Reference
+
+Playwright-backed HTTP daemon. Browser stays alive between commands — auth, cookies, localStorage persist across the full session.
+State file: `~/.claude/skills/browse/.state.json` (port + token)
+Screenshots: `~/.claude/skills/browse/.screenshots/`
+
+## Triggers — use /browse when
+
+- Testing or verifying a live URL, localhost app, or staging environment
+- Checking how UI looks in the browser (screenshot first, then inspect)
+- Navigating authenticated flows (login, checkout, protected pages)
+- Checking console errors or network failures on a running app
+- Any task that says "verify", "check", "test", "QA" against a real URL
+
+Never cold-start Playwright directly — always use this daemon.
+
+## Auto-start (run before every command)
+
+```bash
+SKILL_DIR="$HOME/.claude/skills/browse"
+STATE="$SKILL_DIR/.state.json"
+if [ -f "$STATE" ]; then
+  PORT=$(node -e "console.log(require('$STATE').port)")
+  ALIVE=$(curl -s --max-time 1 http://127.0.0.1:$PORT/health | grep -c '"ok":true' || echo 0)
+else
+  ALIVE=0
+fi
+if [ "$ALIVE" = "0" ]; then
+  ~/.bun/bin/bun run "$SKILL_DIR/server.ts" > "$SKILL_DIR/.daemon.log" 2>&1 &
+  for i in 1 2 3 4 5; do sleep 1; [ -f "$STATE" ] && break; done
+fi
+```
+
+## Calling commands
+
+```bash
+STATE=$(cat ~/.claude/skills/browse/.state.json)
+PORT=$(echo $STATE | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d).port))")
+TOKEN=$(echo $STATE | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d).token))")
+
+# Single
+curl -s -X POST http://127.0.0.1:$PORT/command \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"command": "go localhost:3000"}'
+
+# Batch (prefer — fewer tool calls)
+curl -s -X POST http://127.0.0.1:$PORT/command \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"commands": ["go localhost:3000", "screenshot", "console-errors"]}'
+```
+
+## All commands
+
+### Navigation
+| `go <url>` | navigate (waits networkidle) |
+| `reload` | reload page |
+| `back` / `forward` | browser history |
+
+### Interaction
+| `click <selector>` | click element |
+| `fill <selector> <value>` | fill input |
+| `select <selector> <value>` | select dropdown |
+| `hover <selector>` | hover |
+| `key <key>` | press key (Enter, Tab, Escape, ArrowDown…) |
+| `scroll <selector\|top\|bottom>` | scroll |
+
+### Reading
+| `screenshot` | viewport PNG → Read tool to display |
+| `screenshot:full` | full-page PNG |
+| `text` | all visible text |
+| `html [selector]` | HTML (capped 5000 chars) |
+| `console-errors` | flush buffered console errors/warnings |
+| `network-errors` | flush buffered 4xx/5xx + failed requests |
+
+### Inspection
+| `exists <selector>` | element presence |
+| `visible <selector>` | element visibility |
+| `value <selector>` | input value |
+| `attr <selector> <attr>` | attribute value |
+| `count <selector>` | count matches |
+| `status` | current URL, title, contexts, tabs |
+
+### Viewport & tabs
+| `viewport <w> <h>` | set viewport |
+| `new-tab [url]` / `switch-tab <i>` / `close-tab` / `tabs` | tab management |
+
+### Multi-context (isolated cookies/auth per context)
+| `ctx:create [name]` | create isolated context |
+| `ctx:switch <name>` | switch active context |
+| `ctx:list` | list all contexts |
+| `ctx:destroy <name>` | destroy context (not default) |
+
+## Response shape
+
+```json
+{
+  "ok": true,
+  "screenshot": "/path/to/file.png",
+  "page": { "url": "...", "title": "..." },
+  "new_console_errors": [{ "type": "error", "text": "...", "ts": 0 }],
+  "new_network_errors": [{ "url": "...", "status": 404, "method": "GET", "ts": 0 }],
+  "interactive": { "inputs": 3, "buttons": 5, "links": 12, "forms": 1 }
+}
+```
+
+Use Read tool with returned screenshot path to display inline.
+
+## Common patterns
+
+```json
+// Page load check
+{"commands": ["go localhost:3000", "console-errors", "screenshot"]}
+
+// Auth flow
+{"commands": ["go localhost:3000/login", "fill [name=email] test@x.com", "fill [name=password] pw", "click [type=submit]", "screenshot"]}
+
+// Responsive check
+{"commands": ["go localhost:3000", "screenshot", "viewport 375 812", "screenshot"]}
+
+// Two auth states
+ctx:create admin → login as admin
+ctx:create user  → login as user
+ctx:switch admin → go /admin-panel  (should 200)
+ctx:switch user  → go /admin-panel  (should 403)
+```
+
+## Setup (one-time)
+```bash
+cd ~/.claude/skills/browse && bun install && bun run install-browsers
+```
+
+## Notes
+- `go`, `reload`, `back`, `forward` wait for networkidle
+- `click`, `key` wait up to 3s for networkidle then continue
+- Daemon auto-shuts after 30min idle; restart anytime
+- Crash → check `.daemon.log`, restart daemon

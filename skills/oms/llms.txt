@@ -1,0 +1,186 @@
+# OMS — LLM Reference
+
+Multi-agent discussion engine. OMS answers "what should we build and why?" — not "how do we build it."
+Skills: /oms (discuss) → /oms-implement (execute) → /oms-train (validate) → /oms-capture (capture failures) → /oms-start (init project)
+
+## Triggers
+
+Use /oms when:
+- Architecture, design, or tech strategy decisions needed
+- Task spans 2+ domains (frontend + backend, security + UX, product + eng)
+- High-stakes or irreversible changes
+- Conflicting approaches exist and you need a structured decision
+- Research synthesis needs to become product direction
+
+Skip /oms when:
+- Decision is already made — just implement it
+- Task is trivial / single-domain / obviously reversible
+- You have `action_items[]` from a prior OMS session → use /oms-implement directly
+
+## Invocation modes
+
+```
+/oms <task>                  Task mode (default)
+/oms read <file|url>         Onboard — team reads material, surfaces questions
+/oms discover                Explicit project bootstrap
+/oms exec                    C-suite strategic discussion (auto-triggered at milestones)
+/oms audit                   Audit — manual full efficiency audit; triggers context-optimizer in full mode
+```
+
+## First-run check (Step 0)
+
+Check for `.claude/agents/router.ctx.md`:
+- Not found → run project discovery (read CLAUDE.md, codemap, package.json, tsconfig → generate ctx files)
+- Found → skip
+
+Check for `.claude/agents/company-belief.ctx.md`:
+- Not found → tell CEO: "Run /oms-start first" → stop
+- Found → proceed
+
+## Tier activation (Router output)
+
+| Tier | Signals | Max agents | Max rounds |
+|---|---|---|---|
+| 0 Trivial | 1 domain, known pattern, reversible | 1 | 1 |
+| 1 Simple | 1–2 domains, needs analysis, reversible | 2 | 2 |
+| 2 Compound | 2–3 domains, tradeoffs, partial reversibility | 3 | 2 |
+| 3 Complex | 3+ domains OR irreversible OR high uncertainty | 5 | 4 |
+
+Escalation: agents disagree at Tier N after round cap → Tier N+1, resume from Round 2.
+
+## Steps
+
+```
+Step 0   Project bootstrap (first run only)
+Step 1   Router (Haiku) → task_id, tier, agents, briefings
+Step 1.5 Path Diversity (Haiku, Tier 2+ only) → distinct starting frames per agent
+Step 2   Round 1 — agents in parallel (blind NGT)
+Step 3   Rounds 2+ (Tier 2+) — Pre-Facilitator (Haiku) → Full Facilitator (Sonnet) if needed
+Step 4   Synthesizer (Sonnet; Opus if 5+ agents or livelock)
+Step 5   Log to logs/tasks/[task-id].md
+Step 6   Trainer (always) — evaluates router + agents at tier scope
+Step 7   Context Optimizer (always) — lightweight post-task check; full audit at 10-task threshold, milestone, or /oms audit
+Step 8   CEO feedback + scenario capture
+```
+
+## Step 7 — Context Optimizer
+
+Context Optimizer always runs after Trainer. Two modes based on state.
+
+**Always (post-task lightweight check)**:
+- Input: `logs/tasks/[task-id].md` + `context-optimizer/metrics.md`
+- Check: over-activated agents, wasted rounds, task log size, briefing bloat
+- Auto-fix safe ops immediately (facts.json consolidation if >40 entries)
+- Increment `task_count_since_last_audit` in `metrics.md`
+- If status `clean`: no CEO display — silent
+- If `warning` or `action-taken`: append to task log under `## Efficiency Check` only
+
+**Full audit triggers** (run full audit mode instead of lightweight):
+- `task_count_since_last_audit` reaches 10
+- Router output included `milestone_reached: true`
+- CEO ran `/oms audit`
+
+**Full audit**:
+- Input: all project ctx files, activated agent personas, last 10 task logs, facts.json, MEMORY.md
+- Check: persona bloat, unused ctx files, over-activation patterns, round efficiency, memory bloat
+- Auto-fix: facts consolidation, task log archiving, metrics update
+- Warn: persona trim needed, unused ctx, Router over-activation pattern, MEMORY consolidation needed
+- Output to CEO: 3-5 bullet summary only (not full JSON)
+- Reset `task_count_since_last_audit` to 0 in `metrics.md`
+
+**`/oms audit` (on-demand)**:
+- Always runs full audit mode regardless of task count
+- CEO sees full audit output including recommendations
+
+## Engine Roles
+
+| Role | Persona | Lessons | Memory | Model | Fires |
+|---|---|---|---|---|---|
+| router | `~/.claude/agents/router/persona.md` | `router/lessons.md` | `router/MEMORY.md` | Haiku | Step 1 |
+| path-diversity | `~/.claude/agents/path-diversity/persona.md` | — | — | Haiku | Step 1.5 (T2+) |
+| pre-facilitator | `~/.claude/agents/pre-facilitator/persona.md` | — | — | Haiku | Step 3 inline (T2+) |
+| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | — | Sonnet | Step 3 (T2+) |
+| verification | `~/.claude/agents/verification/persona.md` | — | — | Sonnet | On-demand |
+| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | — | Sonnet/Opus | Step 4 |
+| trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | `trainer/MEMORY.md` | Sonnet | Step 6 |
+| context-optimizer | `~/.claude/agents/context-optimizer/persona.md` | `context-optimizer/lessons.md` | `context-optimizer/MEMORY.md` | Haiku | Step 7 (always) + full audit at milestone |
+
+## Agent roster
+
+**Engine** (always available):
+router (Haiku), path-diversity (Haiku, T2+), pre-facilitator (Haiku inline, T2+),
+facilitator (Sonnet, T2+), verification (Sonnet, on-demand), synthesizer (Sonnet/Opus), trainer (Sonnet),
+context-optimizer (Haiku, Step 7 always + full audit at milestone)
+
+**Engineering** (build/arch/debug/plan/refactor/security/test/perf/ui-ux tasks):
+cto, product-manager, engineering-manager, frontend-developer, backend-developer, qa-engineer
+
+**C-suite** (exec tasks + domain scope):
+cpo (product/roadmap), clo (legal/compliance), cfo (finance/unit economics)
+
+**Research** (research tasks):
+chief-research-officer (lead), human-behavior-researcher, data-intelligence-analyst,
++ project-scoped: content-platform, clinical-safety, language-communication,
+  philosophy-ethics, cultural-historical, biological-evolutionary
+
+## Context loading per agent (scoped — never give everyone everything)
+
+| Role | Gets |
+|---|---|
+| router | all shared context + codemap |
+| cto | architecture.md, tech-stack.md, cross-agent-patterns.md |
+| product-manager | company-belief.ctx.md, product-direction.ctx.md |
+| frontend-developer | tech-stack.md + codemap |
+| backend-developer | tech-stack.md, architecture.md + codemap |
+| qa-engineer | tech-stack.md + codemap |
+| synthesizer | reads from disk log only |
+| trainer | validation-criteria.md only |
+
+## OMS scope rule
+
+/oms → synthesis with action_items[]
+/oms-implement → takes action_items[], implements, CTO review + QA check
+Never merge discuss + implement in one /oms invocation.
+
+## Exec mode auto-triggers
+
+Router fires /oms exec automatically when:
+- Milestone in product-direction.ctx.md reached
+- Research synthesis requires product direction decision
+- C-suite agent raises cross-department concern
+- CLO raises high/critical legal risk
+
+## Task log format
+
+```
+logs/tasks/YYYY-MM-DD-short-slug.md
+# [task-id]: [CEO intent verbatim]
+Date: YYYY-MM-DD  Tier: N  Domain Lead: [role]  Agents: [list]  Rounds: N
+```
+
+## Lazy log access
+
+| When | Load |
+|---|---|
+| Round N | Only Round 1 to Round N-1 sections |
+| Synthesis | All round sections (not preamble) |
+| Status check | .checkpoint file only |
+
+## Error handling
+
+| Error | Response |
+|---|---|
+| Invalid agent JSON | Re-run with schema reminder |
+| Stage-Gate 2 failure | Re-run failing agent before Round 2 |
+| Router cannot route | Ask CEO for more context |
+| Stage-Gate 4 failure | Re-run Synthesizer with traceability instruction |
+| Hard cap hit | Synthesize best available; escalate if unresolved |
+
+## Related skills
+
+| Skill | When |
+|---|---|
+| /oms-start | Init new project — run before first /oms |
+| /oms-implement | Execute action_items[] from completed synthesis |
+| /oms-train | Run training scenarios against agent personas |
+| /oms-capture | Capture a real failure as a training scenario |
