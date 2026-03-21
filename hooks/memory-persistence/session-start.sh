@@ -25,7 +25,8 @@ fi
 # --- Retrieved Facts (mem0) ---
 ENCODED_PATH=$(echo "$CWD" | sed 's|/|-|g')
 FACTS_PATH="$HOME/.claude/projects/$ENCODED_PATH/memory/facts.json"
-GLOBAL_FACTS="$HOME/.claude/projects/-Users-Lewis/memory/facts.json"
+HOME_ENCODED=$(echo "$HOME" | sed 's|/|-|g')
+GLOBAL_FACTS="$HOME/.claude/projects/$HOME_ENCODED/memory/facts.json"
 
 FACTS_OUTPUT=$(python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" retrieve "$FACTS_PATH" "$GLOBAL_FACTS" 2>/dev/null)
 if [ -n "$FACTS_OUTPUT" ]; then
@@ -62,7 +63,7 @@ fi
 
 # --- Always-active entries from topic files (ctx: always) ---
 TOPICS_DIR="$HOME/.claude/projects/$ENCODED_PATH/memory/topics"
-GLOBAL_TOPICS_DIR="$HOME/.claude/projects/-Users-Lewis/memory/topics"
+GLOBAL_TOPICS_DIR="$HOME/.claude/projects/$HOME_ENCODED/memory/topics"
 
 for dir in "$TOPICS_DIR" "$GLOBAL_TOPICS_DIR"; do
   if [ -d "$dir" ]; then

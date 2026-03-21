@@ -124,7 +124,8 @@ fi
 # ── 7. facts.json — valid JSON + consolidation check (current project + global only) ──
 CWD_ENCODED=$(python3 -c "import sys; print('$(pwd)'.replace('/', '-').replace('.', '-'))")
 PROJECT_FACTS="$CLAUDE_DIR/projects/$CWD_ENCODED/memory/facts.json"
-GLOBAL_FACTS="$CLAUDE_DIR/projects/-Users-Lewis/memory/facts.json"
+HOME_ENCODED=$(echo "$HOME" | sed 's|/|-|g')
+GLOBAL_FACTS="$CLAUDE_DIR/projects/$HOME_ENCODED/memory/facts.json"
 
 for f in "$PROJECT_FACTS" "$GLOBAL_FACTS"; do
   [ -f "$f" ] || continue
