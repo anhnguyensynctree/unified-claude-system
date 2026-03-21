@@ -102,9 +102,9 @@ With this:      Claude already knows. Every session, from the first message.
 ├── hooks/
 │   └── memory-persistence/      ◄★ the memory engine lives here
 │       ├── session-start.sh     ← Injects context at session open
-│       ├── session-end.sh       ← Persists state at session close
+│       ├── session-end.sh       ← Checks codemap staleness on every stop
 │       ├── pre-compact.sh       ← Emits priority-tiered XML snapshot before compaction
-│       ├── mem0-extract.sh      ← Extracts structured facts from transcripts
+│       ├── mem0-extract.sh      ← Runs handoff + extract + learn + check-memory at SessionEnd
 │       └── health-check.sh      ← Validates system integrity on every session start
 │
 ├── standards/
@@ -115,8 +115,7 @@ With this:      Claude already knows. Every session, from the first message.
 │
 ├── skills/
 │   ├── continuous-learning/
-│   │   ├── SKILL.md             ← Skill definition
-│   │   └── evaluate-session.sh  ← Pattern extraction on Stop hook
+│   │   └── SKILL.md             ← Skill definition — use /learn to extract patterns manually
 │   ├── browse/                  ← Persistent Playwright browser daemon (/browse)
 │   │   ├── SKILL.md             ← Command reference and QA workflows
 │   │   ├── server.ts            ← Bun HTTP server (idle timeout, auth token)
@@ -283,11 +282,8 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 - Markdown quality check (heading, line count, no placeholders)
 - mgrep nudge when `grep -r` is used
 
-**Stop / SessionEnd:**
-- Session handoff written to `~/.claude/handoffs/YYYY-MM-DD-project-session.tmp`
-- Continuous learning evaluation runs
-- `console.log` audit across all modified files
-- mem0 fact extraction from session transcript (async)
+**Stop:**
+- Codemap staleness check — warns if files were added/deleted since last commit
 
 **SessionStart:**
 - Injects project `CLAUDE.md` if found in cwd
@@ -297,8 +293,10 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 - Runs system health check (zero context tokens, stderr only)
 
 **SessionEnd:**
-- mem0 fact extraction from session transcript (async, via Haiku)
 - Handoff summary written to `~/.claude/handoffs/YYYY-MM-DD-project-session.tmp`
+- mem0 fact extraction (Haiku) — deduplicates against existing facts, auto-consolidates if >40
+- Pattern extraction into topic files (`topics/*.md`, `insights.md`)
+- Memory check — consolidates any topic file over 100 lines via Haiku
 
 ### Memory System — Tiered
 
@@ -453,13 +451,13 @@ Skills are always-available internal behaviors — not slash commands, but loade
 
 #### `skills/continuous-learning/`
 
-The pattern extraction system. At every session end, `evaluate-session.sh` fires via the Stop hook, logs session metadata, and prompts for pattern extraction. `SKILL.md` defines what patterns are worth capturing:
+Pattern extraction runs automatically at SessionEnd via `mem0.py learn`. `SKILL.md` defines what patterns are worth capturing:
 - Error resolutions that were non-trivial
 - Debugging techniques discovered mid-session
 - Project-specific patterns Claude didn't know about
 - Corrections you had to make to Claude's default behavior
 
-Learned patterns are saved to `skills/learned/[pattern-name].md` and available in future sessions. Use `/learn` to extract a pattern immediately rather than waiting for session end.
+Patterns are routed to topic files in the memory system and auto-consolidated when over 100 lines. Use `/learn` to extract a pattern immediately.
 
 #### `skills/strategic-compact.md`
 
@@ -836,7 +834,6 @@ git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.clau
 
 ```bash
 chmod +x ~/.claude/hooks/memory-persistence/*.sh
-chmod +x ~/.claude/skills/continuous-learning/evaluate-session.sh
 ```
 
 ### Step 6 — Set your ANTHROPIC_API_KEY (for mem0)
@@ -1053,7 +1050,6 @@ git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.clau
 
 ```bash
 chmod +x ~/.claude/hooks/memory-persistence/*.sh
-chmod +x ~/.claude/skills/continuous-learning/evaluate-session.sh
 ```
 
 ### Step 7 — Disable the macOS notification hook

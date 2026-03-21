@@ -107,24 +107,6 @@
             "command": "~/.claude/hooks/memory-persistence/session-end.sh"
           }
         ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/skills/continuous-learning/evaluate-session.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "git diff --name-only HEAD 2>/dev/null | xargs grep -l 'console\\.log' 2>/dev/null | while read f; do echo \"[Hook] console.log found in modified file: $f\" >&2; done || true"
-          }
-        ]
       }
     ],
     "PreCompact": [

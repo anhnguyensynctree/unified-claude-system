@@ -21,3 +21,4 @@ DATE=$(date +%Y-%m-%d)
 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" handoff "$TRANSCRIPT_PATH" "$DATE" "$PROJECT" 2>&1 >&2
 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" extract "$TRANSCRIPT_PATH" 2>&1 >&2
 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" learn "$TRANSCRIPT_PATH" 2>&1 >&2
+python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" check-memory 2>&1 >&2
