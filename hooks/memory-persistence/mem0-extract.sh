@@ -16,16 +16,19 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     exit 0
 fi
 
-# Extract facts and write handoff — runs once at true session exit
-# Each step has a 12s hard limit; hook exits immediately when all complete
+# Steps run at true session exit. Each step has a per-step timeout.
+# session-end: single Haiku call → summary + facts + patterns (replaces summary+extract+learn)
+# handoff:     last 15 messages verbatim, no API — always succeeds
+# check-memory: consolidate topic files if over threshold
 DATE=$(date +%Y-%m-%d)
 RETRY_FILE="$HOME/.claude/logs/mem0-retry.json"
 FAILED_STEPS=""
 
 run_step() {
   local step="$1"; shift
+  local limit="${MEM0_TIMEOUT:-25}"
   echo "[mem0] $step..." >&2
-  timeout 12 python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" "$@" 2>&1 >&2
+  timeout "$limit" python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" "$@" 2>&1 >&2
   local code=$?
   if [ $code -ne 0 ]; then
     FAILED_STEPS="${FAILED_STEPS}${FAILED_STEPS:+,}\"$step\""
@@ -33,9 +36,8 @@ run_step() {
   fi
 }
 
-run_step "handoff" handoff "$TRANSCRIPT_PATH" "$DATE" "$PROJECT"
-run_step "extract" extract "$TRANSCRIPT_PATH"
-run_step "learn"   learn   "$TRANSCRIPT_PATH"
+run_step "session-end" session-end "$TRANSCRIPT_PATH" "$DATE" "$PROJECT"
+run_step "handoff"     handoff     "$TRANSCRIPT_PATH" "$DATE" "$PROJECT"
 run_step "check-memory" check-memory
 
 if [ -n "$FAILED_STEPS" ]; then

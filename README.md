@@ -12,6 +12,17 @@ git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.clau
 ```
 → [Full macOS setup](#macos-setup) · [Windows / WSL2](#windows-setup-via-wsl2)
 
+**Newcomer? One prompt does everything:**
+Open Claude Code (anywhere — no project needed), paste this, and Claude handles the rest:
+```
+Set up my global Claude system from https://github.com/anhnguyensynctree/unified-claude-system:
+1. Clone it into ~/.claude
+2. Run the full setup for my platform (hooks executable, memory initialized, prerequisites checked)
+3. Verify everything works: health check, hooks wired, MEMORY.md readable, /hey test
+4. Report green/red for each check and fix anything broken
+5. Confirm when I'm ready to start with /hey
+```
+
 ![unified-claude-system architecture](assets/overview.svg)
 
 ---
@@ -83,6 +94,7 @@ With this:      Claude already knows. Every session, from the first message.
 │   └── docs.md                  ← Documentation / runbooks / ADR mode
 │
 ├── commands/                    ← Slash command definitions (/command-name)
+│   ├── hey.md                   ← Session opener — recap or dev joke on fresh start
 │   ├── tdd.md                   ← RED → GREEN → IMPROVE workflow
 │   ├── commit.md                ← Conventional commit with safety checks
 │   ├── plan.md                  ← 5-phase implementation planning
@@ -340,6 +352,7 @@ MEMORY.md is a lean index. Topic files load only when the domain matches the cur
 
 | Command | What it does |
 |---|---|
+| `/hey` | Session opener — shows last session recap + next step, or a dev joke on a fresh start |
 | `/tdd <task>` | RED → GREEN → IMPROVE with 80% coverage check |
 | `/commit` | Conventional commit — stages specific files, shows message for approval |
 | `/plan <task>` | 5-phase: research → plan → implement → review → verify |
@@ -956,22 +969,24 @@ node ~/.claude/skills/stitch/stitch.mjs list
 
 ### Step 10 — Verify hooks are wired
 
-Open Claude Code. You should see in the session start output:
-```
-## Project Memory
-...
-```
+Open Claude Code and run `/hey`. You should see either a session recap (if you have prior handoffs) or a dev joke with "No recent sessions found."
 
-If you see that block, the session-start hook is running correctly.
+If you see either output, the system is running correctly. If you see nothing, check that hooks are executable:
+```bash
+ls -la ~/.claude/hooks/memory-persistence/*.sh
+# All .sh files should show -rwxr-xr-x
+```
 
 ### Step 11 — First session
 
-Run your first command:
+Open Claude Code and run:
 ```
-/fork
+/hey
 ```
 
-Claude loads all context (global CLAUDE.md + memory + any recent session) and asks what you want to work on. You're live.
+`/hey` is your session opener. It reads the last session handoff and shows what you were working on and what's next. On a fresh install with no prior sessions it tells a dev joke instead — that's expected.
+
+**From now on, start every Claude Code session with `/hey`.** It replaces `/fork` as the standard session-opening command.
 
 </details>
 
@@ -1199,12 +1214,14 @@ Install:
 
 ### Step 13 — First session
 
-Run:
+Open Claude Code and run:
 ```
-/fork
+/hey
 ```
 
-Claude loads all context and asks what you want to work on.
+`/hey` is your session opener. It reads the last session handoff and shows what you were working on and what's next. On a fresh install with no prior sessions it tells a dev joke instead — that's expected.
+
+**From now on, start every Claude Code session with `/hey`.**
 
 </details>
 
@@ -1267,8 +1284,8 @@ git diff origin/main -- settings.json CLAUDE.md
 ## Workflows
 
 ```bash
-# Start a new day
-/fork
+# Start every session
+/hey
 
 # Implement a feature with TDD
 /tdd add payment webhook handler
