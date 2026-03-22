@@ -118,6 +118,73 @@ Do not guess. Do not push through.
 
 ---
 
+## Step 2.5 — Evidence QA (live verification)
+
+After all implementation groups complete and tests pass:
+
+### 1 — Extract acceptance criteria
+Read PM's position from `logs/tasks/[task-id].md`. Extract the user-visible behaviors that constitute "done". If PM position is absent: derive criteria from `action_items[]`.
+
+### 2 — Run browse flows
+Auto-start browse daemon per `~/.claude/skills/browse/llms.txt`.
+
+For each criterion:
+- Navigate to the relevant URL or flow
+- Interact to reach the state being tested (click, fill, submit)
+- Screenshot before and after every interaction that changes visible state
+- Flush `console-errors` and `network-errors` after each flow
+
+Batch commands per flow to minimize tool calls.
+
+### 3 — QA verdict
+Load `qa-engineer/persona.md`. Input: acceptance criteria + screenshot paths + error logs.
+
+Output required:
+```json
+{
+  "verdict": "PASS | FAIL",
+  "criteria_results": [
+    { "criterion": "...", "result": "pass|fail", "screenshot": "/path/to.png", "notes": "..." }
+  ],
+  "console_errors": [],
+  "network_errors": []
+}
+```
+
+### 4 — On FAIL: retry up to 3 times
+- Fix the failing implementation
+- Re-run browse flows for failing criteria only (not all)
+- Track attempt count
+
+After 3 failed attempts — STOP. Escalate to CTO:
+- Load `~/.claude/agents/cto/persona.md` + `cto/lessons.md` + `cto/MEMORY.md`
+- Input: failing criteria, last screenshot paths, all 3 attempt summaries
+- CTO assesses: root cause, whether it's an implementation gap or an acceptance criteria problem
+- CTO outputs: `{ resolution: "implementable" | "unresolvable", approach?: string, escalate_to_ceo?: true, reason?: string }`
+
+**If `resolution: "implementable"`**: CTO prescribes the fix approach. Implement it and run one final browse verification. No further retries — this is the last attempt.
+
+**If `resolution: "unresolvable"` or `escalate_to_ceo: true`**: only then surface to CEO:
+```
+Evidence QA escalated — CTO could not resolve.
+
+Failing criteria:
+  - [criterion]: [last QA finding]
+
+CTO assessment: [reason]
+
+Options:
+  1. Adjust acceptance criteria with PM — re-verify without re-implementing
+  2. Re-run /oms with the implementation constraint as new context
+```
+Do not guess. Do not push through.
+
+### 5 — On PASS
+Append to task log: `## Evidence QA: PASS | [N] criteria verified | [date]`
+Proceed to Step 3.
+
+---
+
 ## Step 3 — Delivery Validation
 
 Two parallel reviews against the completed diff. Run concurrently.

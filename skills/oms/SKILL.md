@@ -64,7 +64,8 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 |---|---|---|
 | router | all | ✓ |
 | facilitator | all | — |
-| synthesizer | none (reads from disk log) | — |
+| ceo-gate | all discussion round outputs + ceo-mandate.ctx.md (project) or ceo-mandate.md (global default) | — |
+| synthesizer | none (reads from disk log) + ceo_decision constraint if CEO Gate fired | — |
 | cto | architecture.md, tech-stack.md, cross-agent-patterns.md | — |
 | product-manager | company-belief.ctx.md, product-direction.ctx.md | — |
 | engineering-manager | architecture.md, company-belief.ctx.md | — |
@@ -125,6 +126,7 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 | pre-facilitator | *(inline — no persona file)* | — | — | Haiku | Before full Facilitator each round (Tier 2+) |
 | facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | `facilitator/MEMORY.md` | Sonnet | After each round (Tier 2+, when pre-facilitator requires it) |
 | verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | `verification/MEMORY.md` | Sonnet | On-demand |
+| ceo-gate | `~/.claude/agents/ceo-gate/persona.md` | — | `ceo-gate/MEMORY.md` | Haiku | Step 3.5 (Tier 1+) — always a quick pass, escalates on match |
 | synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | `synthesizer/MEMORY.md` | Sonnet (Opus: 5+ or livelock) | Step 4 (Tier 2+) |
 | trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | `trainer/MEMORY.md` | Sonnet | Step 6 — always |
 

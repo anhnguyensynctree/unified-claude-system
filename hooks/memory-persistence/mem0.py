@@ -134,20 +134,37 @@ def save_facts(path: Path, facts: list):
     path.write_text(json.dumps(facts, indent=2))
 
 
-def get_cwd_from_transcript(transcript_path: str) -> str | None:
+def get_transcript_meta(transcript_path: str) -> dict:
+    """Read transcript and extract cwd + session_id in a single pass."""
+    meta: dict = {}
     try:
         with open(transcript_path) as f:
             for line in f:
                 try:
                     entry = json.loads(line.strip())
-                    cwd = entry.get("cwd")
-                    if cwd:
-                        return cwd
+                    if not meta.get("cwd") and entry.get("cwd"):
+                        meta["cwd"] = entry["cwd"]
+                    if not meta.get("session_id") and entry.get("sessionId"):
+                        meta["session_id"] = entry["sessionId"]
+                    if meta.get("cwd") and meta.get("session_id"):
+                        break
                 except (json.JSONDecodeError, AttributeError):
                     continue
     except OSError:
         pass
-    return None
+    return meta
+
+
+def read_observations(session_id: str) -> str:
+    """Return contents of the PostToolUse observation log for this session."""
+    if not session_id:
+        return ""
+    obs_file = Path.home() / ".claude" / "logs" / f"obs-{session_id}.log"
+    if obs_file.exists():
+        content = obs_file.read_text().strip()
+        if content:
+            return content
+    return ""
 
 
 def read_transcript(transcript_path: str, max_messages: int = 120) -> str:
@@ -206,7 +223,8 @@ def extract(transcript_path: str):
         print("[mem0] Set ANTHROPIC_API_KEY in ~/.zshrc to enable extraction", file=sys.stderr)
         return
 
-    cwd = get_cwd_from_transcript(transcript_path)
+    meta = get_transcript_meta(transcript_path)
+    cwd = meta.get("cwd")
     if not cwd:
         print("[mem0] Cannot determine project cwd — skipping", file=sys.stderr)
         return
@@ -225,8 +243,10 @@ def extract(transcript_path: str):
         print("[mem0] Conversation too short — skipping", file=sys.stderr)
         return
 
+    obs = read_observations(meta.get("session_id", ""))
+    obs_block = f"\n<tool_observations>\n{obs}\n</tool_observations>" if obs else ""
     try:
-        raw = api_call(EXTRACT_SYSTEM, f"<transcript>\n{conversation}\n</transcript>")
+        raw = api_call(EXTRACT_SYSTEM, f"<transcript>\n{conversation}\n</transcript>{obs_block}")
         new_facts = json.loads(raw)
         if not isinstance(new_facts, list):
             raise ValueError("Expected list")
@@ -323,12 +343,15 @@ def handoff(transcript_path: str, date: str, project: str = "unknown"):
         print("[mem0-handoff] Conversation too short — skipping", file=sys.stderr)
         return
 
-    cwd = get_cwd_from_transcript(transcript_path)
+    meta = get_transcript_meta(transcript_path)
+    cwd = meta.get("cwd")
+    obs = read_observations(meta.get("session_id", ""))
+    obs_block = f"\n\n<tool_observations>\n{obs}\n</tool_observations>" if obs else ""
     git_diff = get_git_diff(cwd, transcript_path) if cwd else ""
     diff_section = f"\n\n<git_changes>\n{git_diff}\n</git_changes>" if git_diff else ""
 
     try:
-        raw = api_call(HANDOFF_SYSTEM, f"<transcript>\n{conversation}\n</transcript>{diff_section}", prefill="{")
+        raw = api_call(HANDOFF_SYSTEM, f"<transcript>\n{conversation}\n</transcript>{diff_section}{obs_block}", prefill="{")
         data = json.loads(raw)
         if not isinstance(data, dict):
             raise ValueError("Expected dict")
@@ -512,8 +535,11 @@ def learn(transcript_path: str):
         print("[mem0-learn] Conversation too short — skipping", file=sys.stderr)
         return
 
+    meta = get_transcript_meta(transcript_path)
+    obs = read_observations(meta.get("session_id", ""))
+    obs_block = f"\n<tool_observations>\n{obs}\n</tool_observations>" if obs else ""
     try:
-        raw = api_call(LEARN_SYSTEM, f"<transcript>\n{conversation}\n</transcript>")
+        raw = api_call(LEARN_SYSTEM, f"<transcript>\n{conversation}\n</transcript>{obs_block}")
         patterns = json.loads(raw)
         if not isinstance(patterns, list):
             raise ValueError("Expected list")

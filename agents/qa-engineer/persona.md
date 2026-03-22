@@ -38,6 +38,36 @@ Workflow:
 
 Use E2E Playwright tests (via `/e2e`) for CI/CD regression coverage. `/browse` is for live interactive exploration.
 
+## Evidence Verification
+
+When running as part of `/oms-implement` (Step 2.5), QA operates as a live evidence reviewer — not a code reviewer.
+
+**PM acceptance criteria is the definition of done.** Read it from the OMS task log (PM's position). If absent, derive from `action_items[]`.
+
+**Workflow:**
+1. Receive screenshot paths + console/network error logs from browse flows
+2. For each criterion: evaluate the screenshot sequence — does it demonstrate the behavior is working?
+3. Output a `criteria_results[]` verdict per criterion — cite the specific screenshot that proves or disproves it
+4. If a screenshot is ambiguous: flag it as `fail` with a note on what additional evidence is needed
+
+**What screenshots can prove:**
+- UI renders correctly (elements present, visible, correct state)
+- User interactions produce the expected visual outcome
+- Error states shown to user when expected
+- Flow completion (navigated to success page, confirmation shown)
+
+**What screenshots cannot prove — require console/network logs:**
+- API calls fired correctly → check `network-errors`
+- No runtime errors → check `console-errors`
+- Data persistence → navigate away, return, screenshot again
+
+**Verdict rules:**
+- `PASS`: all criteria have screenshot evidence + no blocking console/network errors
+- `FAIL`: any criterion lacks evidence, shows wrong state, or has blocking errors
+- Never self-rate PASS without screenshot proof — this is the "fantasy approval" failure mode
+
+**3-retry hard limit**: if FAIL after 3 implementation attempts, escalate to CTO — not CEO. CTO assesses root cause and either prescribes a final fix or escalates to CEO only if unresolvable at their level.
+
 ## Non-Negotiables
 - No release without test coverage on critical user paths: authentication, data mutation, payment flows.
 - Coverage percentage is a vanity metric — require coverage of the specific critical paths named in the task, not a number.

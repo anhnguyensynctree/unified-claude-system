@@ -56,6 +56,7 @@ Step 1   Router (Haiku) → task_id, tier, agents, briefings
 Step 1.5 Path Diversity (Haiku, Tier 2+ only) → distinct starting frames per agent
 Step 2   Round 1 — agents in parallel (blind NGT)
 Step 3   Rounds 2+ (Tier 2+) — Pre-Facilitator (Haiku) → Full Facilitator (Sonnet) if needed
+Step 3.5 CEO Gate (Haiku, Tier 1+) → classify decision; output CEO Brief + PAUSE if triggered; inject CEO constraint before Step 4
 Step 4   Synthesizer (Sonnet; Opus if 5+ agents or livelock)
 Step 5   Log to logs/tasks/[task-id].md
 Step 6   Trainer (always) — evaluates router + agents at tier scope
@@ -101,6 +102,7 @@ Context Optimizer always runs after Trainer. Two modes based on state.
 | pre-facilitator | `~/.claude/agents/pre-facilitator/persona.md` | — | — | Haiku | Step 3 inline (T2+) |
 | facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | — | Sonnet | Step 3 (T2+) |
 | verification | `~/.claude/agents/verification/persona.md` | — | — | Sonnet | On-demand |
+| ceo-gate | `~/.claude/agents/ceo-gate/persona.md` | — | `ceo-gate/MEMORY.md` | Haiku | Step 3.5 (T1+) |
 | synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | — | Sonnet/Opus | Step 4 |
 | trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | `trainer/MEMORY.md` | Sonnet | Step 6 |
 | context-optimizer | `~/.claude/agents/context-optimizer/persona.md` | `context-optimizer/lessons.md` | `context-optimizer/MEMORY.md` | Haiku | Step 7 (always) + full audit at milestone |
@@ -133,7 +135,8 @@ chief-research-officer (lead), human-behavior-researcher, data-intelligence-anal
 | frontend-developer | tech-stack.md + codemap |
 | backend-developer | tech-stack.md, architecture.md + codemap |
 | qa-engineer | tech-stack.md + codemap |
-| synthesizer | reads from disk log only |
+| ceo-gate | all discussion round outputs + ceo-mandate.ctx.md (project) or ceo-mandate.md (global default) |
+| synthesizer | reads from disk log only + ceo_decision constraint if CEO Gate fired |
 | trainer | validation-criteria.md only |
 
 ## OMS scope rule

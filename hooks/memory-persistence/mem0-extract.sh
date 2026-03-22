@@ -51,3 +51,6 @@ else
 fi
 
 echo "[mem0] Done." >&2
+
+# Clean obs log files older than 7 days
+find "$HOME/.claude/logs" -name "obs-*.log" -mtime +7 -delete 2>/dev/null || true

@@ -96,6 +96,15 @@
             "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.py$' && pyright \"$FILE\" 2>&1 | grep -E '(error|warning)' | head -20 >&2 || true"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/memory-persistence/observe.sh"
+          }
+        ]
       }
     ],
     "Stop": [
