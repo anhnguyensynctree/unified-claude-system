@@ -123,18 +123,22 @@ Do not guess. Do not push through.
 After all implementation groups complete and tests pass:
 
 ### 1 — Extract acceptance criteria
-Read PM's position from `logs/tasks/[task-id].md`. Extract the user-visible behaviors that constitute "done". If PM position is absent: derive criteria from `action_items[]`.
+Read `logs/tasks/[task-id].md`. Find PM's output JSON and extract `acceptance_criteria[]` directly — it is a structured array, not prose. Do not infer or guess criteria from surrounding text.
+If PM's `acceptance_criteria[]` is empty or absent: fall back to `action_items[]` as the criteria baseline.
 
-### 2 — Run browse flows
-Auto-start browse daemon per `~/.claude/skills/browse/llms.txt`.
+### 2 — Drive browse for each criterion
+Auto-start browse daemon per `~/.claude/skills/browse/llms.txt`. Run `status` first to see current URL and page state.
 
-For each criterion:
-- Navigate to the relevant URL or flow
-- Interact to reach the state being tested (click, fill, submit)
+For each criterion, build a batch command sequence that fully exercises the behavior:
+- Navigate to the relevant route (`go <path>`)
+- Interact to reach the state under test (`click`, `fill`, `submit`, `key`)
 - Screenshot before and after every interaction that changes visible state
-- Flush `console-errors` and `network-errors` after each flow
+- Use `exists` / `visible` / `count` to make assertions on element state
+- Flush `console-errors` and `network-errors` after every flow
 
-Batch commands per flow to minimize tool calls.
+**Maximize browse per criterion** — one batch call per criterion covering the full interaction sequence, not one command at a time. Use `ctx:create` for flows requiring a fresh session (e.g. persistence after reload, empty state, unauthenticated view).
+
+Never read a URL from config or hardcode one. Use `status` to anchor, then navigate from there.
 
 ### 3 — QA verdict
 Load `qa-engineer/persona.md`. Input: acceptance criteria + screenshot paths + error logs.
