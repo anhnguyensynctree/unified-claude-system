@@ -55,7 +55,7 @@ Step 0   Project bootstrap (first run only)
 Step 1   Router (Haiku) → task_id, tier, agents, briefings
 Step 1.5 Path Diversity (Haiku, Tier 2+ only) → distinct starting frames per agent
 Step 2   Round 1 — agents in parallel (blind NGT)
-Step 3   Rounds 2+ (Tier 2+) — Pre-Facilitator (Haiku) → Full Facilitator (Sonnet) if needed
+Step 3   Rounds 2+ (Tier 2+ only) — Pre-Facilitator (Haiku, runs every round) → Full Facilitator (Sonnet, fires only if intervention needed)
 Step 3.5 CEO Gate (Tier 1+) → Phase 1: classify (Haiku); Phase 2: C-suite blind NGT 1 round if triggered (CPO+CTO+CFO+CLO); if C-suite resolves → inject constraint; if not → CEO Brief + PAUSE; CEO response injected before Step 4
 Step 4   Synthesizer (Sonnet; Opus if 5+ agents or livelock)
 Step 5   Log to logs/tasks/[task-id].md

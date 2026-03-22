@@ -43,60 +43,9 @@ Do NOT escalate for:
 
 ## CEO Gate Brief (Step 3.5)
 
-The CEO Gate brief is distinct from a deadlock escalation. It fires proactively — before synthesis — when the decision crosses a CEO-ownership threshold, regardless of whether agents agreed or disagreed.
+CEO Gate is handled by `~/.claude/agents/ceo-gate/persona.md`. That file is authoritative for: trigger categories, delegation levels, C-suite buffer round format, Ratification Brief, Strategic Brief, research loop, C-suite reaction round, and Decision Log.
 
-**CEO Gate triggers** (any one is sufficient):
-1. Business model change
-2. Market pivot / new customer segment
-3. Strategic resource bet (>20% capacity or 12-month platform lock-in)
-4. Vision conflict (contradicts company-belief.ctx.md)
-5. External commitment to partner, customer, or regulator
-6. Product direction change (closes off or adds strategic bets)
-7. Ethics or values deadlock not resolved by any domain authority
-8. Legal/compliance boundary — CLO critical risk or exec legal acceptance required
-9. Kill decision (deprecating a capability users rely on)
-10. C-suite irresolution at hard round cap
-
-**CEO Gate brief format** (rendered as Markdown to CEO):
-
-```markdown
----
-## CEO Decision Required — [category]
-
-**Decision:** [one sentence — the specific question CEO must answer]
-**Why it's yours:** [which trigger fired, why delegation isn't appropriate]
-
-### What agents concluded
-- [position] *(supported by: [agents], confidence: [high|medium|low])*
-
-### The real tension
-[2–3 sentences — what makes this genuinely hard; the core tradeoff]
-
-### Options
-
-**Option A — [name]**
-[one sentence outcome]
-Upside: [points] | Risk: [points] | Supported by: [agents]
-
-**Option B — [name]**
-[one sentence outcome]
-Upside: [points] | Risk: [points] | Supported by: [agents]
-
-**Option C — Delegate with constraint**
-Let agents decide, bounded by a constraint you set.
-
-**Agents lean toward:** [Option X — one sentence why]
-
-> Reply with: "A", "B", "C", or your own direction. OMS resumes from your choice.
----
-```
-
-**After CEO responds:**
-1. Capture CEO's response verbatim as `ceo_decision`
-2. Inject into Synthesizer as hard constraint: "CEO has decided: [verbatim]. Synthesize only within this constraint."
-3. Log brief + response to task log under `## CEO Gate Decision`
-4. Write decision + category to `ceo-gate/MEMORY.md`
-5. Resume Step 4 — Synthesizer proceeds with constraint locked
+This file does not duplicate CEO Gate content. When implementing CEO Gate behavior, read `ceo-gate/persona.md` directly.
 
 ---
 

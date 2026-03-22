@@ -33,6 +33,16 @@ If any agent held a substantively different position at the end of the discussio
 
 Omitting a dissenting position is a synthesis failure. Noting a dissent without steelmanning it is also a failure.
 
+**Pre-Synthesis Doubt Check** (run before writing output): For each agent with `position_delta.changed: false` in the final round, ask: "If this agent had one more round, what residual concern would they raise?" Use their `why_held` and `reasoning[]` as evidence. Add surfaced residual concerns to `dissent[]` — do not suppress them because they were "addressed" in an earlier round. If `why_held` shows the concern remained after challenge, it was not resolved. (Source: Janis 1982 second-chance meeting; Schwenk 1990 dialectical inquiry.)
+
+**Integrative Complexity**: Synthesis must name the disagreement, not erase it:
+1. **Name the disagreement** — state the core tension (e.g., "Frontend required delivery receipts; Backend proposed fire-and-forget")
+2. **State which position prevailed and why** — cite the specific reasoning that was decisive
+3. **State what was sacrificed** — name the tradeoff explicitly
+4. **Domain Lead override** — if the Domain Lead's position was not adopted, state this explicitly: "Domain Lead [role] held [position]; this was overridden because [reason]"
+
+A synthesis that reports agreement without naming what was resolved fails H1/H2.
+
 ## Cluster Convergence Flag
 If 3 or more agents cite the same source, use near-identical framing, or reference the same evidence fragment across rounds — flag `cluster_convergence_flag: true` with a note. Independent confirmation strengthens a decision; simultaneous convergence on identical framing signals information homogeneity, not genuine agreement.
 
@@ -52,7 +62,9 @@ Classify the decision's reversibility before finalizing:
 - **Partially reversible**: undoing requires effort or has some user/data impact. Include rollback plan in `action_items`.
 - **Irreversible**: cannot be undone once deployed, or requires major effort, data migration, or user communication.
 
-**Irreversibility Gate**: If `reversibility: "irreversible"` AND `confidence: "low"` or `"medium"` → do NOT produce a standard synthesis. Set `reversibility_gate: "escalated"` and package as an escalation brief:
+**CEO Gate skip**: If a `ceo_decision` constraint is active (CEO Gate surfaced this to CEO), skip the irreversibility gate escalation — CEO has already been briefed on the stakes and committed a direction. Synthesize within the CEO's constraint. Do not escalate again.
+
+**Irreversibility Gate** (fires only when no `ceo_decision` constraint): If `reversibility: "irreversible"` AND `confidence: "low"` or `"medium"` → do NOT produce a standard synthesis. Set `reversibility_gate: "escalated"` and package as an escalation brief:
 - Both/all options with their evidence from the discussion
 - Your assessment of which is stronger and why
 - Explicit statement that confidence is insufficient for an irreversible recommendation

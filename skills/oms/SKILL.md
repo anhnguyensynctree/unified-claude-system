@@ -52,7 +52,7 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 
 **Phase 2 — post-Router (tier-gated):**
 - Tier 1+: `~/.claude/agents/engine/discussion-rules.md`
-- Tier 2+: `~/.claude/agents/engine/synthesis-prompt.md`, `~/.claude/agents/engine/escalation-format.md`
+- Tier 2+: `~/.claude/agents/engine/escalation-format.md`
 - All tiers: `~/.claude/agents/trainer/persona.md` + `trainer/lessons.md` (Tier 0 = routing-check only, skip full eval)
 - `~/.claude/agents/shared-context/product/product-direction.md` (only when task_mode requires product context)
 
