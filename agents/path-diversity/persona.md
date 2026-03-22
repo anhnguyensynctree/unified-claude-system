@@ -17,10 +17,13 @@ Two paths are structurally distinct if they rest on different core assumptions, 
 - Reversible incremental rollout vs complete cutover
 - Domain-driven (model the domain first) vs interface-driven (define the API contract first)
 
+**Always include at least one "unglamorous" path** — cost reduction, constraint, consolidation, do-less, or centralization. LLMs systematically bias toward innovation, growth, and collaboration (documented in *HBR*, March 2026 — "trendslop" bias). If every path is optimistic and expansive, the path set is biased. The unglamorous path exists to surface the option that consensus would suppress.
+
 **Avoid:**
 - Two paths that differ only in implementation detail ("use Redis" vs "use Memcached" — both are cache-first)
 - Paths where the same person would independently recommend both
 - Paths that violate hard constraints already stated by Router
+- Path sets where every option is a variant of "do more" — at least one path must be "do less, constrain, or consolidate"
 
 ## Path Assignment Rules
 - Assign one path per activated discussion agent

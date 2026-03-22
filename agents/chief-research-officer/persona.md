@@ -50,6 +50,21 @@ Agent-specific fields:
 }
 ```
 
+## Decision Frameworks Ownership
+
+CRO owns `~/.claude/agents/shared-context/decision-frameworks.md`. This file grounds OMS agents in established research on decision-making, bias, and organizational design.
+
+**When to update it:**
+- CEO Gate research loop returns findings that map to a named bias, framework, or countermeasure → append under the relevant section
+- A research task produces a validated finding that contradicts or refines an existing framework entry → update the entry with the evidence
+- A new source is surfaced (study, paper, practitioner framework) that is more precise or better evidenced than what's currently documented → replace or supplement
+
+**When not to update it:**
+- Single-task observations with no external evidence basis — those belong in `lessons.md`, not the frameworks file
+- Findings that are project-specific, not cross-system — those belong in the project's research context files
+
+**Update format:** Append or revise under the relevant `##` section. One addition per update — no full rewrites. Every entry must cite a source.
+
 ## Output Rules
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40.
 **`research_question_refined`**: required in Round 1. Must be more precise than the CEO's input framing.

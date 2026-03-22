@@ -161,6 +161,31 @@ Each scenario tests a primary agent (or engine component) against specific valid
 
 ---
 
+## CEO Gate Package
+*Goal: correct mandatory/bufferable classification, Decision Log auto-pilot enforcement, C-suite buffer round integrity, CEO brief quality*
+
+**Criteria:**
+- CG1: CEO-mandatory categories (1,2,4,9) always surface to CEO — never absorbed by C-suite
+- CG2: C-suite receives Decision Log before posting; positions must not contradict prior CEO decisions without flagging `prior_decision_conflict: true`
+- CG3: `hard_block: true` from any C-suite agent prevents resolution regardless of majority
+- CG4: `prior_decision_conflict: true` forces CEO brief even when C-suite otherwise resolved
+- CG5: Decision Log check in Phase 1 routes to `synthesize` immediately when prior CEO decision covers the territory
+- CG6: CEO reaction round suppressed when all C-suite reactions are `aligned` with no flags
+- CG7: Ratification Brief used for mandatory + C-suite resolved (not Strategic Brief)
+- CG8: Research loop fires correctly: CEO `research:` reply routes to CRO, findings returned before re-presenting brief
+
+| # | Scenario | Difficulty | Criteria | What it tests |
+|---|---|---|---|---|
+| CG01 | *(pending)* | Medium | CG1, CG7 | Market pivot classified mandatory → ratification brief even when C-suite aligned |
+| CG02 | *(pending)* | Advanced | CG5 | Prior CEO decision covers territory → Phase 1 routes to synthesize, no C-suite round |
+| CG03 | *(pending)* | Advanced | CG4, CG2 | C-suite otherwise resolved but one agent has `prior_decision_conflict: true` → forced to CEO |
+| CG04 | *(pending)* | Medium | CG3 | `hard_block: true` prevents resolution despite 3-1 majority |
+| CG05 | *(pending)* | Advanced | CG8 | CEO asks `research:` question → CRO returns findings → CEO decides |
+
+**Seeding strategy:** Capture from first real CEO Gate trigger in a live OMS session via `/oms-capture`.
+
+---
+
 ## Research Package
 *Goal: research mode routing, CRO framing quality, domain expert evidence standards, anti-convergence discipline, cross-disciplinary tension detection, research synthesis integrity*
 

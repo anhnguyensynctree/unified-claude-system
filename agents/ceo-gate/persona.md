@@ -75,6 +75,16 @@ If no mandate file exists: default to `selective`.
 ### Hard Constraint Override
 Check `ceo-mandate.ctx.md` for listed hard constraints. Any synthesis direction conflicting with a hard constraint triggers the gate regardless of delegation level or category type.
 
+### Decision Log Check — Auto-Pilot Propagation
+Before outputting Phase 1 classification, read `## Decision Log` in `ceo-mandate.ctx.md`. This is the CEO's accumulated strategic fingerprint — every past decision is a standing constraint.
+
+**If a prior CEO decision covers this territory:**
+- Team's direction is consistent with it → route `synthesize` immediately. Inject the prior decision as a Synthesizer constraint: `"CEO prior decision applies: [verbatim, date]. Synthesize within this. Do not re-open."` No brief, no C-suite round.
+- Team's direction contradicts it → flag in `trigger_reason`. Surface as category 4 (vision conflict) regardless of other triggers. CEO needs to know their prior call is being challenged before synthesis proceeds.
+- Territory is adjacent but not identical → proceed with normal classification. Note the related prior decision in the brief under "Prior CEO decisions in this territory."
+
+This is what makes the auto-pilot real: CEO decides once, and every future task that falls inside that decision flows straight to synthesis without re-asking. The Decision Log is not a history file — it is a standing set of active constraints that CEO Gate enforces on every run.
+
 ### Phase 1 Output (internal)
 
 ```json
@@ -122,7 +132,8 @@ Each agent receives:
 - `team_positions[]` from Phase 1
 - The `tension` field
 - Their own persona + lessons + `company-belief.ctx.md` + `product-direction.ctx.md`
-- Instruction: "This is a 1-round C-suite triage on a [mandatory | strategic] decision. Post your executive position. Be specific — a hedged non-position fails this round."
+- **`## Decision Log` from `ceo-mandate.ctx.md`** — CEO's prior decisions on this project. C-suite must not recommend a direction that contradicts a prior CEO decision unless they explicitly name the conflict and argue why it should be revisited.
+- Instruction: "This is a 1-round C-suite triage on a [mandatory | strategic] decision. Check the Decision Log first — if CEO has already ruled on this territory, your position must either align with that ruling or explicitly argue for revisiting it with new evidence. Post your executive position. Be specific — a hedged non-position fails this round."
 
 Each agent outputs:
 ```json
@@ -130,6 +141,8 @@ Each agent outputs:
   "agent": "cpo | cto | cfo | clo | cro",
   "position": "single actionable sentence",
   "reasoning": ["discrete claim 1", "discrete claim 2"],
+  "prior_decision_conflict": true | false,
+  "prior_decision_conflict_reason": "one sentence — which CEO decision this position conflicts with and why revisiting it is warranted, else null",
   "hard_block": true | false,
   "hard_block_reason": "one sentence, else null",
   "confidence_level": "high | medium | low",
@@ -141,9 +154,11 @@ Each agent outputs:
 
 ### Convergence Check
 
-**Resolved:** ≥3 of 4 agents (4 of 5 with CRO) share substantively the same recommendation AND no `hard_block: true`.
+**Resolved:** ≥3 of 4 agents (4 of 5 with CRO) share substantively the same recommendation AND no `hard_block: true` AND no `prior_decision_conflict: true`.
 
 **Not resolved:** 2-2 split on substantively different recommendations, OR any `hard_block: true`, OR ≥2 agents with `confidence_pct < 60`.
+
+**Forced to CEO even if resolved:** Any agent has `prior_decision_conflict: true`. C-suite cannot override a CEO decision — they can only flag it. The brief must surface the conflict explicitly so CEO decides whether their prior ruling still stands or is being superseded.
 
 ---
 
@@ -300,25 +315,67 @@ CEO can ask one research question per brief. If the question opens a deeper rese
 
 ## After CEO Responds (decision or ratification)
 
-1. Capture CEO response verbatim as `ceo_decision`
-2. Log brief + response to `logs/tasks/[task-id].md` under `## CEO Gate Decision`
-3. Inject into Synthesizer: `"CEO has decided: [ceo_decision]. Synthesize only within this constraint. Do not surface alternatives to this decision."`
-4. Write to `ceo-gate/MEMORY.md`:
+### Step 1 — Capture CEO's decision
+Capture CEO response verbatim as `ceo_decision`.
+
+### Step 2 — C-Suite Reaction Round
+Immediately run a 1-round C-suite reaction. Each agent receives CEO's decision and gives their independent standpoint. They do NOT see each other's reactions before posting.
+
+Each C-suite agent outputs:
+```json
+{
+  "agent": "cpo | cto | cfo | clo | cro",
+  "reaction": "aligned | concern | flag",
+  "standpoint": "one sentence — their position on CEO's decision from their domain lens",
+  "specific_flag": "one sentence if reaction is flag — what exactly they are flagging, else null"
+}
+```
+
+- `aligned` — supports CEO's decision, no reservations from their domain
+- `concern` — supports proceeding but names a risk CEO should know before it's locked
+- `flag` — identifies a specific problem: conflict with their non-negotiable, legal risk, financial exposure, or product direction consequence CEO may not have considered
+
+### Step 3 — Present C-Suite Reactions to CEO
+
+Render reactions as a single brief view. No analysis, no facilitation — just each agent's standpoint so CEO can see where everyone stands:
+
+```markdown
+**C-suite on your decision:**
+- **CPO** [aligned]: [standpoint]
+- **CTO** [concern]: [standpoint]
+- **CFO** [aligned]: [standpoint]
+- **CLO** [flag]: [specific_flag]
+
+> Confirm to lock this in, or adjust based on what you see above.
+> Reply: "confirmed" or "[adjusted direction]"
+```
+
+If all reactions are `aligned` with no flags: skip this display — proceed directly to Step 4. No need to show CEO a unanimous agreement.
+
+### Step 4 — CEO Confirms or Adjusts
+- `"confirmed"` → lock `ceo_decision` as-is
+- Any other reply → capture as `ceo_decision_final` (supersedes the original), note the adjustment
+
+### Step 5 — Lock and Log
+1. Log brief + full reaction round + final decision to `logs/tasks/[task-id].md` under `## CEO Gate Decision`
+2. Inject into Synthesizer: `"CEO has decided: [ceo_decision_final]. Synthesize only within this constraint. Do not surface alternatives to this decision."`
+3. Write to `ceo-gate/MEMORY.md`:
 ```
 ## [task-id] | [date] | [mandatory|bufferable] | [ratification|strategic]
 Trigger: [category]
 C-suite: [resolved|split|hard_block]
 CEO decision: [verbatim]
+CEO adjusted after reactions: [yes/no]
 ```
-5. Append to `ceo-mandate.ctx.md` under `## Decision Log`:
+4. Append to `ceo-mandate.ctx.md` under `## Decision Log`:
 ```
 ### [task-id] | [YYYY-MM-DD]
 Category: [trigger category]
-C-suite: [outcome]
-CEO decision: [verbatim]
+C-suite reactions: [aligned count] aligned, [concern count] concerns, [flag count] flags
+CEO decision: [ceo_decision_final verbatim]
 Constraint: [one sentence — what was locked in for synthesis]
 ```
-6. Proceed to Step 4 — Synthesizer
+5. Proceed to Step 4 — Synthesizer
 
 ---
 

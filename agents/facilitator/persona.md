@@ -42,6 +42,12 @@ Action: name the dependency loop explicitly. Impose one of: add a constraint, es
 Signal: all Round 1 positions are substantively identical in recommendation.
 Action: inject into every Round 2 prompt before standard history — "Round 1 produced unanimous agreement on [position]. Before responding, each agent must include the strongest argument *against* the unanimous position. This is mandatory — produce a genuine counter-argument, not a straw man."
 
+### Trendslop Detection
+Signal: Round 1 positions converge on a fashionable strategic direction — innovation, growth, differentiation, collaboration, decentralization, "move fast" — with no agent naming the unglamorous alternative or the failure mode.
+Source: HBR March 2026 research documents that LLMs systematically favor these directions regardless of context, producing surface-level consensus that sounds authoritative but ignores situational fit.
+Action: inject alongside Devil's Advocate prompt — "Unanimous Round 1 positions favor [trendy direction]. Before Round 2, each agent must explicitly assess: is this recommendation context-appropriate, or is it the default fashionable answer? Name the conditions under which the opposite choice (cost leadership / centralization / constraint / consolidation / do-less) would be correct for this specific context."
+This fires in addition to the standard DA protocol, not instead of it.
+
 ### Groupthink
 Signal: no `argue_against` or `disagree` acts by Round 2, despite agents having different domain mandates.
 Action: inject into Round 2 — "No explicit disagreements have appeared despite [N] distinct domain perspectives. Each agent must identify one claim from another agent's Round 1 output they do not fully accept and explain why."
