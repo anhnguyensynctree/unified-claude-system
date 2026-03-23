@@ -6,6 +6,8 @@ import {
   createContext,
   attachListeners,
   SCREENSHOTS_DIR,
+  VIDEOS_DIR,
+  ensureVideosDir,
 } from "./state";
 import { buildResponse, flushErrors, translateError } from "./shaper";
 
@@ -146,12 +148,30 @@ export async function executeCommand(
       // ── Reading ──────────────────────────────────────────────────────────
       case "screenshot":
       case "screenshot:full": {
-        const filename = `screenshot-${Date.now()}${cmd === "screenshot:full" ? "-full" : ""}.png`;
-        const path = join(SCREENSHOTS_DIR, filename);
-        await page.screenshot({ path, fullPage: cmd === "screenshot:full" });
+        // args[0] optional: absolute path or relative path (resolved from cwd)
+        let screenshotPath: string;
+        if (args[0]) {
+          screenshotPath = args[0].startsWith("/")
+            ? args[0]
+            : join(process.cwd(), args[0]);
+          // ensure parent dir exists
+          const { mkdirSync: mkdir, existsSync: exists } = await import("fs");
+          const parent = screenshotPath.substring(
+            0,
+            screenshotPath.lastIndexOf("/"),
+          );
+          if (parent && !exists(parent)) mkdir(parent, { recursive: true });
+        } else {
+          const filename = `screenshot-${Date.now()}${cmd === "screenshot:full" ? "-full" : ""}.png`;
+          screenshotPath = join(SCREENSHOTS_DIR, filename);
+        }
+        await page.screenshot({
+          path: screenshotPath,
+          fullPage: cmd === "screenshot:full",
+        });
         return buildResponse(
           {
-            screenshot: path,
+            screenshot: screenshotPath,
             hint: `Use Read tool on this path to display the image`,
           },
           ctx,
@@ -246,6 +266,82 @@ export async function executeCommand(
         return { ok: true, tabs };
       }
 
+      // ── Video recording ──────────────────────────────────────────────────
+      case "record:start": {
+        if (browse.recording) {
+          return {
+            ok: false,
+            error: `Already recording in context '${browse.recording.contextName}'. Run record:stop first.`,
+          };
+        }
+        // args[0] optional name/path. If absolute or contains /, use as dir; else use VIDEOS_DIR
+        const recName = args[0] ?? `rec-${Date.now()}`;
+        let videoDir: string;
+        if (recName.startsWith("/")) {
+          videoDir = recName;
+        } else if (recName.includes("/")) {
+          videoDir = join(process.cwd(), recName);
+        } else {
+          videoDir = VIDEOS_DIR;
+        }
+        const { mkdirSync: mkdirV, existsSync: existsV } = await import("fs");
+        if (!existsV(videoDir)) mkdirV(videoDir, { recursive: true });
+        const recCtxName = `__rec__${recName.replace(/\//g, "-")}`;
+        const recContext = await browse.browser.newContext({
+          recordVideo: { dir: videoDir },
+        });
+        const recPage = await recContext.newPage();
+        const recEntry = {
+          context: recContext,
+          pages: [recPage],
+          activeTab: 0,
+          consoleErrors: [],
+          networkErrors: [],
+        };
+        browse.contexts.set(recCtxName, recEntry);
+        attachListeners(recCtxName, recPage);
+        browse.active = recCtxName;
+        browse.recording = { contextName: recCtxName, recordingPage: recPage };
+        return buildResponse(
+          { recording: recName, context: recCtxName },
+          recEntry,
+        );
+      }
+
+      case "record:stop": {
+        if (!browse.recording) {
+          return {
+            ok: false,
+            error: "No active recording. Run record:start first.",
+          };
+        }
+        const { contextName, recordingPage } = browse.recording;
+        const recEntry = browse.contexts.get(contextName);
+        if (!recEntry) {
+          browse.recording = null;
+          return { ok: false, error: "Recording context not found." };
+        }
+        // Save video path reference before closing
+        const videoRef = recordingPage.video();
+        // Close all pages to flush video, then close context
+        for (const p of recEntry.pages) {
+          await p.close().catch(() => {});
+        }
+        await recEntry.context.close().catch(() => {});
+        const videoPath = await videoRef?.path().catch(() => null);
+        browse.contexts.delete(contextName);
+        browse.recording = null;
+        // Switch back to default
+        browse.active = "default";
+        return {
+          ok: true,
+          video: videoPath ?? null,
+          hint: videoPath
+            ? "Use Read tool with this path to attach video to task log"
+            : "Video path unavailable — context may not have recorded any frames",
+        };
+      }
+
       // ── Meta ──────────────────────────────────────────────────────────────
       case "status":
         return {
@@ -256,6 +352,7 @@ export async function executeCommand(
           title: await page.title(),
           tab: ctx.activeTab,
           tabs: ctx.pages.length,
+          recording: browse.recording ? browse.recording.contextName : null,
         };
 
       case "eval": {
@@ -276,7 +373,7 @@ export async function executeCommand(
       default:
         return {
           ok: false,
-          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, status, eval`,
+          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, record:start, record:stop, status, eval`,
         };
     }
   } catch (e) {

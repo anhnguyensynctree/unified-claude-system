@@ -3,6 +3,7 @@ import { resolve } from "path";
 import type { Browser, BrowserContext, Page } from "playwright";
 
 export const SCREENSHOTS_DIR = resolve(import.meta.dir, ".screenshots");
+export const VIDEOS_DIR = resolve(import.meta.dir, ".videos");
 export const STATE_FILE = resolve(import.meta.dir, ".state.json");
 
 export interface ContextEntry {
@@ -18,16 +19,23 @@ export interface ContextEntry {
   }>;
 }
 
+export interface RecordingState {
+  contextName: string;
+  recordingPage: Page;
+}
+
 export interface BrowseState {
   browser: Browser;
   contexts: Map<string, ContextEntry>;
   active: string;
+  recording: RecordingState | null;
 }
 
 export const browse: BrowseState = {
   browser: null as any,
   contexts: new Map(),
   active: "default",
+  recording: null,
 };
 
 export function activePage(): Page {
@@ -89,4 +97,8 @@ export async function createContext(name: string): Promise<ContextEntry> {
 export function ensureScreenshotsDir(): void {
   if (!existsSync(SCREENSHOTS_DIR))
     mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+}
+
+export function ensureVideosDir(): void {
+  if (!existsSync(VIDEOS_DIR)) mkdirSync(VIDEOS_DIR, { recursive: true });
 }

@@ -23,6 +23,7 @@ Before writing output, process inputs in this order:
 5. **Check Domain Lead override** — if the synthesis overrides the Domain Lead's position on a risk-related claim, `domain_lead_overridden` must be `true` with an explicit `domain_lead_override_reason`. A synthesis that silently ignores the Domain Lead fails M2.
 6. **Check Primary Recommender alignment** — did the synthesis align with the Primary Recommender's core contribution? Note any divergence.
 7. **Draft action items** — concrete, assignable, ordered. Each action item names the responsible agent/role. Vague actions ("look into X") are not permitted.
+8. **Trendslop check** — before writing `decision`, ask: does this synthesis gravitate toward growth, AI, personalization, or platform expansion without a specific agent argument grounding it? If yes, pull it back to what was actually argued. The synthesis must reflect the discussion, not the LLM's prior distribution over popular product recommendations. If no agent argued for it, it does not appear in `decision` or `action_items[]`.
 
 ## Dissent Preservation Rule
 If any agent held a substantively different position at the end of the discussion, it must appear in `dissent[]` with:

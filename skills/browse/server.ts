@@ -5,6 +5,7 @@ import {
   browse,
   createContext,
   ensureScreenshotsDir,
+  ensureVideosDir,
   STATE_FILE,
 } from "./state";
 import { executeCommand, executeBatch } from "./commands";
@@ -31,6 +32,7 @@ async function shutdown() {
 
 async function main() {
   ensureScreenshotsDir();
+  ensureVideosDir();
 
   browse.browser = await chromium.launch({ headless: true });
   await createContext("default");

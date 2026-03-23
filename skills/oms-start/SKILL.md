@@ -72,6 +72,12 @@ Based on scope answer, run intake questions from each active department's lead. 
 5. Biggest technical constraint right now?
 6. What is explicitly out of scope?
 
+**Domain specialist detection** (auto — no question needed, infer from stack + answers):
+- Vercel detected (deployment answer or `vercel.json` / `next.config.js` present) → write `"deploy": "vercel"` to oms-config.json project entry, and add to `cto.ctx.md` under `## Deploy`
+- iOS / React Native / Expo detected → write `"mobile": "ios"` to oms-config.json project entry; note in `cto.ctx.md` that mobile testing requires simulator or device
+- GitHub Actions detected (`/.github/workflows/` exists) → note in `cto.ctx.md` under `## CI`; no separate Discord channel needed — engineering handles it
+- Supabase detected → add to `backend-developer.ctx.md` under `## Database`
+
 **Research (if active — asked by CRO perspective):**
 7. What domains of knowledge does this product depend on? (e.g., behavioral psychology, content strategy, linguistics)
 8. What is the core research question the product is trying to answer about its users?
@@ -132,6 +138,8 @@ Write all files to `.claude/agents/` in the current project. Create the director
 [Major product decisions made to date — appended by CPO after exec discussions]
 ```
 
+**When proposing agents not in the standard roster**: read `~/.claude/agents/engine/agent-creation-rules.md` and run the C-suite narrowing gate (CPO → CTO → CEO) before adding any non-standard agent to the hierarchy. Never create a new persona file without CEO approval.
+
 **`company-hierarchy.md`** — department structure and rostered agents:
 ```markdown
 # Company Hierarchy — [Project Name]
@@ -179,11 +187,45 @@ All available by default for engineering tasks.
 [What the team already knows vs. what must be discovered]
 ```
 
+### Always generate:
+
+**`ceo-decisions.ctx.md`** — append-only CEO decision log, starts empty:
+```markdown
+# CEO Decisions — [Project Name]
+
+<!-- Append-only. Format: [date] | [decision] | [rationale] -->
+```
+
 ### Generate only if engineering ctx makes sense (project has a meaningful stack):
 
-**`cto.ctx.md`**, **`backend-developer.ctx.md`**, **`frontend-developer.ctx.md`** — brief project-specific context per agent, max 10 lines each.
+**`cto.ctx.md`**, **`backend-developer.ctx.md`**, **`frontend-developer.ctx.md`** — project-specific context per agent. No line cap — these are living documents.
 
-## Step 6 — Confirm
+## Step 6 — Create Discord channel + register project
+
+Check if `~/.claude/oms-config.json` exists (autonomous pipeline configured):
+
+```bash
+cat ~/.claude/oms-config.json 2>/dev/null
+```
+
+**If config exists:** create a Discord channel for this project and register it.
+
+Derive slug from project directory name (lowercase, hyphens for spaces).
+Check if slug already exists in config — if yes, skip channel creation.
+
+Create the Discord channel via bot API:
+```bash
+python3 ~/.claude/bin/discord-create-channel.py "[slug]"
+```
+
+This script creates a text channel named `#[slug]` in the same server as `#oms-updates`,
+writes the new channel_id to `oms-config.json` under `projects.[slug]`, and prints the channel ID.
+
+If script fails or pipeline not configured: tell CEO "Discord channel not created — run /init-oms to set up the pipeline first."
+
+**If config does not exist:** skip silently.
+
+## Step 7 — Confirm
 
 Tell CEO:
 ```
@@ -194,6 +236,7 @@ Files written to .claude/agents/:
 
 Active departments: [list]
 [If research] Rostered researchers: [list agent names]
+[If Discord configured] Discord: #[slug] channel created — autonomous OMS ready
 
 Run /oms <task> to start.
 Run /oms exec for a strategic C-suite discussion.
@@ -205,5 +248,7 @@ Run /oms-start again if the project pivots or a new department is needed.
 - **Never write `company-direction.ctx.md`** — it is now `company-belief.ctx.md`
 - **Never write `project-roster.md`** — it is now `company-hierarchy.md`
 - If `.claude/agents/` does not exist: create it
-- Keep all generated files under 40 lines — dense and scannable
+- ctx.md files are living documents — no line cap, they grow as OMS learns the project
+- `ceo-decisions.ctx.md` is append-only — never rewrite, only add entries
+- `company-belief.ctx.md` and `product-direction.ctx.md` start dense (under 40 lines) but grow over time
 - Do not generate files for inactive departments

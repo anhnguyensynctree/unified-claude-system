@@ -1,3 +1,15 @@
+# OMS autonomous loop — personal infrastructure, never publish
+# (discord bot, dispatcher, launchd wiring, budget tracking)
+bin/
+commands/init-oms.md
+oms-config.json
+oms-budget.json
+oms-costs/
+oms-locks/
+oms-pending/
+logs/
+agents/training/.last-nightly-run
+
 # OMS — personal/learned data only (framework is public)
 agents/*/lessons.md
 agents/*/MEMORY.md

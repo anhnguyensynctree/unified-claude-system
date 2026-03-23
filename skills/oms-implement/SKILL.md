@@ -52,6 +52,34 @@ Wait for confirmation. If CEO adjusts scope: update the plan only. Do NOT re-run
 
 ---
 
+## Step 1.25 — CTO Safety Gate
+
+Before any implementation, scan `action_items[]` for dangerous operations:
+
+**Dangerous flags** (require blocking question before proceeding):
+- DB schema migration or DROP/ALTER statements
+- Auth flow changes (token logic, session handling, OAuth config)
+- Breaking API changes (endpoint removal, response shape change, auth scope change)
+- Infrastructure changes (environment variables, deployment config, CI/CD pipeline)
+- Any action item containing the words: `migrate`, `drop`, `rename column`, `break`, `remove endpoint`, `revoke`
+
+**Default behavior**: auto-proceed without asking. OMS runs continuously.
+
+**If a dangerous flag is detected** (autonomous mode only — `OMS_BOT=1`):
+Write blocking question to `~/.claude/oms-pending/[slug].question`:
+```json
+{
+  "question": "CTO Safety Gate: dangerous operation detected — [flag type]. Action item: [exact item]. Proceed?",
+  "context": "DB/auth/breaking-API changes are irreversible — requiring explicit approval",
+  "task_id": "[task-id]",
+  "step": "safety-gate",
+  "asked_at": "[ISO timestamp]"
+}
+```
+Write checkpoint `"next": "waiting_ceo"`. Do not proceed until CEO replies "yes" or equivalent.
+
+**In manual mode** (no `OMS_BOT=1`): present inline in the Step 1 plan confirmation instead of writing a file. CEO's "y" covers it.
+
 ## Step 1.5 — Dependency Analysis
 
 Before touching code, classify each action item:
@@ -128,6 +156,12 @@ If PM's `acceptance_criteria[]` is empty or absent: fall back to `action_items[]
 
 ### 2 — Drive browse for each criterion
 Auto-start browse daemon per `~/.claude/skills/browse/llms.txt`. Run `status` first to see current URL and page state.
+
+**Output path convention**: all QA media saves to the project's `qa/` directory with task-id in filename:
+- Videos: `qa/videos/[task-id]-[criterion-slug]` (passed to `record:start`)
+- Screenshots: `qa/screenshots/[task-id]-[criterion-slug].png` (passed to `screenshot`)
+
+The browse daemon resolves these relative to cwd (the project directory).
 
 For each criterion, build a batch command sequence that fully exercises the behavior:
 - Navigate to the relevant route (`go <path>`)

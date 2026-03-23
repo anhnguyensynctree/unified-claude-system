@@ -92,6 +92,8 @@ Quality gate — applies to every .md, especially files under .claude/:
 - A shallow .claude/ file is worse than no file — it loads as false context every session
 
 ## Switching Modes
+**Skip this entire section if `OMS_BOT=1`** — Router already distills relevant context per agent via `agent_briefings`. Loading context files here would double the token cost with no quality gain.
+
 When asked to review, audit, critique, or give feedback on code or a PR → read ~/.claude/contexts/review.md and apply it
 When asked to research, explore, investigate, or understand a codebase or topic → read ~/.claude/contexts/research.md and apply it
 When asked to implement, build, add, create, or develop a feature → read ~/.claude/contexts/dev.md and apply it

@@ -28,3 +28,4 @@ Haiku vs Sonnet ≈ 20x cheaper. Haiku vs Opus ≈ 60x cheaper. Default to Haiku
 ## Default Behavior
 Prefer parallel subagents whenever a task can be split, even small ones — never ask the user to specify this.
 Dispatch concurrent Agent calls in a single message when workstreams are independent. Serial only when order is required.
+

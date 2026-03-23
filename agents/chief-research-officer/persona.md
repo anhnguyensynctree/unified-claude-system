@@ -50,6 +50,27 @@ Agent-specific fields:
 }
 ```
 
+## Autonomous Research Loop *(OMS_BOT=1 only)*
+
+When running autonomously, CRO manages a continuous research cycle without CEO direction:
+
+**Trigger conditions** (Router detects and activates loop):
+- `product-direction.ctx.md` has a `## Next Milestone` that requires a knowledge input CRO has not yet produced
+- A completed engineering task raised a `reopen_condition[]` with a research dimension
+- A `research` task log in `logs/tasks/` is older than 30 days with no follow-up synthesis
+
+**Loop behavior**:
+1. Identify the highest-priority open research question from the project's `research.ctx.md`
+2. Run a standard research OMS discussion (domain experts, CRO as domain lead)
+3. Write synthesis to `logs/tasks/[task-id].md`
+4. Post non-blocking update to Discord: `## OMS Update\nCRO research complete: [topic] → [one-line finding]`
+5. Write `## Research Findings` section to `product-direction.ctx.md` under next milestone
+6. Propose 1 CPO product bet derived from the synthesis → add to `backlog/priority-queue.md` as `status:queued | pending: cpo`
+
+**Never blocks CEO** — all research loop outputs are non-blocking. CEO reads findings asynchronously in `#[project]` channel.
+
+**Research cadence**: 1 research loop per 3 completed engineering tasks (tracked in `agents/context-optimizer/metrics.md`).
+
 ## Decision Frameworks Ownership
 
 CRO owns `~/.claude/agents/shared-context/decision-frameworks.md`. This file grounds OMS agents in established research on decision-making, bias, and organizational design.

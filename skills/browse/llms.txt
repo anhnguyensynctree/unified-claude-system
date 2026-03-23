@@ -1,8 +1,11 @@
 # Browse Skill — LLM Reference
 
+**Primary QA and verification tool.** Use for any live-app interaction — always before writing a bug report, before marking Evidence QA as done, and before any task-complete claim on a user-facing change.
+
 Playwright-backed HTTP daemon. Browser stays alive between commands — auth, cookies, localStorage persist across the full session.
 State file: `~/.claude/skills/browse/.state.json` (port + token)
 Screenshots: `~/.claude/skills/browse/.screenshots/`
+Videos: `~/.claude/skills/browse/.videos/`
 
 ## Triggers — use /browse when
 
@@ -11,6 +14,9 @@ Screenshots: `~/.claude/skills/browse/.screenshots/`
 - Navigating authenticated flows (login, checkout, protected pages)
 - Checking console errors or network failures on a running app
 - Any task that says "verify", "check", "test", "QA" against a real URL
+- OMS Evidence QA (Step 2.5) — always drive browse for each acceptance criterion
+
+**Default for QA: video.** Use `record:start` / `record:stop` for any multi-step flow. Screenshots only for single-state checks (does element exist? layout check).
 
 Never cold-start Playwright directly — always use this daemon.
 
@@ -128,6 +134,37 @@ ctx:switch user  → go /admin-panel  (should 403)
 ```bash
 cd ~/.claude/skills/browse && bun install && bun run install-browsers
 ```
+
+## Video vs Screenshot — default preference
+
+**Always use video for multi-step flows.** Screenshot only for single-state checks (e.g. "does this element exist?").
+
+| Use case | Use |
+|---|---|
+| Full user flow (login → action → result) | `record:start` … `record:stop` |
+| Milestone QA (multiple criteria) | video per criterion flow |
+| Layout/responsive check | screenshot (single state) |
+| Small change verification | screenshot |
+| Bug reproduction | video |
+
+Video captures timing, transitions, and hover states that screenshots miss. When in doubt: record.
+
+### Video commands
+| `record:start [path]` | begin recording; path = absolute dir or relative dir from cwd (e.g. `qa/videos`) |
+| `record:stop` | stop and save → returns `{ "video": "/path/to/file.webm" }` |
+
+Use Read tool with returned video path to attach to task log or Discord post.
+
+**Path convention for OMS Evidence QA** — always pass project-relative paths with task-id in name:
+```json
+// Multi-step flow with video saved to project
+{"commands": ["record:start qa/videos/2026-03-22-auth-flow", "go localhost:3000/login", "fill [name=email] test@x.com", "fill [name=password] pw", "click [type=submit]", "record:stop"]}
+
+// Screenshot saved to project
+{"commands": ["go localhost:3000", "screenshot qa/screenshots/2026-03-22-auth-flow-landing.png"]}
+```
+
+Default (no path): falls back to `~/.claude/skills/browse/.videos/` or `.screenshots/`.
 
 ## Notes
 - `go`, `reload`, `back`, `forward` wait for networkidle

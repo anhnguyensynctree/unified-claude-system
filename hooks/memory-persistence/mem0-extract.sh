@@ -11,6 +11,12 @@ if [ -f "$HOME/.config/anthropic/key" ]; then
   export ANTHROPIC_API_KEY=$(cat "$HOME/.config/anthropic/key")
 fi
 
+# Skip all extraction for autonomous OMS bot steps — OMS task logs are the memory
+if [ "${OMS_BOT:-0}" = "1" ]; then
+  echo "[mem0] OMS_BOT session — skipping extraction" >&2
+  exit 0
+fi
+
 if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     echo "[mem0] No transcript available — skipping extraction" >&2
     exit 0

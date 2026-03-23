@@ -83,6 +83,11 @@ for dir in "$TOPICS_DIR" "$GLOBAL_TOPICS_DIR"; do
   fi
 done
 
+# --- Skip expensive parts for autonomous OMS bot steps ---
+if [ "${OMS_BOT:-0}" = "1" ]; then
+  exit 0
+fi
+
 # --- Previous sessions (project-scoped, last 7 days) ---
 HANDOFFS_DIR="$HOME/.claude/handoffs"
 PROJECT=$(basename "${CLAUDE_PROJECT_DIR:-$CWD}")

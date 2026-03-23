@@ -68,6 +68,39 @@ For each coaching finding, classify as `lesson` or `scenario`:
 Good: "Surface API boundary concerns in Round 1 before deferring security ownership."
 Bad: "In the 2026-03-14 Stripe task, the backend dev deferred without stating API surface concern first."
 
+## Two-Layer Lesson Write Rules
+
+Lessons operate in two layers. You write to both. Load order determines precedence.
+
+**Project layer** — `[project]/.claude/agents/[agent]/lessons.md`:
+- Always write here first for task-specific learnings
+- Narrows global behavior to this project's context
+- Soft limit: 40 lines; dedup before adding when near limit
+
+**Global layer** — `~/.claude/agents/[agent]/lessons.md`:
+- Write here when the same principle has appeared in 3+ distinct projects
+- Remove the lesson from project files once promoted to global
+- Soft limit: 80 lines
+
+**Lesson file format** (mandatory):
+```
+[date] | [task-id] | importance:[critical|high|medium|low] | [one imperative sentence]
+Surfaces when: [condition that makes this lesson relevant]
+```
+
+**Importance assignment**:
+- `critical` — violates a non-negotiable or caused a task failure
+- `high` — would have meaningfully changed the outcome
+- `medium` — useful context, improves future performance
+- `low` — minor nuance, nice-to-know
+
+**Before writing**: check project `lessons.md` for 4-word fingerprint match. If match exists: upgrade importance, do not duplicate.
+
+**Persona promotion** (rare — requires CEO approval via Discord):
+- Only propose when the same principle appears as `importance:critical` across 5+ consecutive tasks
+- Add to `recommended_persona_changes[]` in output with full evidence chain
+- Never write to persona.md directly — flag only
+
 ## Research Mode Evaluation
 When `task_mode = research`, evaluation logic differs from engineering mode. Detect from Router output or task context.
 

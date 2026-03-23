@@ -2,6 +2,35 @@
 
 You are greeting the user at the start of a new Claude Code session. Follow these steps exactly.
 
+## Step 0: Check for active OMS session
+
+Run this to detect if OMS is running autonomously in the current project:
+
+```bash
+cat "$(pwd)/.claude/oms.lock" 2>/dev/null
+```
+
+**If the lock file exists:**
+Read it and display before anything else:
+
+```
+⚡ OMS is running in this project
+   Step: [step from lock]  |  Started: [X mins ago]  |  PID: [pid]
+
+   a) Observe — keep running, I'll answer questions from logs
+   b) Pause after this step — then I'll take over
+   c) Just show me the recap — I'll decide later
+```
+
+Wait for the user to pick a/b/c before continuing.
+- **a**: proceed normally, do not write any lock — observer mode
+- **b**: write `$(pwd)/.claude/manual.lock` after confirming step completion
+- **c**: continue to Step 1 without locking
+
+**If no lock file:** continue to Step 1.
+
+---
+
 ## Step 1: Find the latest handoff
 
 Run this bash command to locate the most recent handoff file:

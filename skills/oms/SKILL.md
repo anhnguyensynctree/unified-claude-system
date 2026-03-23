@@ -336,6 +336,33 @@ Project memory (`topics/oms-history.md`):
 Decision: [one sentence]  Agents: [list]  Tier: N  Log: logs/tasks/[task-id].md
 ```
 
+## Step 5.5 — CPO Backlog Pass *(autonomous mode only — OMS_BOT=1)*
+
+After the task log is written and synthesis is confirmed, CPO updates the backlog:
+
+1. Read `synthesis.action_items[]` from the completed task log
+2. Read `.claude/agents/backlog/priority-queue.md` (create if missing)
+3. Mark the current task `status:done`
+4. Add the next 1–3 highest-priority tasks derived from:
+   - Remaining synthesis `action_items[]` not yet in backlog
+   - `product-direction.ctx.md` current priorities
+   - Any `reopen_conditions[]` from synthesis that became real
+5. Write updated `priority-queue.md`
+
+**Entry format**: follow `~/.claude/agents/engine/cpo-backlog.md` exactly.
+
+**CPO approval rule**: tasks generated from a completed engineering synthesis are CPO-approved by default. Tasks requiring C-suite sign-off (new initiatives, external services, architectural pivots) are added with `pending: cto|cpo`.
+
+**Non-blocking update after write**:
+```
+## OMS Update
+CPO backlog updated — next task queued: [slug]
+```
+
+Skip entirely in manual mode (no `OMS_BOT=1`).
+
+---
+
 ## Step 6 — Trainer
 Trainer always runs. Scope scales by tier:
 
@@ -372,11 +399,15 @@ Trainer call:
 If `complexity_assessment_accurate: false`: inject correction to Router memory.
 If `meta_retrospective_due: true`: notify CEO — "Run `/compact-agent-memory [agent]`."
 
-## Step 7 — Compact Check
-```bash
-python3 ~/.claude/agents/memory/agent-mem-extract.py check
-```
-Over threshold → tell CEO: "[role] memory is [N] lines — run `/compact-agent-memory [role]` when convenient."
+## Step 7 — Context Optimizer
+
+Load `~/.claude/agents/context-optimizer/persona.md` and `~/.claude/agents/context-optimizer/metrics.md`.
+
+**Mode 1 (every task — always):** Run post-task lightweight check against `logs/tasks/[task-id].md`. Also read Trainer output from the task log — correlate lesson quality signals with efficiency findings (e.g. Trainer flagged over-discussion → wasted rounds confirmed). Execute safe auto-fixes immediately (facts.json consolidation, archive markers on >300-line logs). Update `metrics.md`.
+
+**Mode 2 (full audit — when triggered):** Check `task_count_since_last_audit` in `metrics.md`. If ≥10, OR Router flagged `milestone_reached: true` this task → run full audit across all OMS living documents (all `.ctx.md` files including `ceo-decisions.ctx.md`, persona dedup/upgrade pipeline, engine health, efficiency patterns). Post non-blocking Discord summary (3-5 bullets). Reset audit counter. Any engine changes or persona trims require CEO approval before executing.
+
+Output: JSON per schema in persona.md. Append `## Efficiency Check` to task log only if `status != "clean"`. Never surface clean results to CEO.
 
 ## Step 8 — CEO Feedback + Scenario Capture
 
@@ -400,6 +431,144 @@ Run /oms-capture to extract as a training scenario? (y/n)
 
 If CEO declines: log the skip in the task log under `## Capture Decision` with reason.
 If CEO approves: run `/oms-capture [task-id]`.
+
+---
+
+---
+
+## Autonomous Pipeline Protocol
+
+These rules apply when `OMS_BOT=1` env var is set (bot-driven sessions). Ignored in manual sessions.
+
+### Step Isolation — one step per invocation
+
+**Each `claude --print` invocation runs exactly ONE step, then exits.**
+
+This is the most important rule in autonomous mode. After completing the assigned step:
+1. Write the checkpoint with the correct `next` value
+2. Output `## OMS Update\n[one-line summary]`
+3. **Exit immediately** — do not proceed to the next step
+
+The dispatcher reads the checkpoint and sends a new invocation for the next step. The bot chains them via `maybe_continue()`.
+
+**Why this matters:** if a step times out or crashes mid-way, only that step is lost. The checkpoint still points to the same step, so the retry reruns only that step from a clean state — not the entire task from scratch.
+
+Step sequence and their `next` values:
+```
+router → round_1 → round_2 → ... → (ceo_gate if triggered) → synthesis → log → cpo_backlog → trainer → compact_check → done
+                                                              ↓
+                                                        waiting_ceo (blocking)
+```
+
+### Checkpoint — write before exiting each step
+
+Write `.claude/oms-checkpoint.json` immediately after the step completes, before outputting the update:
+
+```json
+{
+  "task_id": "2026-03-22-auth-flow",
+  "step": "synthesis",
+  "status": "complete",
+  "next": "log",
+  "updated": "2026-03-22T14:32:01Z"
+}
+```
+
+`next` values: `router` | `round_N` | `ceo_gate` | `synthesis` | `log` | `cpo_backlog` | `trainer` | `compact_check` | `implement` | `milestone_gate` | `waiting_ceo` | `done`
+
+**Write checkpoint first, output update second, then stop.** If the process dies after writing the checkpoint but before outputting the update, the next invocation will correctly resume from the written `next` value — nothing is lost.
+
+### Step Progress Journal — micro-checkpoints within a step
+
+For steps with meaningful sub-work (multi-round discussions, synthesis, trainer eval), write incremental progress to `.claude/oms-step-progress.md` as you go. This file is:
+- **Never surfaced to Discord** — internal only
+- **Read at the start of a step retry** — if the step is re-run after a crash, OMS reads this file first to understand what was already completed
+- **Cleared when the step writes its final checkpoint** — once the step is done, delete it
+
+Format — append one line per meaningful milestone reached:
+```
+[HH:MM] router: complexity=tier2, agents=[cto, backend-dev, pm], rounds=2
+[HH:MM] round_1: cto position logged, backend-dev position logged
+[HH:MM] round_1: facilitator says proceed to round_2
+[HH:MM] round_2: convergence reached on API design
+```
+
+**When to write a progress entry** (within a step):
+- After Router completes its analysis and selects agents
+- After each agent completes their round position
+- After Facilitator issues a proceed/escalate/inject decision
+- After CEO Gate evaluates (pass or trigger)
+- After Synthesizer completes each major section
+
+**On retry** — read `oms-step-progress.md` at start of step. If it shows work already done (e.g. Round 1 complete), skip that sub-work and resume from the last logged milestone.
+
+### Blocking questions — write to pending file, then poll
+
+When CEO input is required (CEO Gate, clarifying question, CTO escalation, milestone gate):
+
+**Do NOT ask in the terminal.** Instead:
+
+1. Write the question to `~/.claude/oms-pending/[project-slug].question`:
+```json
+{
+  "question": "[exact question text for CEO]",
+  "context": "[one-line reason why this is blocking]",
+  "task_id": "[current task-id]",
+  "step": "[current step name]",
+  "asked_at": "[ISO timestamp]"
+}
+```
+
+2. Write checkpoint with `"next": "waiting_ceo"`
+
+3. Poll for answer (30s intervals, up to 24h):
+```bash
+ANSWER_FILE=~/.claude/oms-pending/[project-slug].answer
+while [ ! -f "$ANSWER_FILE" ]; do sleep 30; done
+ANSWER=$(cat "$ANSWER_FILE")
+rm "$ANSWER_FILE" ~/.claude/oms-pending/[project-slug].question
+```
+
+4. Continue with `$ANSWER` injected as CEO response.
+
+**Project slug** = basename of current working directory, or read from `.claude/oms-config-slug` if set.
+
+### Non-blocking updates — print clearly for bot parsing
+
+End every completed step with a summary line the bot can extract:
+
+```
+## OMS Update
+[one-line summary of what was completed or decided]
+```
+
+The Discord bot extracts this line and posts it to the project channel.
+
+### Milestone gate — always blocking
+
+When a milestone completes (all tasks in a milestone group are done + Evidence QA passed):
+
+1. Write blocking question with full milestone summary:
+```
+Milestone complete: [milestone name]
+Tasks: [N] ✅  QA: [N criteria verified]  Staging: [URL if available]
+
+Reply "continue" to start next milestone, or give feedback.
+```
+2. Do NOT start the next milestone until answer file contains "continue" or equivalent approval.
+
+### Auto-capture — write then continue
+
+When capture conditions are met (Step 8), do NOT ask CEO. Instead:
+1. Run `/oms-capture [task-id]` automatically
+2. Write non-blocking update: `## OMS Update\nScenario [NNN] captured: [one-line description]`
+3. Continue to next task
+
+### Auto-implement — trigger after synthesis
+
+After Step 5 (log written) and Step 6 (trainer done):
+- If `action_items[]` non-empty in synthesis AND task mode is not `exec`: write checkpoint `"next": "implement"` and exit
+- Dispatcher reads checkpoint → sends "implement" prompt → oms-implement runs as next step
 
 ---
 
