@@ -15,6 +15,29 @@ Orchestrates the one-man-show multi-agent discussion engine. Invoked via `/oms` 
 | `/oms discover` | **Discover** — explicit project bootstrap |
 | `/oms add <role> to the team` | **Task** — route to CTO + EM |
 | `/oms exec` | **Exec** — C-suite strategic discussion; auto-triggered at milestones |
+| `/oms think [framework]: <question>` | **Framework** — CEO invokes a named lens on a specific question |
+
+## Framework Invocation Mode
+
+When CEO uses `/oms think [framework]: <question>`, route to the framework owner and run a focused single-round analysis. Skip full discussion engine — this is a targeted lens, not a full task.
+
+| Framework | Owner | What to produce |
+|---|---|---|
+| `rice` | CPO | RICE score + Kano class + Now/Next/Later slot for the named item |
+| `kano` | CPO | Classify the feature: basic / performance / delighter — with evidence |
+| `jtbd` | CRO + Human Behavior | 3-layer job map: functional / emotional / social |
+| `desirability` | CRO | Desirability verdict + evidence basis + latent vs absent need call |
+| `feasibility` | CTO | Feasibility assessment: blockers, effort, timeline risk |
+| `viability` | CPO + CFO | Revenue, retention, moat — does this sustain itself? |
+| `ideo` | Synthesizer | All three IDEO dimensions evaluated in parallel |
+| `impact-risk` | Synthesizer | Expected value vs downside — proportionality check |
+| `now-next-later` | CPO | Slot the named items into Now/Next/Later with rationale |
+
+**Rules:**
+- One framework, one question — do not run multiple frameworks in a single `think` call
+- Output must include the framework's named output fields (from the owning agent's persona)
+- No checkpoint written — this is advisory, not a pipeline step
+- CEO can combine with a task: `/oms think jtbd: [then run task]` — JTBD output becomes briefing input for Router
 
 ---
 

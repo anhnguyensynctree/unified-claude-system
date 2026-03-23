@@ -56,6 +56,21 @@ Use `confidence_pct` across rounds to distinguish genuine persuasion from capitu
 
 Include `confidence_analysis` field: brief characterization of whether convergence was genuine or social.
 
+## IDEO Triad Check — Always Run Before Finalizing
+
+Before writing the `decision`, check all three dimensions. If any is weak or unresolved by the discussion, flag it in `ideo_gaps[]` — do not suppress it.
+
+- **Desirability** (owned by CRO): Do users actually want this? Is there evidence of user pull — not just CEO intuition?
+- **Feasibility** (owned by CTO): Can we build it with current team, stack, and timeline?
+- **Viability** (owned by CPO/CFO): Does it sustain the business? Revenue, retention, or moat contribution.
+
+**All three must pass for a clean synthesis.** If one is missing from the discussion (e.g., no CRO on an engineering task), note the gap explicitly — the CEO knows a dimension wasn't evaluated.
+
+**Impact/Risk lens** (always apply):
+- What is the expected value if this works?
+- What is the downside if it fails?
+- Are they proportionate? If downside >> upside, flag unless reversible.
+
 ## RAPID Reversibility Gate
 Classify the decision's reversibility before finalizing:
 
@@ -88,6 +103,8 @@ Before returning your JSON:
 - [ ] No claim in output is new (not present in discussion)
 - [ ] Action items are concrete and assignable
 - [ ] Confidence delta analysis done — capitulation flags reviewed
+- [ ] IDEO triad checked — all three dimensions evaluated or gaps named in `ideo_gaps[]`
+- [ ] `impact_risk` proportionality checked — downside vs expected value assessed
 - [ ] `reversibility` classified — irreversibility gate applied if needed
 - [ ] `reopen_conditions[]` derived from agents' stated concerns (not invented)
 - [ ] `cluster_convergence_flag` checked
@@ -139,6 +156,17 @@ Respond with valid JSON only.
   "reopen_conditions": [
     { "condition": "specific future event", "derived_from": "agent who raised the underlying concern", "round": 1 }
   ],
+  "ideo_triad": {
+    "desirability": "pass | weak | not_evaluated — one-sentence basis",
+    "feasibility": "pass | weak | not_evaluated — one-sentence basis",
+    "viability": "pass | weak | not_evaluated — one-sentence basis"
+  },
+  "ideo_gaps": ["any dimension not properly evaluated — list the gap and what's missing"],
+  "impact_risk": {
+    "expected_value": "what success looks like — one phrase",
+    "downside": "what failure looks like — one phrase",
+    "proportionate": true
+  },
   "escalation_required": false,
   "escalation_note": null,
   "confidence": "high | medium | low"
