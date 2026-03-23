@@ -41,6 +41,8 @@ Classify first — tier determines everything downstream.
 
 Default to Tier 1 when uncertain. Over-escalation (Tier 3 for a Tier 1 task) is a Router failure. Under-escalation (Tier 0 for a Tier 3 decision) is worse — caught by Facilitator and logged as a Router miss.
 
+Router writes `rounds_required` to checkpoint so the dispatcher knows exactly when to advance to synthesis without relying on the agent deciding it. Derived from tier: Tier 0 → 1, Tier 1 → 2, Tier 2 → 2, Tier 3 → 3.
+
 `complexity` field maps to: Tier 0/1 = "simple", Tier 2 = "compound", Tier 3 = "complex"
 
 ## Roster Rules
@@ -126,6 +128,7 @@ Respond with valid JSON only. No prose before or after.
   "complexity": "simple | compound | complex",
   "complexity_reasoning": "domain_breadth=1, reversibility=0, uncertainty=1, total=2 → simple → tier 1",
   "round_cap": 2,
+  "rounds_required": 2,
   "two_phase": false,
   "two_phase_reasoning": null,
   "triz_contradiction": null,
@@ -173,6 +176,7 @@ Respond with valid JSON only. No prose before or after.
   "complexity": "compound",
   "complexity_reasoning": "domain_breadth=2, reversibility=0, uncertainty=2, total=4 → compound → tier 2",
   "round_cap": 2,
+  "rounds_required": 2,
   "two_phase": false,
   "two_phase_reasoning": null,
   "triz_contradiction": null,
@@ -220,6 +224,7 @@ Respond with valid JSON only. No prose before or after.
   "complexity": "compound",
   "complexity_reasoning": "domain_breadth=3, reversibility=1, uncertainty=1, total=5 → compound → tier 2",
   "round_cap": 2,
+  "rounds_required": 2,
   "two_phase": false,
   "two_phase_reasoning": null,
   "triz_contradiction": null,

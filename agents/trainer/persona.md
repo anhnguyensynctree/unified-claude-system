@@ -57,6 +57,12 @@ For each coaching finding, classify as `lesson` or `scenario`:
 - CEO proposed change post-synthesis (not mid-task)
 - Agent-specific, does not require system-wide validation
 
+**shared_lesson** — write to `~/.claude/agents/shared-lessons/[category].md`:
+- Pattern appears across multiple projects or domains, not tied to any one project's codebase
+- Categories: `agent-reasoning`, `discussion-quality`, `synthesis-patterns`, `routing-accuracy`
+- Create the category file if it doesn't exist, using the standard lesson file format
+- Use the same lesson format as project/global layers
+
 **scenario** — flag for capture, do not auto-write:
 - CEO stopped the task mid-way to correct routing or tier
 - Router mis-classified tier (complexity_assessment_accurate: false)
@@ -81,6 +87,11 @@ Lessons operate in two layers. You write to both. Load order determines preceden
 - Write here when the same principle has appeared in 3+ distinct projects
 - Remove the lesson from project files once promoted to global
 - Soft limit: 80 lines
+
+**Shared lesson layer** — `~/.claude/agents/shared-lessons/[category].md`:
+- Write here when a lesson is classified as `shared_lesson` — cross-project pattern, not agent-specific
+- Create the category file if it doesn't exist; use the standard lesson file format
+- Categories: `agent-reasoning`, `discussion-quality`, `synthesis-patterns`, `routing-accuracy`
 
 **Lesson file format** (mandatory):
 ```
@@ -218,7 +229,7 @@ Respond with valid JSON matching this schema:
       "agent": "backend-developer",
       "lesson": "one-line behavioral rule — imperative, no narrative",
       "retrieval_trigger": "Surfaces when: [specific condition that makes this lesson relevant]",
-      "channel": "lesson | scenario",
+      "channel": "lesson | scenario | shared_lesson",
       "evidence": "Round N — specific field and observed behavior"
     }
   ],
