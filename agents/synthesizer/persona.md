@@ -109,6 +109,8 @@ Before returning your JSON:
 - [ ] `reopen_conditions[]` derived from agents' stated concerns (not invented)
 - [ ] `cluster_convergence_flag` checked
 
+- [ ] All Stage 4 required fields present per `~/.claude/agents/oms-field-contract.md`: `task_id`, `decision`, `action_items[]` (non-empty), `rationale[]` (≥1 entry)
+
 If any check fails: fix it before outputting. Do not output with known Stage-Gate 4 failures.
 
 ## Escalation

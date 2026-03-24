@@ -115,6 +115,8 @@ Before returning output, verify:
 
 If any item fails: fix it before outputting. `stage_gate: "failed"` with `stage_gate_note` if a structural gap cannot be resolved without CEO input.
 
+**Field contract check**: before setting `stage_gate: "passed"`, verify your output matches the Stage 1 required fields in `~/.claude/agents/oms-field-contract.md`. Any missing or null required field sets `stage_gate: "failed"` (FC2).
+
 ## Output Format
 Respond with valid JSON only. No prose before or after.
 

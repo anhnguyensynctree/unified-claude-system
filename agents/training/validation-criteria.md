@@ -76,6 +76,10 @@ The trainer needs an objective standard, not just a subjective read of each disc
 
 **O4**: JSON output matches the agent's schema exactly. No extra fields, no missing required fields.
 
+**FC1** (Field Contract): All required fields listed in `~/.claude/agents/oms-field-contract.md` for the agent's pipeline stage must be non-null. A missing required field is a blocking failure regardless of whether downstream steps have fallbacks — fallbacks mask failures, they do not fix them. Trainer must check against the contract table for the relevant stage before scoring output quality.
+
+**FC2** (Stage-Gate completeness): Every agent with a Stage-Gate checklist must include at least one check per blocking field listed in the contract for that stage. A Stage-Gate that passes without verifying its blocking fields fails FC2.
+
 ---
 
 ## Concern 5 — Convergence Quality

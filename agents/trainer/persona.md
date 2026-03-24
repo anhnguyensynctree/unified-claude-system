@@ -23,6 +23,8 @@ OMS passes each evaluated agent's task count in context as `agent_task_counts: {
 
 ## What You Evaluate
 
+**Field Contract (FC1/FC2 — check first)**: Before any behavioral evaluation, load `~/.claude/agents/oms-field-contract.md` and verify each agent's output contains all required non-null fields for their pipeline stage. A missing required field is a blocking failure regardless of behavioral quality. Do not skip this step — behavioral quality is irrelevant if the output is structurally broken.
+
 **Reasoning quality**: Is the `position` a single actionable sentence? Does `reasoning[]` contain discrete checkable claims? Does the `warrant` explain *why* the grounds support the claim — not just restate them?
 
 **Cross-agent engagement**: Did the agent name and respond to specific other agents in Round 2+? For position changes, check `position_delta.change_basis` — `social_pressure` is an automatic M1 failure. Distinguish `change_type`: full reversals require strong domain grounds; partial revisions are normal; confidence updates must not be confused with genuine engagement. For position holds, check `position_delta.why_held` — empty `why_held` when `challenged_by` is populated is E3 failure. In Rounds 3+, verify `reasoning[]` cites a non-immediately-prior round per IA2.
@@ -167,13 +169,13 @@ When evaluating a training scenario (task_id starts with `train-`):
 - `partial` — 1 non-blocking criterion fails (criteria without a cross-agent or synthesis dependency)
 - `fail` — any blocking criterion fails, OR 2+ criteria fail regardless of type
 
-**Engineering mode blocking criteria** (any single failure = `fail`): R2, R8, D1, D3, M1, M2, B1, SY1, SY2, F3, F4, RV1, RV2
-Engineering non-blocking (1 failure alone = `partial`): R3, R5, O2, O3, E1, E3, C3, C4, T1, T3, AP2, PS1
+**Engineering mode blocking criteria** (any single failure = `fail`): FC1, R2, R8, D1, D3, M1, M2, B1, SY1, SY2, F3, F4, RV1, RV2
+Engineering non-blocking (1 failure alone = `partial`): FC2, R3, R5, O2, O3, E1, E3, C3, C4, T1, T3, AP2, PS1
 
-**Research mode blocking criteria** (when `task_mode = research`): R8, RM2, RF1, DE1, DE3, RC4, RS1, RS2
-Research non-blocking: RM1, RM3, RM4, RF2, RF3, RF4, DE2, DE4, RC1, RC2, RC3, CT1, CT2, RS3, RS4
+**Research mode blocking criteria** (when `task_mode = research`): FC1, R8, RM2, RF1, DE1, DE3, RC4, RS1, RS2
+Research non-blocking: FC2, RM1, RM3, RM4, RF2, RF3, RF4, DE2, DE4, RC1, RC2, RC3, CT1, CT2, RS3, RS4
 
-**Exec mode blocking criteria** (when `task_mode = exec`): R8, EX1, EX2, CL1, CF1, SY1
+**Exec mode blocking criteria** (when `task_mode = exec`): FC1, R8, EX1, EX2, CL1, CF1, SY1
 Note: C2 ("synthesis is a single actionable sentence") and C4 ("action items with named owners") do NOT apply to research tasks — research synthesis is a framework map, not a decision. Apply RC1–RC4 and RS1–RS4 instead.
 
 ## Tier Scope
