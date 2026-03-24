@@ -12,6 +12,21 @@ Bootstraps OMS for the current project. Accepts any starting material — raw id
 - Adding a new department to an existing project
 - CEO wants to update company belief or product direction
 
+## Bot Mode (OMS_BOT=1) — READ THIS FIRST
+
+> **If `OMS_BOT=1` is set OR this is a `claude --print` session: skip ALL interactive steps. Execute rules below immediately before reading anything else.**
+
+- **Write files now** — `--dangerously-skip-permissions` is active; all writes are pre-approved
+- **Zero questions** — answer everything from files on disk (`README.md`, `IDEA.md`, `CLAUDE.md`, `package.json`, etc.)
+- **Zero permission text** — never output "I need write access", "please approve", "grant permission", or any approval request
+- **Zero confirmations** — do not ask to proceed, do not summarize what you're about to do, just do it
+- **Scope detection** — reason about what expertise the project genuinely needs, don't pattern-match keywords. Ask: does this product depend on domain knowledge outside software engineering? Does it handle regulated data or operate in a regulated industry? Does it have a revenue model or financial product dimension? Activate Research, Legal, or Finance only when the answer is clearly yes. Examples: game → Engineering only (unless it involves behavioral psychology or monetization); personal finance app → Engineering + Finance + Legal; astrology/personality app → Engineering + Research; healthcare → Engineering + Research + Legal.
+- **Roster detection** — standard engineering roster is a default, not a ceiling. Reason about whether the project needs specialists beyond cto, product-manager, backend-developer, frontend-developer, engineering-manager, qa-engineer. A game needs a game-designer. An ML product needs an ml-engineer. A mobile-first product needs a mobile-developer. Add only what's genuinely recurring across tasks, not one-off.
+- **Placeholders for unknowns**: write `TBD — update via /oms-start` and continue
+- **Single-pass output**: write all ctx files, then output exactly: `## OMS Update\n[one sentence: files written + active departments + any non-standard agents added]` — nothing else
+
+---
+
 ## Step 1 — Check Existing Context
 
 Look for `.claude/agents/company-belief.ctx.md` in the current project.
@@ -40,25 +55,60 @@ Auto-read whatever exists in the current directory:
 
 If nothing exists and CEO provides no material: ask for a one-paragraph description of what they are building. Accept anything — rough idea, vision, half-baked concept. Do not require polish.
 
-Summarise what was ingested in one sentence before proceeding.
+## Step 2.5 — Internal Analysis (before talking to CEO)
 
-## Step 3 — Scope Declaration
+After ingesting material, reason silently across four dimensions. Do NOT show this work — use it to drive Steps 3 and 4.
 
-Ask ONE question. Present as a numbered list:
+**What expertise does this project genuinely need?**
+- What domain knowledge is required beyond software engineering?
+- Does it handle personal, health, financial, or regulated data?
+- Does it have a revenue model or financial product dimension?
+- What type of engineers does it need beyond the standard six?
+
+**What is unclear or underspecified?**
+- List every assumption you had to make because the idea didn't say
+- List every decision that would significantly change the architecture if answered differently
+- List every risk (technical, legal, ethical, financial) that the idea didn't address
+
+**What is the recommended scope?**
+- Derive the department list from the expertise analysis, not from keywords
+- Derive the non-standard agents needed (game-designer, ml-engineer, mobile-developer, etc.)
+
+**What questions must CEO answer before ctx files can be accurate?**
+- Prioritise: only surface questions where the answer changes what gets built or how
+- Skip questions where a sensible default exists and can be stated
+
+## Step 3 — Present Analysis + Get CEO Alignment
+
+In ONE message, show CEO the analysis and ask everything needed. Format:
 
 ```
-What departments are active in this project?
+Here's what I understand so far:
+[2-3 sentence summary of what they're building and for whom]
 
-[1] Engineering only — software product, no research dimension
-[2] Engineering + Research — requires domain expert knowledge (behavioral science, content strategy, platform research, etc.)
-[3] Engineering + Research + Legal — has compliance, privacy, or platform ToS exposure
-[4] All departments — Engineering, Research, Legal, Finance
-[5] Custom — describe which departments
+Recommended scope: [departments] — [one sentence reasoning]
+Non-standard agents needed: [list with one-line rationale each, or "none"]
 
-Note: Engineering is always included. Legal and Finance can be added to any combination.
+Before I generate ctx files, I need answers to [N] open questions:
+
+**Must answer (changes the architecture):**
+1. [question]
+2. [question]
+
+**Good to answer (improves ctx quality):**
+3. [question]
+
+Confirm scope + answer any questions — or just say "looks right, go" to proceed with defaults.
 ```
 
-CEO answers with a number or description. Router enforces activation from this point.
+CEO replies. If they say "go" or confirm: proceed to Step 4 with defaults for unanswered questions.
+If they answer questions: incorporate answers, then proceed.
+
+**Rules:**
+- Max 5 questions total — ruthlessly cut anything that has a sensible default
+- Never ask about things already stated in the idea
+- Scope and roster proposals go here, not in a separate step
+- In Bot Mode: skip entirely — use analysis results silently, write files with TBD for unknowns
 
 ## Step 4 — Departmental Intake (parallel)
 
@@ -220,6 +270,16 @@ python3 ~/.claude/bin/discord-create-channel.py "[slug]"
 
 This script creates a text channel named `#[slug]` in the same server as `#oms-updates`,
 writes the new channel_id to `oms-config.json` under `projects.[slug]`, and prints the channel ID.
+
+After the channel is created, also set `auto_start: true` in the project entry so the heartbeat auto-starts the first task:
+```python
+# Read oms-config.json, set projects.[slug].auto_start = true, write back
+import json, os
+p = os.path.expanduser("~/.claude/oms-config.json")
+cfg = json.load(open(p))
+cfg["projects"].setdefault("[slug]", {})["auto_start"] = True
+json.dump(cfg, open(p + ".tmp", "w"), indent=2); os.replace(p + ".tmp", p)
+```
 
 If script fails or pipeline not configured: tell CEO "Discord channel not created — run /init-oms to set up the pipeline first."
 
