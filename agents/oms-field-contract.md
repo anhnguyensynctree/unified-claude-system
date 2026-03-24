@@ -167,6 +167,22 @@ Base schema from `shared-context/discussion-schema.md`. All fields below are **p
 
 ---
 
+## Change → Required Updates
+
+When a field changes, these are the minimum files that must also be updated:
+
+| What changed | Files to update |
+|---|---|
+| New field on any stage boundary | This file (add row) → agent Stage-Gate checklist → Trainer blocking criteria if blocking |
+| Field removed or renamed | This file → agent Stage-Gate → all downstream consumers (dispatcher prompts, agent personas that read it) → training scenarios that assert the field |
+| `next` allowlist entry added/removed | This file → dispatcher allowlist in `oms-dispatcher.sh` |
+| Dispatcher force-advance table entry added | This file (checkpoint section) → dispatcher pre-step validation (add required input field check) |
+| New OMS step added to pipeline | This file (new stage or checkpoint row) → dispatcher: case statement + force-advance table + pre-step validation + allowlist + model selection |
+| Agent output schema field added | This file → agent's Stage-Gate checklist → `discussion-schema.md` (if shared field) → training scenario that tests the agent |
+| Training scenario references a field | This file → scenario's `Criteria tested` list must include FC1 if testing contract compliance |
+
+**Rule**: a dispatcher fallback that defaults a missing field is evidence of a contract gap — add the field to this file and the upstream Stage-Gate before adding the fallback.
+
 ## Update Protocol
 
 When any of the following changes, update this file **before** merging:

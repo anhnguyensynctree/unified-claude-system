@@ -348,6 +348,50 @@ case "$NEXT" in
   *) STEP_MODEL="claude-sonnet-4-6" ;;
 esac
 
+# Pre-step input validation — check required checkpoint fields exist before invoking Claude
+# Catches upstream stage failures before they cascade into downstream garbage output
+if [ -n "$NEXT" ] && [ -f "$PROJECT_PATH/.claude/oms-checkpoint.json" ]; then
+  python3 -c "
+import json, os, sys, re
+cp_path = '$PROJECT_PATH/.claude/oms-checkpoint.json'
+try:
+    cp = json.load(open(cp_path))
+except Exception:
+    sys.exit(0)
+
+nxt = '$NEXT'
+missing = []
+
+# Fields required before round steps — Router must have written these
+if re.fullmatch(r'round_[1-9][0-9]?', nxt):
+    if not cp.get('activated_agents'):
+        missing.append('activated_agents (Router must run first)')
+    rr = cp.get('rounds_required')
+    if not rr or str(rr).strip() in ('', 'None', 'null'):
+        missing.append('rounds_required (Router output incomplete — R8)')
+
+# task_id required for all content-producing steps
+content_steps = {'round_1','round_2','round_3','round_4','synthesis','implement',
+                 'cpo_backlog','trainer','compact_check','mark_done'}
+if nxt in content_steps and not cp.get('task_id'):
+    missing.append('task_id')
+
+if not missing:
+    sys.exit(0)
+
+# Missing required inputs — freeze pipeline
+print('[dispatcher] Pre-step validation FAILED for step ' + nxt + ':', file=sys.stderr)
+for m in missing:
+    print('  missing: ' + m, file=sys.stderr)
+cp['frozen_step'] = nxt
+cp['next'] = 'pipeline_frozen'
+tmp = cp_path + '.tmp'
+json.dump(cp, open(tmp, 'w'))
+os.replace(tmp, cp_path)
+sys.exit(1)
+" 2>&1 >&2 || { echo "## OMS Update"$'\n'"Pipeline frozen: missing required inputs for step $NEXT — check dispatcher logs"; exit 0; }
+fi
+
 echo "[dispatcher] Starting step for $PROJECT_SLUG (next: ${NEXT:-explicit}, model: $STEP_MODEL)" >&2
 
 CLAUDE_BIN="${HOME}/.local/bin/claude"
