@@ -379,7 +379,7 @@ if nxt in content_steps and not cp.get('task_id'):
 if not missing:
     sys.exit(0)
 
-# Missing required inputs — freeze pipeline
+# Missing required inputs — freeze pipeline and write immediate lesson to responsible agent
 print('[dispatcher] Pre-step validation FAILED for step ' + nxt + ':', file=sys.stderr)
 for m in missing:
     print('  missing: ' + m, file=sys.stderr)
@@ -388,6 +388,29 @@ cp['next'] = 'pipeline_frozen'
 tmp = cp_path + '.tmp'
 json.dump(cp, open(tmp, 'w'))
 os.replace(tmp, cp_path)
+
+# Write lesson immediately — pipeline won't reach Trainer so feedback must happen now
+from datetime import date
+today = date.today().isoformat()
+task_id = cp.get('task_id', 'unknown')
+lesson_map = {
+    'activated_agents': ('router', 'activated_agents must be written to checkpoint before advancing to round_1 — Stage-Gate 1 must verify this field is non-null before passing.'),
+    'rounds_required': ('router', 'rounds_required must be non-null before setting stage_gate: passed — derived from tier (Tier 0→1, Tier 1→2, Tier 2→2, Tier 3→3). Missing value triggers R8 blocking failure and freezes the pipeline.'),
+    'task_id':         ('dispatcher', 'task_id must be written to checkpoint at router step — all downstream content steps depend on it.'),
+}
+for m in missing:
+    for key, (agent, lesson_text) in lesson_map.items():
+        if key in m:
+            lessons_path = os.path.expanduser(f'~/.claude/agents/{agent}/lessons.md')
+            entry = (f'\n{today} | {task_id} | importance:critical | {lesson_text}\n'
+                     f'Surfaces when: dispatcher pre-step validation fires for {nxt} step\n')
+            try:
+                with open(lessons_path, 'a') as f:
+                    f.write(entry)
+                print(f'[dispatcher] Wrote lesson to {agent}/lessons.md', file=sys.stderr)
+            except Exception as e:
+                print(f'[dispatcher] Could not write lesson: {e}', file=sys.stderr)
+            break
 sys.exit(1)
 " 2>&1 >&2 || { echo "## OMS Update"$'\n'"Pipeline frozen: missing required inputs for step $NEXT — check dispatcher logs"; exit 0; }
 fi
