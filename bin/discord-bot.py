@@ -121,10 +121,20 @@ async def get_or_create_task_thread(
     if key in task_threads:
         return task_threads[key]
 
-    # Try to find an existing non-archived thread by name
     thread_name = task_id[:100]
+
+    # Search active (non-archived) threads first — fast, no API call
     try:
         for thread in channel.threads:
+            if thread.name == thread_name:
+                task_threads[key] = thread
+                return thread
+    except Exception:
+        pass
+
+    # Search archived threads — survives bot restart and thread auto-archive
+    try:
+        async for thread in channel.archived_threads(limit=100):
             if thread.name == thread_name:
                 task_threads[key] = thread
                 return thread
@@ -143,7 +153,7 @@ async def get_or_create_task_thread(
     return thread
 
 
-_RATE_LIMIT_SIGNALS = ("rate limit", "rate_limit", "too many requests", "usage limit", "claude max")
+_RATE_LIMIT_SIGNALS = ("rate limit", "rate_limit", "too many requests", "usage limit reached")
 _RATE_LIMIT_RETRY_SECS = 900  # 15 min between retries; Claude Max resets at 4pm PT
 
 
@@ -311,8 +321,12 @@ def _read_cost_summary(slug: str, task_id: str) -> dict:
         return {"thread_suffix": "", "main_suffix": ""}
 
 
-def _unblock_ceo_gate(proj: dict) -> None:
-    """When CEO answers a blocking question, advance checkpoint from waiting_ceo to synthesis."""
+def _unblock_ceo_gate(proj: dict, slug: str = "") -> None:
+    """
+    Advance checkpoint from waiting_ceo → synthesis when CEO answers a blocking question.
+    Only fires for real CEO gate blocks — never for pipeline_frozen (stuck step).
+    Also clears any stale stuck-step counter for the step that was waiting.
+    """
     proj_path = proj.get("path", "")
     if not proj_path:
         return
@@ -320,23 +334,33 @@ def _unblock_ceo_gate(proj: dict) -> None:
     try:
         cp = json.loads(cp_path.read_text()) if cp_path.exists() else {}
         if cp.get("next") == "waiting_ceo":
+            task_id = cp.get("task_id", "")
             cp["next"] = "synthesis"
             tmp = str(cp_path) + ".tmp"
             Path(tmp).write_text(json.dumps(cp))
             Path(tmp).replace(cp_path)
+            # Clear stale stuck counters so resumed step starts fresh
+            if slug:
+                _step_repeat.pop(f"{slug}:{task_id}:ceo_gate", None)
+                _step_repeat.pop(f"{slug}:{task_id}:synthesis", None)
     except Exception:
         pass
 
 
-def _write_waiting_ceo(proj: dict, task_id: str) -> None:
-    """Freeze pipeline at waiting_ceo so heartbeat stops retrying a stuck step."""
+def _freeze_pipeline(proj: dict, task_id: str, stuck_step: str) -> None:
+    """
+    Freeze pipeline at pipeline_frozen so heartbeat stops retrying.
+    Stores the stuck step so skip/reset can resume correctly.
+    Distinct from waiting_ceo (CEO blocking question) — never unblocked by _unblock_ceo_gate.
+    """
     proj_path = proj.get("path", "")
     if not proj_path:
         return
     cp_path = Path(proj_path) / ".claude/oms-checkpoint.json"
     try:
         cp = json.loads(cp_path.read_text()) if cp_path.exists() else {}
-        cp["next"] = "waiting_ceo"
+        cp["next"] = "pipeline_frozen"
+        cp["frozen_step"] = stuck_step
         if task_id:
             cp["task_id"] = task_id
         tmp = str(cp_path) + ".tmp"
@@ -392,7 +416,7 @@ async def maybe_continue(slug: str, proj: dict, channel: discord.TextChannel):
         task_id = cp.get("task_id", "")
 
         # Terminal/blocking states — nothing to dispatch
-        if nxt in ("complete", "waiting_ceo", ""):
+        if nxt in ("complete", "waiting_ceo", "pipeline_frozen", ""):
             return
 
         if not task_id:
@@ -416,8 +440,8 @@ async def maybe_continue(slug: str, proj: dict, channel: discord.TextChannel):
                 "type": "stuck",
             }
             (PENDING_DIR / f"{slug}.question").write_text(json.dumps(q_data))
-            # Freeze checkpoint at waiting_ceo — stops heartbeat from retrying every 60s
-            _write_waiting_ceo(proj, task_id)
+            # Freeze pipeline — separate state from waiting_ceo (CEO question)
+            _freeze_pipeline(proj, task_id, nxt)
             return
 
         thread = await get_or_create_task_thread(slug, task_id, channel)
@@ -615,7 +639,7 @@ async def _resume_in_progress_tasks():
         cp = read_checkpoint(proj)
         nxt = cp.get("next", "")
         task_id = cp.get("task_id", "")
-        if not task_id or nxt in ("", "complete", "waiting_ceo"):
+        if not task_id or nxt in ("", "complete", "waiting_ceo", "pipeline_frozen"):
             continue
         if cp.get("completion_reported") and nxt != "done":
             continue  # Already finished — don't re-run
@@ -1025,16 +1049,25 @@ async def handle_thread_message(
     if content.lower() == "skip":
         cp = read_checkpoint(proj)
         cur = cp.get("next", "")
-        step_order = ["router", "round_1", "round_2", "round_3", "synthesis",
-                      "log", "cpo_backlog", "trainer", "compact_check", "mark_done", "transition"]
+        # If pipeline is frozen, resume from the step that was stuck
+        if cur == "pipeline_frozen":
+            cur = cp.get("frozen_step", "router")
+        step_order = [
+            "router", "round_1", "round_2", "round_3",
+            "ceo_gate", "synthesis", "implement",
+            "log", "cpo_backlog", "trainer", "compact_check", "mark_done", "transition",
+        ]
         try:
             nxt = step_order[min(step_order.index(cur) + 1, len(step_order) - 1)]
         except ValueError:
-            nxt = "done"
+            nxt = "cpo_backlog"  # safe fallback — skip to post-synthesis housekeeping
         cp["next"] = nxt
         cp.pop("session_id", None)  # Break session chain — fresh context after skip
+        cp.pop("frozen_step", None)
         (Path(proj["path"]) / ".claude/oms-checkpoint.json").write_text(json.dumps(cp, indent=2))
         clear_question(slug)
+        # Clear stuck counter for the skipped step
+        _step_repeat.pop(f"{slug}:{cp.get('task_id', '')}:{cur}", None)
         await thread.send(f"⏩ Skipped `{cur}` → `{nxt}`")
         if channel:
             await maybe_continue(slug, proj, channel)
@@ -1042,10 +1075,16 @@ async def handle_thread_message(
 
     if content.lower() == "reset":
         cp = read_checkpoint(proj)
+        task_id = cp.get("task_id", "")
         cp["next"] = "router"
         cp.pop("session_id", None)
+        cp.pop("frozen_step", None)
         (Path(proj["path"]) / ".claude/oms-checkpoint.json").write_text(json.dumps(cp, indent=2))
         clear_question(slug)
+        # Clear stuck counters for this task
+        keys_to_del = [k for k in _step_repeat if k.startswith(f"{slug}:{task_id}:")]
+        for k in keys_to_del:
+            _step_repeat.pop(k, None)
         await thread.send("↩️ Reset to router — restarting from Step 1")
         if channel:
             await maybe_continue(slug, proj, channel)
@@ -1055,7 +1094,7 @@ async def handle_thread_message(
     if is_blocking_question_pending(slug):
         write_answer(slug, content)
         clear_question(slug)
-        _unblock_ceo_gate(proj)  # advance waiting_ceo → synthesis
+        _unblock_ceo_gate(proj, slug)  # advance waiting_ceo → synthesis
         await message.add_reaction("✅")
         await thread.send("Got it — resuming OMS.")
         if channel:
@@ -1107,7 +1146,7 @@ async def handle_project_message(
     if is_blocking_question_pending(slug):
         write_answer(slug, content)
         clear_question(slug)
-        _unblock_ceo_gate(proj)  # advance waiting_ceo → synthesis
+        _unblock_ceo_gate(proj, slug)  # advance waiting_ceo → synthesis
         await message.add_reaction("✅")
         await message.reply("Got it — resuming OMS.", mention_author=False)
         await maybe_continue(slug, proj, channel)

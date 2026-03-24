@@ -139,7 +139,7 @@ def main():
         try:
             cp = json.load(open(cp_path))
             cp["session_id"] = new_session_id
-            if step and step not in ("", "done", "complete", "waiting_ceo"):
+            if step and step not in ("", "done", "complete", "waiting_ceo", "pipeline_frozen"):
                 written = cp.get("steps_written", [])
                 if step not in written:
                     written.append(step)

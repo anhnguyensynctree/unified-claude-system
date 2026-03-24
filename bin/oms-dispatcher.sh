@@ -137,10 +137,47 @@ tmp = '$CHECKPOINT.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp,'$CHECKPOI
             python3 -c "
 import json, os
 cp = json.load(open('$CHECKPOINT'))
-cp['next'] = 'log'
+cp['next'] = 'implement'
 tmp = '$CHECKPOINT.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp,'$CHECKPOINT')
 "
-            echo "## OMS Update"$'\n'"Synthesis already complete — advancing to log"
+            echo "## OMS Update"$'\n'"Synthesis already complete — advancing to implement"
+            exit 0
+          fi ;;
+        cpo_backlog)
+          BACKLOG="$PROJECT_PATH/.claude/agents/backlog/priority-queue.md"
+          if [ -f "$BACKLOG" ] && grep -qE "status:done|Status.*done" "$BACKLOG" 2>/dev/null; then
+            # Already scored this session — but cpo_backlog may still need to run for new items
+            # Only skip if steps_written includes cpo_backlog (checkpoint tracks this)
+            if python3 -c "
+import json, sys
+cp = json.load(open('$CHECKPOINT'))
+sys.exit(0 if 'cpo_backlog' in cp.get('steps_written', []) else 1)
+" 2>/dev/null; then
+              echo "[dispatcher] Pre-flight: cpo_backlog already run this task — advancing" >&2
+              python3 -c "
+import json, os
+cp = json.load(open('$CHECKPOINT'))
+cp['next'] = 'trainer'
+tmp = '$CHECKPOINT.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp,'$CHECKPOINT')
+"
+              echo "## OMS Update"$'\n'"CPO backlog already complete — advancing to trainer"
+              exit 0
+            fi
+          fi ;;
+        trainer)
+          if python3 -c "
+import json, sys
+cp = json.load(open('$CHECKPOINT'))
+sys.exit(0 if 'trainer' in cp.get('steps_written', []) else 1)
+" 2>/dev/null; then
+            echo "[dispatcher] Pre-flight: trainer already run this task — advancing" >&2
+            python3 -c "
+import json, os
+cp = json.load(open('$CHECKPOINT'))
+cp['next'] = 'compact_check'
+tmp = '$CHECKPOINT.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp,'$CHECKPOINT')
+"
+            echo "## OMS Update"$'\n'"Trainer already complete — advancing to compact_check"
             exit 0
           fi ;;
       esac
@@ -178,7 +215,7 @@ tmp = cp_path + '.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp, cp_path)
         fi
         PROMPT="OMS autonomous step: run Step 3.5 CEO Gate for task $TASK_ID. ${READ_LOG_ROUNDS}If no CEO input needed, write checkpoint next:synthesis and output ## OMS Update\n[passed — proceeding to synthesis]. If CEO input IS needed, write a full decision brief to .claude/oms-pending/${PROJECT_SLUG}.question as JSON with field 'question' containing: (1) decision context and why it matters, (2) each option with bullet-point pros and cons, (3) agent recommendation with one-line reason. Write checkpoint next:waiting_ceo and output ## OMS Update\n[blocking — decision brief posted to CEO]" ;;
       synthesis)
-        PROMPT="OMS autonomous step: run Step 4 Synthesizer for task $TASK_ID. ${READ_LOG_ROUNDS}FIRST CHECK: if Synthesis already written in log, write checkpoint next:cpo_backlog and output ## OMS Update\n[synthesis already complete, advancing]. Otherwise run Synthesizer — write full synthesis output to logs/tasks/$TASK_ID.md, write checkpoint next:cpo_backlog, output ## OMS Update\n[1-2 sentences: core recommendation locked in synthesis]" ;;
+        PROMPT="OMS autonomous step: run Step 4 Synthesizer for task $TASK_ID. ${READ_LOG_ROUNDS}FIRST CHECK: if Synthesis already written in log, write checkpoint next:implement and output ## OMS Update\n[synthesis already complete, advancing to implement]. Otherwise run Synthesizer — write full synthesis output to logs/tasks/$TASK_ID.md, write checkpoint next:implement, output ## OMS Update\n[1-2 sentences: core recommendation locked in synthesis]" ;;
       log)
         # Ghost step — synthesis already writes to the log. Just advance.
         echo "[dispatcher] log step is a ghost — force-advancing to cpo_backlog" >&2
@@ -198,11 +235,13 @@ tmp = cp_path + '.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp, cp_path)
       compact_check)
         PROMPT="OMS autonomous step: run Step 7 Context Optimizer for task $TASK_ID. Load ~/.claude/agents/context-optimizer/persona.md and ~/.claude/agents/context-optimizer/metrics.md. Run Mode 1 post-task lightweight check against logs/tasks/$TASK_ID.md. Execute safe auto-fixes. Update metrics.md. Write checkpoint next:mark_done. Output exactly: ## OMS Update\n[1 sentence: efficiency status and any optimisations applied]" ;;
       implement)
-        PROMPT="OMS autonomous step: run /oms-implement $TASK_ID — implement the completed synthesis. Write checkpoint next:mark_done when complete. Output ## OMS Update\n[1 sentence: what was implemented]" ;;
+        PROMPT="OMS autonomous step: run /oms-implement $TASK_ID — implement the completed synthesis. Write checkpoint next:cpo_backlog when complete. Output ## OMS Update\n[1 sentence: what was implemented]" ;;
       milestone_gate)
         PROMPT="OMS autonomous step: check milestone gate for task $TASK_ID. Write checkpoint next:waiting_ceo or next:mark_done. Output ## OMS Update\n[1 sentence: milestone status]" ;;
       waiting_ceo)
         echo "[dispatcher] Waiting for CEO input on $TASK_ID — skipping" >&2; exit 0 ;;
+      pipeline_frozen)
+        echo "[dispatcher] Pipeline frozen (stuck step) for $TASK_ID — skipping until CEO skip/reset" >&2; exit 0 ;;
       mark_done)
         echo "[dispatcher] mark_done: marking $TASK_ID as done in backlog" >&2
         PROMPT="OMS autonomous step (mark_done): Open .claude/agents/backlog/priority-queue.md and mark the entry for $TASK_ID as status:done — update both the table row (change 'queued' to 'done') and the **Status** field in its ## section. Do NOTHING else. Write checkpoint {\"task_id\":\"$TASK_ID\",\"next\":\"transition\"} and output exactly: ## OMS Update\n$TASK_ID marked done in backlog."
@@ -320,6 +359,28 @@ cd "$PROJECT_PATH" && OMS_BOT=1 "$CLAUDE_BIN" \
   -p "$PROMPT" < /dev/null >"$TMPJSON" 2>"$LOG_DIR/oms-${PROJECT_SLUG}-last-step.log"
 EXIT_CODE=$?
 
+# Session resumption fallback — if --resume failed, retry as fresh session
+if [ $EXIT_CODE -ne 0 ] && [ -n "$PRIOR_SESSION" ]; then
+  echo "[dispatcher] Session resume failed for ${PRIOR_SESSION:0:16} — retrying fresh" >&2
+  # Clear stale session_id from checkpoint so it doesn't loop
+  python3 -c "
+import json, os
+cp_path = '$PROJECT_PATH/.claude/oms-checkpoint.json'
+try:
+    cp = json.load(open(cp_path))
+    cp.pop('session_id', None)
+    tmp = cp_path + '.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp, cp_path)
+except Exception: pass
+" 2>/dev/null
+  cd "$PROJECT_PATH" && OMS_BOT=1 "$CLAUDE_BIN" \
+    --print \
+    --dangerously-skip-permissions \
+    --output-format json \
+    --model "$STEP_MODEL" \
+    -p "$PROMPT" < /dev/null >"$TMPJSON" 2>>"$LOG_DIR/oms-${PROJECT_SLUG}-last-step.log"
+  EXIT_CODE=$?
+fi
+
 OUTPUT=$(python3 "$HOME/.claude/bin/oms-post-step.py" \
   "$TMPJSON" "$PROJECT_PATH" "$TASK_ID" "${NEXT:-step}" "$PROJECT_SLUG" 2>/dev/null)
 rm -f "$TMPJSON"
@@ -335,6 +396,9 @@ if [ -n "$TASK_ID" ] && [ -f "$PROJECT_PATH/.claude/oms-checkpoint.json" ]; then
       else
         FORCE_NEXT="round_${NEXT_ROUND}"
       fi ;;
+    synthesis)     FORCE_NEXT="implement" ;;
+    implement)     FORCE_NEXT="cpo_backlog" ;;
+    ceo_gate)      FORCE_NEXT="waiting_ceo" ;;
     cpo_backlog)   FORCE_NEXT="trainer" ;;
     trainer)       FORCE_NEXT="compact_check" ;;
     compact_check) FORCE_NEXT="mark_done" ;;
