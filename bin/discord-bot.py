@@ -328,6 +328,24 @@ def _unblock_ceo_gate(proj: dict) -> None:
         pass
 
 
+def _write_waiting_ceo(proj: dict, task_id: str) -> None:
+    """Freeze pipeline at waiting_ceo so heartbeat stops retrying a stuck step."""
+    proj_path = proj.get("path", "")
+    if not proj_path:
+        return
+    cp_path = Path(proj_path) / ".claude/oms-checkpoint.json"
+    try:
+        cp = json.loads(cp_path.read_text()) if cp_path.exists() else {}
+        cp["next"] = "waiting_ceo"
+        if task_id:
+            cp["task_id"] = task_id
+        tmp = str(cp_path) + ".tmp"
+        Path(tmp).write_text(json.dumps(cp))
+        Path(tmp).replace(cp_path)
+    except Exception:
+        pass
+
+
 async def _generate_completion_report(proj_path: str, task_id: str) -> str:
     """CEO-level milestone report from task log. Read-only, no lock needed."""
     prompt = (
@@ -385,7 +403,7 @@ async def maybe_continue(slug: str, proj: dict, channel: discord.TextChannel):
         _step_repeat[step_key] = _step_repeat.get(step_key, 0) + 1
         count = _step_repeat[step_key]
         if count > 3:
-            _step_repeat.pop(step_key, None)
+            # Do NOT pop — keep counter high so subsequent calls also block without running
             thread = await get_or_create_task_thread(slug, task_id, channel)
             await thread.send(
                 f"⚠️ **OMS stuck**: `{nxt}` ran {count}× without checkpoint advancing.\n"
@@ -398,6 +416,8 @@ async def maybe_continue(slug: str, proj: dict, channel: discord.TextChannel):
                 "type": "stuck",
             }
             (PENDING_DIR / f"{slug}.question").write_text(json.dumps(q_data))
+            # Freeze checkpoint at waiting_ceo — stops heartbeat from retrying every 60s
+            _write_waiting_ceo(proj, task_id)
             return
 
         thread = await get_or_create_task_thread(slug, task_id, channel)
