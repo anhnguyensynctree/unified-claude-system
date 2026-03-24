@@ -790,7 +790,7 @@ async def _collect_idea_thread_history(thread: discord.Thread) -> tuple[str, str
     return idea_text, "\n".join(lines)
 
 
-async def _write_idea_to_disk(slug: str, project_path: Path, idea_text: str, conversation: str):
+async def _write_idea_to_disk(slug: str, project_path: Path, conversation: str):
     """Write full thread conversation to IDEA.md so oms-start reads rich context."""
     idea_body = f"# {slug}\n\n{conversation}\n"
     (project_path / "IDEA.md").write_text(idea_body)
@@ -815,11 +815,11 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
         project_path = HOME / "code" / "personal" / slug
 
     # Collect full thread history
-    idea_text, conversation = await _collect_idea_thread_history(thread)
+    _, conversation = await _collect_idea_thread_history(thread)
 
     # Always write to disk so the project files stay in sync with the discussion
     if project_path.exists():
-        await _write_idea_to_disk(slug, project_path, idea_text, conversation)
+        await _write_idea_to_disk(slug, project_path, conversation)
 
     await message.add_reaction("⏳")
     try:
@@ -828,7 +828,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
             if not project_path.exists():
                 project_path.mkdir(parents=True, exist_ok=True)
                 (project_path / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
-                await _write_idea_to_disk(slug, project_path, idea_text, conversation)
+                await _write_idea_to_disk(slug, project_path, conversation)
 
             prompt = (
                 "AUTONOMOUS BOT MODE — OMS_BOT=1. --dangerously-skip-permissions is active.\n"
@@ -898,7 +898,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
             await message.remove_reaction("⏳", bot.user)
 
 
-async def handle_claude_thread_reply(message: discord.Message, content: str, thread: discord.Thread):
+async def handle_claude_thread_reply(content: str, thread: discord.Thread):
     """Continue a #claude conversation thread with full history as context."""
     if not content:
         return
@@ -1010,7 +1010,7 @@ async def on_message(message: discord.Message):
         # #claude conversation thread — continue with full history
         claude_channel_id = config.get("claude_channel_id")
         if claude_channel_id and channel.parent_id == int(claude_channel_id):
-            await handle_claude_thread_reply(message, content, channel)
+            await handle_claude_thread_reply(content, channel)
             return
         # Ideas thread — continue oms-start conversation
         ideas_id = config.get("ideas_channel_id")
@@ -1132,7 +1132,7 @@ async def handle_thread_message(
         return
 
     # Observer Q&A — direct claude call, no lock/dispatcher needed
-    await handle_thread_qa(message, slug, proj, content)
+    await handle_thread_qa(message, proj, content)
 
 
 def _is_step_in_flight(slug: str) -> bool:
@@ -1209,7 +1209,7 @@ async def handle_project_message(
 
     # If a step is actively running, route Q&A directly to handle_thread_qa (no lock needed)
     if _is_step_in_flight(slug):
-        await handle_thread_qa(message, slug, proj, content)
+        await handle_thread_qa(message, proj, content)
         return
 
     prompt = (
@@ -1239,7 +1239,7 @@ async def handle_project_message(
 
 
 async def handle_thread_qa(
-    message: discord.Message, slug: str, proj: dict, content: str
+    message: discord.Message, proj: dict, content: str
 ):
     """CEO observer Q&A — direct claude call, no lock/dispatcher needed (read-only)."""
     proj_path = proj.get("path", "")
@@ -1577,7 +1577,7 @@ async def _post_offline():
     await bot.close()
 
 
-def _handle_shutdown(sig, frame):
+def _handle_shutdown(sig, frame):  # pyright: ignore[reportUnusedParameter]
     log.info(f"Received signal {sig} — shutting down")
     loop = asyncio.get_event_loop()
     loop.create_task(_post_offline())

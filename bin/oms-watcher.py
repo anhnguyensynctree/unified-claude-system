@@ -236,6 +236,19 @@ def main():
               f'Task: {task_id} | Step: {frozen_step} | Bug: {bug["bug_id"]} — manual intervention needed.')
         sys.exit(1)
 
+    # Restore from prev snapshot for integrity — keeps all accumulated work, discards corruption
+    prev_path = cp_path.replace('.json', '.prev.json')
+    if os.path.exists(prev_path):
+        try:
+            base = json.load(open(prev_path))
+            # Carry forward accumulated work and attempt tracking from current checkpoint
+            base['steps_written'] = cp.get('steps_written', [])
+            base['fix_attempts'] = cp.get('fix_attempts', {})
+            cp = base
+            print(f'[watcher] Restored from prev snapshot for {task_id}', file=sys.stderr)
+        except Exception as e:
+            print(f'[watcher] Could not load prev snapshot — patching current: {e}', file=sys.stderr)
+
     # Apply fix
     cp['next'] = bug['next']
     cp.pop('frozen_step', None)

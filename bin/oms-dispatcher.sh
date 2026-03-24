@@ -457,6 +457,14 @@ fi
 # Retries append to the same step log (not overwrite) so all attempts are visible
 STEP_LOG="$LOG_DIR/oms-${PROJECT_SLUG}-${NEXT:-step}.log"
 
+# Snapshot checkpoint before Claude invocation — Watcher uses prev for safe reset
+python3 -c "
+import shutil, os
+cp = '$PROJECT_PATH/.claude/oms-checkpoint.json'
+if os.path.exists(cp):
+    shutil.copy2(cp, cp.replace('.json', '.prev.json'))
+" 2>/dev/null
+
 TMPJSON=$(mktemp)
 cd "$PROJECT_PATH" && OMS_BOT=1 "$CLAUDE_BIN" \
   --print \
