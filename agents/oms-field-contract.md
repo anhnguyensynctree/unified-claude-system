@@ -146,7 +146,7 @@ Base schema from `shared-context/discussion-schema.md`. All fields below are **p
 
 | Field | Type | Null OK | Blocking | Written by | Notes |
 |---|---|---|---|---|---|
-| `next` | string | no | yes | dispatcher force-advance | terminal states: `complete`, `waiting_ceo`, `pipeline_frozen` |
+| `next` | string | no | yes | dispatcher force-advance | validated against allowlist after every write — invalid value → `pipeline_frozen` immediately |
 | `task_id` | string | no | yes | dispatcher at router step | checkpoint filename key |
 | `session_id` | string | yes | no | oms-post-step.py | used for --resume; cleared on fallback |
 | `rounds_required` | integer | no | yes | oms-post-step.py from Router output | R8 — dispatcher defaults to 3 if missing (masked failure) |

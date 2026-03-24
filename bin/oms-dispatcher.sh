@@ -459,5 +459,36 @@ os.replace(p + '.tmp', p)
   fi
 fi
 
+# Validate checkpoint next value against allowlist — catches bad writes before they corrupt the pipeline
+if [ -f "$PROJECT_PATH/.claude/oms-checkpoint.json" ]; then
+  python3 -c "
+import json, os, sys, re
+cp_path = '$PROJECT_PATH/.claude/oms-checkpoint.json'
+try:
+    cp = json.load(open(cp_path))
+except Exception:
+    sys.exit(0)  # unreadable checkpoint — dispatcher will catch on next cycle
+
+nxt = cp.get('next', '')
+valid = {
+    'router', 'ceo_gate', 'synthesis', 'implement', 'log',
+    'cpo_backlog', 'trainer', 'compact_check', 'mark_done',
+    'transition', 'waiting_ceo', 'pipeline_frozen', 'complete',
+    'done',  # legacy alias
+    '',      # empty = not yet started
+}
+if nxt in valid or re.fullmatch(r'round_[1-9][0-9]?', nxt):
+    sys.exit(0)  # valid
+
+# Invalid next value — freeze pipeline immediately
+print(f'[dispatcher] INVALID next value \"{nxt}\" — freezing pipeline for $PROJECT_SLUG', file=sys.stderr)
+cp['frozen_step'] = nxt
+cp['next'] = 'pipeline_frozen'
+tmp = cp_path + '.tmp'
+json.dump(cp, open(tmp, 'w'))
+os.replace(tmp, cp_path)
+" 2>&1 >&2
+fi
+
 echo "$OUTPUT"
 exit $EXIT_CODE
