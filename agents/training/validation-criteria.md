@@ -31,6 +31,8 @@ The trainer needs an objective standard, not just a subjective read of each disc
 
 **R6**: Router outputs `tier: 0|1|2|3` using Cynefin classification. The `complexity_reasoning` must show the numeric score AND the tier derivation. A tier without reasoning fails R6.
 
+**R8**: Router output always contains a non-null `rounds_required` derived from tier. Missing or null `rounds_required` fails R8 — blocking criterion. The dispatcher has a fallback, but relying on it masks a Router failure and degrades all downstream agents who receive no explicit round cap.
+
 **R7**: Tier 0 tasks activate exactly 1 agent. Tier 1 activates 1–2. Tier 2 activates 2–3. Tier 3 activates 3–5. Activating more agents than the tier warrants fails R7 (over-activation waste). Activating fewer than needed fails R1.
 *Scope note*: If a scenario expects an agent that does not exist in the current roster (e.g., architect, tech-lead), Router correctly identifying the gap in `coverage_gap` and substituting the closest available agent is **pass**, not fail. Flag as a roster gap in criteria_gaps — not as a Router failure.
 

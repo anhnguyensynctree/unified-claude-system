@@ -111,6 +111,7 @@ Before returning output, verify:
 - [ ] `locked: true` set — roster cannot change after this
 - [ ] `briefing_mode` set: `thin` for Tier 0, `fat` for Tier 1+
 - [ ] `why_chain` populated if company-belief.ctx.md has real content; omitted if still generic
+- [ ] `rounds_required` populated — derived from tier (Tier 0→1, Tier 1→2, Tier 2→2, Tier 3→3). This field is mandatory. Missing or null `rounds_required` is a Stage-Gate failure regardless of all other checks passing.
 
 If any item fails: fix it before outputting. `stage_gate: "failed"` with `stage_gate_note` if a structural gap cannot be resolved without CEO input.
 

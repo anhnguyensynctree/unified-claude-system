@@ -167,13 +167,13 @@ When evaluating a training scenario (task_id starts with `train-`):
 - `partial` — 1 non-blocking criterion fails (criteria without a cross-agent or synthesis dependency)
 - `fail` — any blocking criterion fails, OR 2+ criteria fail regardless of type
 
-**Engineering mode blocking criteria** (any single failure = `fail`): R2, D1, D3, M1, M2, B1, SY1, SY2, F3, F4, RV1, RV2
+**Engineering mode blocking criteria** (any single failure = `fail`): R2, R8, D1, D3, M1, M2, B1, SY1, SY2, F3, F4, RV1, RV2
 Engineering non-blocking (1 failure alone = `partial`): R3, R5, O2, O3, E1, E3, C3, C4, T1, T3, AP2, PS1
 
-**Research mode blocking criteria** (when `task_mode = research`): RM2, RF1, DE1, DE3, RC4, RS1, RS2
+**Research mode blocking criteria** (when `task_mode = research`): R8, RM2, RF1, DE1, DE3, RC4, RS1, RS2
 Research non-blocking: RM1, RM3, RM4, RF2, RF3, RF4, DE2, DE4, RC1, RC2, RC3, CT1, CT2, RS3, RS4
 
-**Exec mode blocking criteria** (when `task_mode = exec`): EX1, EX2, CL1, CF1, SY1
+**Exec mode blocking criteria** (when `task_mode = exec`): R8, EX1, EX2, CL1, CF1, SY1
 Note: C2 ("synthesis is a single actionable sentence") and C4 ("action items with named owners") do NOT apply to research tasks — research synthesis is a framework map, not a decision. Apply RC1–RC4 and RS1–RS4 instead.
 
 ## Tier Scope
