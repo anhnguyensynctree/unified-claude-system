@@ -41,6 +41,11 @@ Fires after every task (Step 7), before CEO sees the final output.
 3. **Task log size**: >300 lines? Flag — Synthesizer reads this file; large logs degrade synthesis quality.
 4. **Briefing bloat**: any `agent_briefings` from Router longer than 150 words?
 5. **ctx.md growth signal**: did any ctx.md file grow this task? Note which file and new line count for full audit tracking.
+6. **Pipeline integrity signals** (read from task log and checkpoint `steps_written[]`):
+   - **Force-advance fired**: any mechanical step (log, cpo_backlog, trainer, compact_check) where the dispatcher forced the checkpoint forward rather than the agent writing it — means that step ran but wasted its full token budget without completing its job. Flag the step and add a correction lesson to the relevant agent.
+   - **Repetition guard triggered**: any step that ran 3+ times (appears 3+ times in task log or checkpoint history) — each repeat is a full wasted invocation. Flag for immediate Router lesson injection.
+   - **Double-completion guard fired**: `completion_reported` flag was already set when done handler ran — means the pipeline ran twice. Estimate wasted tokens from second run and flag as high-priority.
+   - **Ghost step detected**: any step that ran but produced zero new content in the task log — pure checkpoint-advancement waste. Flag for dispatcher removal.
 
 **Auto-fix (safe — execute immediately)**:
 - facts.json >40 entries → run `python3 ~/.claude/hooks/memory-persistence/mem0.py consolidate [project-path]`
@@ -122,6 +127,21 @@ Engine files are loaded on every step — every excess line costs tokens per inv
 
 ---
 
+### Audit Check 5 — Pipeline Token Leak Detection
+
+Read `~/.claude/bin/oms-dispatcher.sh` and `~/.claude/bin/oms-post-step.py`. Check for structural token leaks:
+
+1. **Steps with no idempotency guard**: any `round_*` or `synthesis` step missing a "FIRST CHECK: if already written" instruction in its prompt — agents will re-run completed work. List missing guards.
+2. **Steps without force-advance**: any mechanical step (fixed next-state) that still depends on the agent to write the checkpoint — agent failure means infinite loop. Check `log`, `cpo_backlog`, `trainer`, `compact_check` all have force-advance in place.
+3. **Session-aware prompt gaps**: any step prompt that says "Read logs/tasks/..." unconditionally — should be conditional on `PRIOR_SESSION` being empty. Cold reads on resumed sessions waste tokens.
+4. **Ghost step candidates**: any step whose prompt only advances the checkpoint without producing new content (like the old `log` step was) — propose removal to CEO.
+5. **Model selection audit**: verify Haiku is assigned to `log|cpo_backlog|trainer|compact_check` in the model selection block. Any mechanical step using Sonnet is a cost leak.
+6. **Repetition guard threshold**: verify the bot's repetition guard fires at 3 (not higher) — each extra repeat before firing wastes one full step invocation.
+
+**Output**: list each leak found with estimated token waste per task and proposed fix. All proposed fixes require CEO approval — never auto-modify dispatcher or bot.
+
+---
+
 ### Audit Check 4 — Efficiency Patterns
 
 - **Unused ctx files**: any OMS living doc unreferenced in last 10 task briefings → inform only (Discord post, no action)
@@ -179,6 +199,12 @@ After every lightweight check, update `~/.claude/agents/context-optimizer/metric
   "task_log_flag": false,
   "ctx_growth": [{ "file": "cto.ctx.md", "lines": 87 }],
   "auto_fixed": [],
+  "pipeline_integrity": {
+    "force_advance_fired": [],
+    "repetition_guard_triggered": [],
+    "double_completion_detected": false,
+    "ghost_steps_detected": []
+  },
   "warnings": []
 }
 ```
@@ -204,6 +230,14 @@ After every lightweight check, update `~/.claude/agents/context-optimizer/metric
   "efficiency_patterns": {
     "over_activation": [], "round_efficiency_pct": 0, "auto_injected_router_lessons": []
   },
+  "pipeline_leaks": [
+    {
+      "type": "missing_idempotency_guard | missing_force_advance | session_aware_gap | ghost_step | model_leak | repetition_threshold",
+      "step": "step-name",
+      "estimated_waste_per_task": "$X.XX",
+      "proposed_fix": "one sentence"
+    }
+  ],
   "ceo_approvals_needed": [],
   "recommendations": []
 }
