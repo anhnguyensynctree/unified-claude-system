@@ -379,7 +379,7 @@ if nxt in content_steps and not cp.get('task_id'):
 if not missing:
     sys.exit(0)
 
-# Missing required inputs — freeze pipeline and write immediate lesson to responsible agent
+# Missing required inputs — freeze pipeline, then hand off to Watcher for auto-recovery
 print('[dispatcher] Pre-step validation FAILED for step ' + nxt + ':', file=sys.stderr)
 for m in missing:
     print('  missing: ' + m, file=sys.stderr)
@@ -388,31 +388,40 @@ cp['next'] = 'pipeline_frozen'
 tmp = cp_path + '.tmp'
 json.dump(cp, open(tmp, 'w'))
 os.replace(tmp, cp_path)
-
-# Write lesson immediately — pipeline won't reach Trainer so feedback must happen now
-from datetime import date
-today = date.today().isoformat()
-task_id = cp.get('task_id', 'unknown')
-lesson_map = {
-    'activated_agents': ('router', 'activated_agents must be written to checkpoint before advancing to round_1 — Stage-Gate 1 must verify this field is non-null before passing.'),
-    'rounds_required': ('router', 'rounds_required must be non-null before setting stage_gate: passed — derived from tier (Tier 0→1, Tier 1→2, Tier 2→2, Tier 3→3). Missing value triggers R8 blocking failure and freezes the pipeline.'),
-    'task_id':         ('dispatcher', 'task_id must be written to checkpoint at router step — all downstream content steps depend on it.'),
-}
-for m in missing:
-    for key, (agent, lesson_text) in lesson_map.items():
-        if key in m:
-            lessons_path = os.path.expanduser(f'~/.claude/agents/{agent}/lessons.md')
-            entry = (f'\n{today} | {task_id} | importance:critical | {lesson_text}\n'
-                     f'Surfaces when: dispatcher pre-step validation fires for {nxt} step\n')
-            try:
-                with open(lessons_path, 'a') as f:
-                    f.write(entry)
-                print(f'[dispatcher] Wrote lesson to {agent}/lessons.md', file=sys.stderr)
-            except Exception as e:
-                print(f'[dispatcher] Could not write lesson: {e}', file=sys.stderr)
-            break
+# Pass missing field names as args so Watcher can match the bug
+print(' '.join(missing))  # captured by bash as MISSING_FIELDS
 sys.exit(1)
-" 2>&1 >&2 || { echo "## OMS Update"$'\n'"Pipeline frozen: missing required inputs for step $NEXT — check dispatcher logs"; exit 0; }
+" 2>/dev/null
+PRESTEP_EXIT=$?
+if [ $PRESTEP_EXIT -ne 0 ]; then
+  MISSING_FIELDS=$(python3 -c "
+import json, re
+cp_path = '$PROJECT_PATH/.claude/oms-checkpoint.json'
+try:
+    cp = json.load(open(cp_path))
+except: cp = {}
+nxt = '$NEXT'
+missing = []
+if re.fullmatch(r'round_[1-9][0-9]?', nxt):
+    if not cp.get('activated_agents'): missing.append('activated_agents')
+    rr = cp.get('rounds_required')
+    if not rr or str(rr).strip() in ('', 'None', 'null'): missing.append('rounds_required')
+content_steps = {'round_1','round_2','round_3','round_4','synthesis','implement','cpo_backlog','trainer','compact_check','mark_done'}
+if nxt in content_steps and not cp.get('task_id'): missing.append('task_id')
+print(' '.join(missing))
+" 2>/dev/null)
+  WATCHER_OUT=$(python3 "$HOME/.claude/bin/oms-watcher.py" \
+    "$PROJECT_PATH/.claude/oms-checkpoint.json" \
+    "$NEXT" "$TASK_ID" $MISSING_FIELDS 2>>"${STEP_LOG:-/dev/stderr}")
+  WATCHER_EXIT=$?
+  if [ $WATCHER_EXIT -eq 0 ]; then
+    echo "$WATCHER_OUT"
+    exit 0  # Watcher fixed it — next heartbeat runs corrected step
+  else
+    echo "$WATCHER_OUT"
+    exit 0  # Watcher escalated — pipeline stays frozen, CEO notified
+  fi
+fi
 fi
 
 echo "[dispatcher] Starting step for $PROJECT_SLUG (next: ${NEXT:-explicit}, model: $STEP_MODEL)" >&2
@@ -547,14 +556,25 @@ valid = {
 if nxt in valid or re.fullmatch(r'round_[1-9][0-9]?', nxt):
     sys.exit(0)  # valid
 
-# Invalid next value — freeze pipeline immediately
+# Invalid next value — freeze then hand to Watcher
 print(f'[dispatcher] INVALID next value \"{nxt}\" — freezing pipeline for $PROJECT_SLUG', file=sys.stderr)
 cp['frozen_step'] = nxt
 cp['next'] = 'pipeline_frozen'
 tmp = cp_path + '.tmp'
 json.dump(cp, open(tmp, 'w'))
 os.replace(tmp, cp_path)
-" 2>&1 >&2
+print('INVALID_NEXT')  # sentinel for bash
+sys.exit(1)
+" 2>/dev/null
+  POSTWRITE_EXIT=$?
+  if [ $POSTWRITE_EXIT -ne 0 ]; then
+    WATCHER_OUT=$(python3 "$HOME/.claude/bin/oms-watcher.py" \
+      "$PROJECT_PATH/.claude/oms-checkpoint.json" \
+      "$NEXT" "$TASK_ID" 2>>"${STEP_LOG:-/dev/stderr}")
+    # Append watcher notification to output regardless of exit code
+    OUTPUT="$OUTPUT
+$WATCHER_OUT"
+  fi
 fi
 
 echo "$OUTPUT"

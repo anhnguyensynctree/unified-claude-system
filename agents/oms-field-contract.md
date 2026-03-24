@@ -156,6 +156,21 @@ Base schema from `shared-context/discussion-schema.md`. All fields below are **p
 
 ---
 
+## Watcher — Pipeline Integrity Agent
+
+**Fires when**: `pipeline_frozen` written to checkpoint (both trigger points)
+**Consumed by**: dispatcher (calls `oms-watcher.py` at each freeze point)
+**Source of truth for bugs**: `~/.claude/agents/watcher/bug-list.md`
+
+| Field | Type | Null OK | Blocking | Notes |
+|---|---|---|---|---|
+| `fix_attempts` | object | yes | no | keyed by `{bug_id}:{frozen_step}:{task_id}` — max 2 auto-fixes per key |
+| `frozen_step` | string | yes | no | set on freeze, cleared on successful fix |
+
+**Loop mitigation**: `fix_attempts[key] >= 2` → escalate to CEO, do not retry.
+
+---
+
 ## FC1 — Field Contract Validation (new blocking criterion)
 
 **Added to**: `validation-criteria.md` under Concern 4 — Output Quality
