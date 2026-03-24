@@ -70,6 +70,60 @@ Rerun step: `synthesis`
 Responsible agent: `synthesizer`
 Lesson: action_items[] must be non-empty — derive from decision even if agents did not enumerate explicitly; Stage-Gate 4 must verify before passing
 
+## BUG-007 — rounds_required is zero or negative
+Signature: pre-step validation fails on `round_*` with `rounds_required<=0` in missing list
+Frozen step: `round_1` (or any `round_N`)
+Missing/invalid: `rounds_required` is 0 or negative — would cause synthesis to fire immediately or never advance
+Fix: reset checkpoint `next` to `router`, clear `frozen_step`, remove bad `rounds_required`
+Rerun step: `router`
+Responsible agent: `router`
+Lesson: rounds_required must be a positive integer (1–4) derived from tier — 0 or negative causes synthesis to fire after round_1 without discussion
+
+## BUG-008 — Router stage_gate failed but pipeline continued
+Signature: pre-step validation fires on `round_*` with `stage_gate:failed` in missing list
+Frozen step: `round_1`
+Missing/invalid: `stage_gate: "failed"` in checkpoint — Router signalled it could not complete
+Fix: reset checkpoint `next` to `router`, clear `stage_gate` field, clear `frozen_step`
+Rerun step: `router`
+Responsible agent: `router`
+Lesson: stage_gate:failed must halt the pipeline — Router must be rerun; never proceed to rounds with a failed stage gate
+
+## BUG-009 — waiting_ceo orphan (question file deleted, checkpoint stuck)
+Signature: checkpoint `next: "waiting_ceo"` but no `.question` file in `.claude/oms-pending/`
+Frozen step: `waiting_ceo`
+Missing/invalid: question file absent — CEO already answered or file was deleted manually
+Fix: advance checkpoint `next` to `synthesis`, clear `frozen_step`
+Rerun step: `synthesis`
+Responsible agent: `discord-bot` (`_unblock_ceo_gate` should have fired)
+Lesson: N/A — operational state issue, not agent output
+
+## BUG-010 — steps_written is not a list
+Signature: pre-flight idempotency check crashes — `steps_written` is null, string, or non-list
+Frozen step: `cpo_backlog` or `trainer`
+Missing/invalid: `steps_written` wrong type in checkpoint
+Fix: reset `steps_written` to `[]` in checkpoint, clear `frozen_step`, reset `next` to frozen step
+Rerun step: whichever step was frozen
+Responsible agent: `oms-post-step.py` (writes steps_written)
+Lesson: N/A — infrastructure fix
+
+## BUG-011 — Transition produced same task_id (transition loop)
+Signature: checkpoint `task_id` after `transition` step is identical to the previous task_id
+Frozen step: `transition`
+Missing/invalid: transition step did not advance to a new task
+Fix: reset checkpoint `next` to `transition`, clear `task_id` — force re-evaluation of backlog
+Rerun step: `transition`
+Responsible agent: `transition` prompt
+Lesson: transition must pick a task with a different task_id than the completed one — identical task_id after transition signals a backlog or checkpoint bug
+
+## BUG-012 — Synthesizer produced empty decision string
+Signature: task log synthesis section contains `"decision": ""` (empty string)
+Frozen step: `implement`
+Missing/invalid: `decision` is empty string — not the same as missing but equally unusable
+Fix: reset checkpoint `next` to `synthesis`, clear `frozen_step` — Synthesizer reruns
+Rerun step: `synthesis`
+Responsible agent: `synthesizer`
+Lesson: decision must be a non-empty single actionable sentence — Stage-Gate 4 must check for empty string, not just null
+
 ---
 
 ## Criteria Gap Log

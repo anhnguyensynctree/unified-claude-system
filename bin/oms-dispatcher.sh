@@ -162,7 +162,8 @@ tmp = '$CHECKPOINT.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp,'$CHECKPOI
             if python3 -c "
 import json, sys
 cp = json.load(open('$CHECKPOINT'))
-sys.exit(0 if 'cpo_backlog' in cp.get('steps_written', []) else 1)
+sw = cp.get('steps_written'); sw = sw if isinstance(sw, list) else []
+sys.exit(0 if 'cpo_backlog' in sw else 1)
 " 2>/dev/null; then
               echo "[dispatcher] Pre-flight: cpo_backlog already run this task — advancing" >&2
               python3 -c "
@@ -179,7 +180,8 @@ tmp = '$CHECKPOINT.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp,'$CHECKPOI
           if python3 -c "
 import json, sys
 cp = json.load(open('$CHECKPOINT'))
-sys.exit(0 if 'trainer' in cp.get('steps_written', []) else 1)
+sw = cp.get('steps_written'); sw = sw if isinstance(sw, list) else []
+sys.exit(0 if 'trainer' in sw else 1)
 " 2>/dev/null; then
             echo "[dispatcher] Pre-flight: trainer already run this task — advancing" >&2
             python3 -c "
@@ -250,6 +252,16 @@ tmp = cp_path + '.tmp'; json.dump(cp, open(tmp,'w')); os.replace(tmp, cp_path)
       milestone_gate)
         PROMPT="OMS autonomous step: check milestone gate for task $TASK_ID. Write checkpoint next:waiting_ceo or next:mark_done. Output ## OMS Update\n[1 sentence: milestone status]" ;;
       waiting_ceo)
+        # BUG-009: orphan check — if question file is gone, Watcher should unblock
+        QUESTION_FILE="$PROJECT_PATH/.claude/oms-pending/${PROJECT_SLUG}.question"
+        if [ ! -f "$QUESTION_FILE" ]; then
+          echo "[dispatcher] waiting_ceo: question file absent — calling Watcher (BUG-009)" >&2
+          WATCHER_OUT=$(python3 "$HOME/.claude/bin/oms-watcher.py" \
+            "$PROJECT_PATH/.claude/oms-checkpoint.json" \
+            "waiting_ceo" "$TASK_ID" "orphan_no_question_file" 2>>"${STEP_LOG:-/dev/stderr}")
+          echo "$WATCHER_OUT"
+          exit 0
+        fi
         echo "[dispatcher] Waiting for CEO input on $TASK_ID — skipping" >&2; exit 0 ;;
       pipeline_frozen)
         echo "[dispatcher] Pipeline frozen (stuck step) for $TASK_ID — skipping until CEO skip/reset" >&2; exit 0 ;;
@@ -369,6 +381,11 @@ if re.fullmatch(r'round_[1-9][0-9]?', nxt):
     rr = cp.get('rounds_required')
     if not rr or str(rr).strip() in ('', 'None', 'null'):
         missing.append('rounds_required (Router output incomplete — R8)')
+    elif int(str(rr)) <= 0:
+        missing.append('rounds_required<=0 (invalid value — would skip all rounds)')
+    # stage_gate: failed means Router signalled it could not complete — must not proceed
+    if cp.get('stage_gate') == 'failed':
+        missing.append('stage_gate:failed (Router Stage-Gate failed — must rerun)')
 
 # task_id required for all content-producing steps
 content_steps = {'round_1','round_2','round_3','round_4','synthesis','implement',

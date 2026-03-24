@@ -1,0 +1,30 @@
+{
+  "ideas_channel_id": "1485506375785386124",
+  "updates_channel_id": "1485506558992584774",
+  "projects": {
+    "sonai": {
+      "path": "/Users/Lewis/code/personal/sonai",
+      "channel_id": "1485506398023450684",
+      "active": true,
+      "deploy": null,
+      "mobile": null
+    },
+    "cosmic-daily": {
+      "path": "/Users/Lewis/code/personal/cosmic-daily",
+      "channel_id": "1485838389939802144",
+      "active": true,
+      "deploy": null,
+      "mobile": null
+    },
+    "daily-cosmos": {
+      "path": "/Users/Lewis/code/personal/daily-cosmos",
+      "channel_id": "1485848137217212636",
+      "active": true,
+      "auto_start": true,
+      "deploy": "vercel",
+      "mobile": null
+    }
+  },
+  "claude_channel_id": "1485719966274552019",
+  "watcher_channel_id": ""
+}

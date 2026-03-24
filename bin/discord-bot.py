@@ -453,6 +453,25 @@ async def maybe_continue(slug: str, proj: dict, channel: discord.TextChannel):
         if cp_after.get("next") != nxt or cp_after.get("task_id") != task_id:
             _step_repeat.pop(step_key, None)
 
+        # Watcher notifications → dedicated watcher channel (cross-project pipeline health)
+        if "## WATCHER" in output:
+            watcher_lines = []
+            capture = False
+            for line in output.strip().split("\n"):
+                if line.strip() == "## WATCHER":
+                    capture = True
+                    continue
+                if capture:
+                    watcher_lines.append(line)
+            watcher_text = "\n".join(watcher_lines).strip()
+            watcher_ch_id = load_config().get("watcher_channel_id")
+            watcher_ch = _get_sendable(watcher_ch_id) if watcher_ch_id else None
+            if watcher_ch:
+                await watcher_ch.send(f"**[{slug}]** {watcher_text}")
+            else:
+                # Fallback: post to project thread if watcher channel not configured
+                await thread.send(f"🔧 **Watcher** — {watcher_text}")
+
         # Tiered posting — CEO only sees milestones, not every internal step
         step_summary = format_step_update(output)
         if nxt == "synthesis":

@@ -115,7 +115,76 @@ def match_bug(frozen_step, missing_fields):
 
     # BUG-005: task_id missing — no auto-fix, escalate
     if has_tid:
-        return None  # forces escalation
+        return None
+
+    # BUG-007: rounds_required zero or negative
+    if is_round and any('rounds_required<=0' in m for m in missing_fields):
+        return {
+            'bug_id': 'BUG-007',
+            'description': 'rounds_required is zero or negative — invalid value',
+            'rerun_step': 'router',
+            'next': 'router',
+            'responsible_agent': 'router',
+            'lesson': ('router', 'rounds_required must be a positive integer (1–4) derived from tier '
+                       '— 0 or negative causes synthesis to fire immediately without discussion'),
+        }
+
+    # BUG-008: stage_gate failed
+    if is_round and any('stage_gate:failed' in m for m in missing_fields):
+        return {
+            'bug_id': 'BUG-008',
+            'description': 'Router stage_gate: failed — pipeline continued past a failed gate',
+            'rerun_step': 'router',
+            'next': 'router',
+            'responsible_agent': 'router',
+            'lesson': ('router', 'stage_gate:failed must halt the pipeline — '
+                       'never proceed to rounds with a failed stage gate'),
+        }
+
+    # BUG-009: waiting_ceo orphan — question file gone
+    if frozen_step == 'waiting_ceo' and any('orphan' in m for m in missing_fields):
+        return {
+            'bug_id': 'BUG-009',
+            'description': 'waiting_ceo orphan — question file absent, advancing to synthesis',
+            'rerun_step': 'synthesis',
+            'next': 'synthesis',
+            'responsible_agent': None,
+            'lesson': None,
+        }
+
+    # BUG-010: steps_written not a list
+    if any('steps_written' in m for m in missing_fields):
+        return {
+            'bug_id': 'BUG-010',
+            'description': 'steps_written is not a list — resetting to []',
+            'rerun_step': frozen_step,
+            'next': frozen_step,
+            'responsible_agent': None,
+            'lesson': None,
+        }
+
+    # BUG-011: transition loop — same task_id after transition
+    if frozen_step == 'transition' and any('same_task_id' in m for m in missing_fields):
+        return {
+            'bug_id': 'BUG-011',
+            'description': 'Transition loop — same task_id produced, forcing re-evaluation',
+            'rerun_step': 'transition',
+            'next': 'transition',
+            'responsible_agent': None,
+            'lesson': None,
+        }
+
+    # BUG-012: synthesizer empty decision string
+    if frozen_step == 'implement' and any('empty_decision' in m for m in missing_fields):
+        return {
+            'bug_id': 'BUG-012',
+            'description': 'Synthesizer produced empty decision string — rerunning synthesis',
+            'rerun_step': 'synthesis',
+            'next': 'synthesis',
+            'responsible_agent': 'synthesizer',
+            'lesson': ('synthesizer', 'decision must be a non-empty single actionable sentence '
+                       '— Stage-Gate 4 must check for empty string, not just null'),
+        }
 
     # BUG-004: invalid next value (frozen_step is the bad value itself)
     if frozen_step and not ALLOWLIST.match(frozen_step):
@@ -154,8 +223,8 @@ def main():
         details = ', '.join(missing) if missing else f'invalid step "{frozen_step}"'
         print(f'[watcher] No deterministic fix for frozen_step={frozen_step} missing=[{details}]',
               file=sys.stderr)
-        print(f'## OMS Update\n🚨 Watcher escalation: no fix for {frozen_step} ({details}) '
-              f'on {task_id} — manual intervention needed')
+        print(f'## WATCHER\n🚨 No fix available for `{frozen_step}` ({details}) on `{task_id}` '
+              f'— manual intervention needed.')
         sys.exit(1)
 
     fix_key  = f"{bug['bug_id']}:{frozen_step}:{task_id}"
@@ -163,13 +232,18 @@ def main():
 
     if attempts >= MAX_ATTEMPTS:
         print(f'[watcher] {fix_key} already attempted {attempts}x — escalating', file=sys.stderr)
-        print(f'## OMS Update\n🚨 Watcher escalation: {bug["description"]} failed after '
-              f'{attempts} attempts on {frozen_step} for {task_id}. Manual intervention needed.')
+        print(f'## WATCHER\n🚨 {bug["description"]} failed after {attempts} attempts.\n'
+              f'Task: {task_id} | Step: {frozen_step} | Bug: {bug["bug_id"]} — manual intervention needed.')
         sys.exit(1)
 
     # Apply fix
     cp['next'] = bug['next']
     cp.pop('frozen_step', None)
+    cp.pop('stage_gate', None)  # clear failed stage_gate so it doesn't re-trigger BUG-008
+    if bug['bug_id'] == 'BUG-010':
+        cp['steps_written'] = []  # reset corrupted steps_written
+    if bug['bug_id'] == 'BUG-007':
+        cp.pop('rounds_required', None)  # force Router to rewrite a valid value
     new_attempts = increment_attempts(cp, fix_key)
     save_cp(cp_path, cp)
 
@@ -179,9 +253,10 @@ def main():
         write_lesson(agent, task_id, frozen_step, lesson_text)
 
     warning = ' ⚠️ Last auto-attempt — will escalate if it fails again.' if new_attempts >= MAX_ATTEMPTS else ''
-    print(f'## OMS Update\n🔧 Watcher: {bug["description"]} '
+    print(f'## WATCHER\n🔧 {bug["description"]} '
           f'(attempt {new_attempts}/{MAX_ATTEMPTS}).{warning} '
-          f'Resetting to {bug["rerun_step"]} — rerunning next heartbeat.')
+          f'Resetting to {bug["rerun_step"]} — rerunning next heartbeat.\n'
+          f'Task: {task_id} | Step: {frozen_step} | Bug: {bug["bug_id"]}')
     sys.exit(0)
 
 
