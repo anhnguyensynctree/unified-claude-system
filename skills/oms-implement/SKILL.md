@@ -1,10 +1,20 @@
 ---
 name: oms-implement
-description: Implement action items from a completed OMS synthesis. Isolated execution phase — never re-discusses. Validates delivery quality via CTO review and QA requirement check.
+description: Implement action items from a completed OMS synthesis. Isolated execution phase — never re-discusses. Approval chain: Dev builds → QA verifies → CTO approves. CEO only on escalation.
 ---
 # OMS Implement
 
-Executes `action_items[]` from a completed `/oms` task. Decision is settled — this skill builds it, tests it, then validates delivery quality and requirement fidelity before presenting to CEO.
+Executes `action_items[]` from a completed `/oms` task. Decision is settled — build it, test it, verify it. All discussion happened in OMS; this skill only builds and validates.
+
+## Approval Chain
+```
+Dev implements → QA evidence review → CTO quality approval → done
+                      ↓ fail ×3           ↓ critical issue
+                 CTO diagnoses       CEO gate (rare)
+                      ↓ unresolvable
+                 CEO gate (rare)
+```
+CEO touchpoints: (1) plan summary at start, (2) dangerous ops scan, (3) reopen condition, (4) CTO escalation only.
 
 ## Invocation
 ```
@@ -32,53 +42,53 @@ If not found: "Run /oms first to settle the approach, then /oms-implement to bui
 
 ---
 
-## Step 1 — Plan Confirmation
-Present to CEO before touching code:
+## Step 1 — Plan Summary
+Post to CEO — auto-proceeds, no confirmation needed unless scope adjustment is required:
 ```
 Implementing: [task-id]
 Decision: [one-line decision from synthesis]
 
-Action items:
+Action items ([N] total):
   1. [item]
   2. [item]
   ...
 
 Dissent notes: [any from synthesis, or "none"]
 Reopen conditions: [list, or "none"]
-
-Proceed? (y / adjust)
 ```
-Wait for confirmation. If CEO adjusts scope: update the plan only. Do NOT re-run OMS — if the OMS decision itself is wrong, say so and offer to re-run `/oms` instead.
+If CEO replies with an adjustment: update the plan only. Do NOT re-run OMS — if the OMS decision itself is wrong, say so and offer to re-run `/oms` instead.
+
+Proceed immediately after posting. Do not wait unless in interactive mode.
 
 ---
 
-## Step 1.25 — CTO Safety Gate
+## Step 1.25 — Pre-implementation Risk Scan
 
-Before any implementation, scan `action_items[]` for dangerous operations:
+Scan `action_items[]` for dangerous operations before touching any code.
 
-**Dangerous flags** (require blocking question before proceeding):
+**Dangerous flags** (require CEO approval before proceeding):
 - DB schema migration or DROP/ALTER statements
 - Auth flow changes (token logic, session handling, OAuth config)
 - Breaking API changes (endpoint removal, response shape change, auth scope change)
 - Infrastructure changes (environment variables, deployment config, CI/CD pipeline)
-- Any action item containing the words: `migrate`, `drop`, `rename column`, `break`, `remove endpoint`, `revoke`
+- Any action item containing: `migrate`, `drop`, `rename column`, `break`, `remove endpoint`, `revoke`
 
-**Default behavior**: auto-proceed without asking. OMS runs continuously.
+**Default behavior**: no dangerous flags → auto-proceed silently.
 
-**If a dangerous flag is detected** (autonomous mode only — `OMS_BOT=1`):
+**If a dangerous flag is detected** (autonomous mode — `OMS_BOT=1`):
 Write blocking question to `~/.claude/oms-pending/[slug].question`:
 ```json
 {
-  "question": "CTO Safety Gate: dangerous operation detected — [flag type]. Action item: [exact item]. Proceed?",
-  "context": "DB/auth/breaking-API changes are irreversible — requiring explicit approval",
+  "question": "Risk scan: dangerous operation detected — [flag type]. Action item: [exact item]. Proceed?",
+  "context": "DB/auth/breaking-API changes are irreversible — explicit approval required",
   "task_id": "[task-id]",
-  "step": "safety-gate",
+  "step": "risk-scan",
   "asked_at": "[ISO timestamp]"
 }
 ```
-Write checkpoint `"next": "waiting_ceo"`. Do not proceed until CEO replies "yes" or equivalent.
+Write checkpoint `"next": "waiting_ceo"`. Do not proceed until CEO replies.
 
-**In manual mode** (no `OMS_BOT=1`): present inline in the Step 1 plan confirmation instead of writing a file. CEO's "y" covers it.
+**In manual mode** (no `OMS_BOT=1`): present inline after the Step 1 summary. CEO's acknowledgment covers it.
 
 ## Step 1.5 — Dependency Analysis
 
@@ -130,7 +140,7 @@ For each group in `implementation_groups[]` in order:
 2. All agents in the group run concurrently — dispatch in a single message
 3. Collect all agent outputs before proceeding
 4. If any agent returns `status: reopen`: **stop entire group**, surface to CEO (see Reopen Condition below)
-5. Merge each worktree branch in order — if merge conflict: surface specific conflict to CEO before resolving
+5. Merge each worktree branch in order — if merge conflict: **pause all remaining merges**, resolve the conflict (CTO diagnoses, Dev implements fix), then continue merging in order
 6. Run full test suite after all merges in the group pass — must be green before starting next group
 7. Append per-item progress markers to task log
 
@@ -264,22 +274,30 @@ Output required: `items_satisfied[]` (per item: complete|partial|missing), `scop
 ## Step 3 — Outcome Handling
 
 **All clear** (`quality: pass` + all items complete + no critical scope creep):
-Present to CEO:
+Post to CEO (informational — no response needed):
 ```
-Delivery validated.
+✅ Delivery validated — [task-id]
 CTO: [brief quality note]
-QA: all [N] action items complete
-Tests: passing
+QA: all [N] items complete | Tests: passing
 ```
 
-**Issues found**: present clearly grouped:
-```
-CTO review — [critical/major issues]
-QA check — [missing or partial items] / [scope creep]
-```
-For each issue: implement correction or get explicit CEO sign-off to accept it. Log outcome.
+**Minor issues** (severity: minor, no architecture misalignment): auto-fix inline. Do not interrupt CEO.
 
-**Critical architecture misalignment** (`architecture_aligned: false`): stop. Present the gap. Offer to re-run `/oms` with the implementation finding as new context.
+**Major issues** (severity: major, items missing/partial, non-critical scope creep):
+- Implement corrections directly
+- Re-run CTO + QA review on the corrected diff
+- If clean after correction: post summary to CEO as above
+
+**Critical issues or architecture misalignment** (`architecture_aligned: false`): stop. CEO gate:
+```
+CTO escalation: [issue]
+Architecture alignment: false — [specific gap]
+Options:
+  1. Adjust implementation within current OMS decision scope
+  2. Re-run /oms with implementation finding as new context
+```
+
+**QA failures after CTO resolution attempt**: if CTO marks `resolution: "unresolvable"`, CEO gate with the same format.
 
 ---
 

@@ -110,6 +110,17 @@ except: print(''); print(''); print(''); print('3')
     TASK_ID=$(echo "$_CP" | sed -n '2p')
     PRIOR_SESSION=$(echo "$_CP" | sed -n '3p')
     ROUNDS_REQUIRED=$(echo "$_CP" | sed -n '4p')
+    # Project-level default_rounds only applies when checkpoint doesn't specify
+    if [ -z "$ROUNDS_REQUIRED" ]; then
+      ROUNDS_REQUIRED=$(python3 -c "
+import json
+try:
+    c = json.load(open('$CONFIG'))
+    r = c.get('projects', {}).get('$PROJECT_SLUG', {}).get('default_rounds', '')
+    print(str(r) if r else '')
+except: print('')
+" 2>/dev/null)
+    fi
     ROUNDS_REQUIRED="${ROUNDS_REQUIRED:-3}"
 
     # Pre-flight idempotency: grep task log before invoking claude (zero token cost)
@@ -349,6 +360,10 @@ if [ -n "$PRIOR_SESSION" ]; then
   echo "[dispatcher] Resuming session ${PRIOR_SESSION:0:16}... for $PROJECT_SLUG" >&2
 fi
 
+# Per-step log — named by step so history is preserved across the pipeline
+# Retries append to the same step log (not overwrite) so all attempts are visible
+STEP_LOG="$LOG_DIR/oms-${PROJECT_SLUG}-${NEXT:-step}.log"
+
 TMPJSON=$(mktemp)
 cd "$PROJECT_PATH" && OMS_BOT=1 "$CLAUDE_BIN" \
   --print \
@@ -356,12 +371,13 @@ cd "$PROJECT_PATH" && OMS_BOT=1 "$CLAUDE_BIN" \
   --output-format json \
   --model "$STEP_MODEL" \
   "${RESUME_ARGS[@]}" \
-  -p "$PROMPT" < /dev/null >"$TMPJSON" 2>"$LOG_DIR/oms-${PROJECT_SLUG}-last-step.log"
+  -p "$PROMPT" < /dev/null >"$TMPJSON" 2>"$STEP_LOG"
 EXIT_CODE=$?
 
 # Session resumption fallback — if --resume failed, retry as fresh session
 if [ $EXIT_CODE -ne 0 ] && [ -n "$PRIOR_SESSION" ]; then
   echo "[dispatcher] Session resume failed for ${PRIOR_SESSION:0:16} — retrying fresh" >&2
+  echo "--- RETRY (fresh session) $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >>"$STEP_LOG"
   # Clear stale session_id from checkpoint so it doesn't loop
   python3 -c "
 import json, os
@@ -377,7 +393,7 @@ except Exception: pass
     --dangerously-skip-permissions \
     --output-format json \
     --model "$STEP_MODEL" \
-    -p "$PROMPT" < /dev/null >"$TMPJSON" 2>>"$LOG_DIR/oms-${PROJECT_SLUG}-last-step.log"
+    -p "$PROMPT" < /dev/null >"$TMPJSON" 2>>"$STEP_LOG"
   EXIT_CODE=$?
 fi
 

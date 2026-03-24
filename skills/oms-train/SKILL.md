@@ -8,10 +8,13 @@ Runs training scenarios against the agent system and iterates until all scenario
 
 ## Usage
 ```
-/oms-train              # run all 46 scenarios, loop until all green
-/oms-train 001          # run a specific scenario by number
-/oms-train 001 002 003  # run specific scenarios
-/oms-train --failing    # re-run only scenarios that failed last run
+/oms-train                        # run all scenarios, loop until all green
+/oms-train 001                    # run a specific scenario by number
+/oms-train 001 002 003            # run specific scenarios
+/oms-train --failing              # re-run only scenarios that failed last run
+/oms-train --difficulty basic     # run only Basic scenarios
+/oms-train --difficulty medium    # run only Medium scenarios
+/oms-train --difficulty advanced  # run only Advanced scenarios
 ```
 
 ## Before Running
@@ -25,13 +28,26 @@ Location: `~/.claude/agents/training/results.tsv`
 
 Create if missing. Append one row per scenario per run:
 ```
-date	run	scenario_id	scenario_name	overall_result	criteria_results
-2026-03-14	1	001	simple-routing	pass	R1:pass,R2:pass,E1:pass
-2026-03-14	1	003	scope-conflict	fail	D3:fail,D1:pass
-2026-03-14	2	003	scope-conflict	pass	D3:pass,D1:pass
+date	run	scenario_id	scenario_name	difficulty	overall_result	criteria_results
+2026-03-14	1	001	simple-routing	Basic	pass	R1:pass,R2:pass,E1:pass
+2026-03-14	1	003	scope-conflict	Medium	fail	D3:fail,D1:pass
+2026-03-14	2	003	scope-conflict	Medium	pass	D3:pass,D1:pass
 ```
 
 `run` increments each time a full or partial pass is completed in the same session.
+`difficulty` is read from the scenario file frontmatter (`Basic | Medium | Advanced`).
+
+---
+
+## Execution Per Scenario
+
+## Scenario Execution Order
+
+When running all scenarios (no filter), run in difficulty order: **Basic → Medium → Advanced**.
+This catches foundational failures early before spending tokens on complex scenarios that depend on the same behaviors.
+
+When `--difficulty` is specified: run only that tier.
+When `--failing` is specified: run failing scenarios regardless of difficulty, but still ordered Basic → Medium → Advanced within the failing set.
 
 ---
 
@@ -39,6 +55,7 @@ date	run	scenario_id	scenario_name	overall_result	criteria_results
 
 ### 1. Load the scenario
 Read `~/.claude/agents/training/scenarios/[NNN]-[name].md`.
+Extract `difficulty` from frontmatter — required for results.tsv and report grouping.
 
 ### 2. Run through OMS flow
 Use the scenario's synthetic CEO intent as the `/oms` input. Execute Steps 1–5 from oms.md (Router → rounds → synthesis → log). Write the log to `~/.claude/logs/tasks/train-[scenario-id]-[date].md`.
@@ -120,10 +137,15 @@ After running all scenarios (or the specified subset):
 ```
 Training Run [N] — [date]
 Scenarios: [total run] | Pass: [X] | Partial: [Y] | Fail: [Z]
+  Basic:    [X/Y pass]  Medium: [X/Y pass]  Advanced: [X/Y pass]
 
-RESULTS
+RESULTS — Basic
 [001] simple-routing: pass — R1 ✓ R2 ✓ E1 ✓
+
+RESULTS — Medium
 [003] scope-conflict: fail — D3 ✗ (PM accepted reduced scope without naming sacrificed user need)
+
+RESULTS — Advanced
 [005] majority-cascade: partial — M1 ✓ M2 ✗ (Backend Dev capitulated in Round 3 citing round count)
 
 SCENARIO CANDIDATES (lessons that appeared 2+ times)
