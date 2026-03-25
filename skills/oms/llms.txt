@@ -112,14 +112,15 @@ Fires after CEO feedback confirms the synthesis. Converts `action_items[]` into 
 If any box fails: surface to CEO now for re-spec. Do not write to queue until all boxes pass.
 
 **Derive validation chain from activated agents:**
-| Activated | Chain |
+| Task type | Chain |
 |---|---|
-| Any researcher agent | researcher → cro → cpo |
-| Researcher + product-manager | researcher → cro → cpo → pm |
+| Research | researcher → cro → cpo |
+| Research with product decision output | researcher → cro → cpo → pm |
 | Engineering, internal (refactor/infra/bug) | dev → qa → em |
 | Engineering, user-facing feature | dev → qa → pm → em |
-| CTO / infra | dev → cto |
-| Research + impl combined | researcher → cro → cpo → dev → qa → pm → em |
+| CTO / infra-critical | dev → cto |
+
+Max 4 steps. Research + impl in one task = split it. Use Depends to link them.
 
 **Write to `[project]/.claude/cleared-queue.md`** using schema from
 `~/.claude/agents/oms-work/task-schema.md`. Append; do not overwrite existing tasks.

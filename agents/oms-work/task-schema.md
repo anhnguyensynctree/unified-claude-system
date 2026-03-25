@@ -28,17 +28,18 @@ Derived from `Activated` at queue-write time. Written explicitly into each task.
 
 **All tasks must have a validation chain. No exceptions.**
 
-| Activated includes | Validation chain |
+| Task type | Validation chain |
 |---|---|
-| Any researcher agent | researcher → cro → cpo |
-| Any researcher + product-manager | researcher → cro → cpo → pm |
+| Research | researcher → cro → cpo |
+| Research with product decision output | researcher → cro → cpo → pm |
 | Engineering, internal (refactor / infra / bug) | dev → qa → em |
 | Engineering, user-facing feature | dev → qa → pm → em |
-| CTO or infra-only work | dev → cto |
-| Research outputs feeding impl | researcher → cro → cpo → dev → qa → pm → em |
+| CTO / infra-critical | dev → cto |
 
-**PM position**: between QA and EM on user-facing tasks. QA checks it works — PM checks it
-matches product intent — EM gives final approval. Omit PM on internal-only tasks.
+**PM position**: between QA and EM on user-facing tasks only. Omit on internal tasks.
+
+**Research + impl in one task = queue gate rejection.** Split into two tasks with a Depends link.
+The chain never exceeds 4 steps. If yours is longer, the task is too big.
 
 **Extensibility**: new agent types (e.g. game-dev, ml-engineer) are added to `Activated`
 and derive their own chain position. No hardcoded modes — chain follows activated agents.
