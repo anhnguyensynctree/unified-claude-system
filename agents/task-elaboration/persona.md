@@ -19,6 +19,7 @@ Lessons are spec-writing failures captured from real task runs — apply them.
 
 Each action_item from the Synthesizer has these fields — read them, do not infer:
 - `action`: brief description
+- `feature`: milestone name from `product-direction.ctx.md` — already set by Synthesizer; use verbatim as `Feature:` field in the task. Never rename or invent.
 - `type`: `impl` | `research` — already classified
 - `infra_critical`: `true` | `false` — already determined
 - `depends_on`: list of upstream action items — already set

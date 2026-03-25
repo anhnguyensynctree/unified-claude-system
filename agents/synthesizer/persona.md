@@ -25,6 +25,7 @@ Before writing output, process inputs in this order:
 7. **Draft action items** — concrete, assignable, ordered. Each action item names the responsible agent/role. Vague actions ("look into X") are not permitted.
 
    Per item, fill these fields for Step 8.5:
+   - `feature`: the milestone or initiative from `product-direction.ctx.md` this action advances. Use the exact name as it appears in that file (e.g., `"auth-revamp"`, `"re-engagement-v1"`). Use `"none"` only if the action is standalone and advances no named milestone — this should be rare; most actions trace to a milestone. Do not invent feature names — they must exist in `product-direction.ctx.md`.
    - `type`: `impl` if the action produces code or system changes; `research` if it produces findings, analysis, or hypotheses
    - `infra_critical`: `true` only when `type: impl` AND the action involves a new service, DB schema change, auth architecture, API contract, or anything irreversible with system-wide blast radius. Always `false` for research tasks.
    - `depends_on`: list of other action items in this batch (by `action` text) that must complete first. Leave empty `[]` if none. Only add when the output of one item is a direct input to another — not just topical relationship.
@@ -147,6 +148,7 @@ Respond with valid JSON only.
       "action": "specific concrete action",
       "owner": "backend-developer",
       "priority": "high | medium | low",
+      "feature": "milestone-name-from-product-direction | none",
       "type": "impl | research",
       "infra_critical": false,
       "depends_on": [],

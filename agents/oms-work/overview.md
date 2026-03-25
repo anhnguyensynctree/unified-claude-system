@@ -1,7 +1,11 @@
-# OMS + OMS-Work — System Overview
+# OMS + OMS-Work — System Overview v0.6
 
 Two separate loops. OMS decides. OMS-Work executes.
 They share one artifact: `[project]/.claude/cleared-queue.md`
+
+Every task in the queue traces back to a milestone in `product-direction.ctx.md`.
+The Synthesizer is the enforcement point — it maps each action_item to a named milestone
+before the Elaboration Agent writes a single field.
 
 ---
 
@@ -22,14 +26,13 @@ They share one artifact: `[project]/.claude/cleared-queue.md`
 ║  Step 3    Rounds 2+ — Pre-Facilitator → Facilitator (Tier 2+)   ║
 ║  Step 3.5  CEO Gate → C-suite blind NGT if triggered             ║
 ║  Step 4    Synthesizer (Sonnet/Opus)                             ║
+║            Reads: company-belief.ctx.md + product-direction.ctx.md
 ║            → decision, rationale, dissent                        ║
-║            → action_items[] with:                                ║
+║            → action_items[], each tagged with:                   ║
+║               feature (from product-direction milestones)        ║
 ║               type | infra_critical | depends_on | chain_type    ║
 ║  Step 5    Log → logs/tasks/[date-slug].md                       ║
 ║  Step 6    Trainer                                               ║
-║            → scores discussion quality                           ║
-║            → scores task spec quality (SHALL/scenarios/          ║
-║               artifacts/produces) → task-elaboration/lessons.md  ║
 ║  Step 7    Context Optimizer                                     ║
 ║  Step 8    CEO feedback                                          ║
 ║                                                                  ║
@@ -40,22 +43,23 @@ They share one artifact: `[project]/.claude/cleared-queue.md`
 ║      strategic  → ceo-decisions.ctx.md, stop                     ║
 ║                                                                  ║
 ║   2. Chain pre-check (if depends_on non-empty)                   ║
-║      chain_type: value_substitution → both tasks elaborate       ║
-║      chain_type: direction_selection → research only;            ║
-║                  impl held until CEO reviews findings             ║
+║      value_substitution → both tasks elaborate                   ║
+║      direction_selection → research only; impl held              ║
 ║                                                                  ║
 ║   3. Elaborate  (Task Elaboration Agent — Sonnet)                ║
-║      Spec Exploration checklist (5 questions)                    ║
 ║      Loads task-elaboration/lessons.md first                     ║
-║      Drafts: Spec(SHALL) · Scenarios(GIVEN/WHEN/THEN)            ║
-║              Feature · Artifacts · Produces · Verify · Context   ║
+║      Reads feature from Synthesizer output — never invents it    ║
+║      Spec Exploration checklist (5 questions)                    ║
+║      Drafts: Spec · Scenarios · Feature · Artifacts              ║
+║              Produces · Verify · Context                         ║
 ║      Produces→Context wiring for chained tasks                   ║
 ║                                                                  ║
 ║   4. Review (one reviewer per task, in parallel)                 ║
 ║      impl + infra_critical → CTO                                 ║
-║      research → CPO  (CTO if feeds infra-critical downstream)    ║
+║      research + feeds infra → CTO                                ║
+║      research (standard) → CPO                                   ║
 ║      impl standard → EM                                          ║
-║      CLO/CFO override if activated in discussion                 ║
+║      CLO/CFO if activated in discussion                          ║
 ║      APPROVE or REWORK (re-draft once, else surface to CEO)      ║
 ║                                                                  ║
 ║   5. Queue Gate (8 checks)                                       ║
@@ -70,10 +74,11 @@ They share one artifact: `[project]/.claude/cleared-queue.md`
                           ▼
 ╔══════════════════════════════════════════════════════════════════╗
 ║  OMS-WORK  (no CEO — passive, autonomous)                        ║
-║  Trigger: /oms-work in Discord · CLI: oms-work.py <slug>         ║
+║  Trigger: Discord !oms-work · CLI: oms-work.py <slug>            ║
+║  Always posts to Discord regardless of trigger.                  ║
 ║                                                                  ║
 ║  1. Parse queue → find ready tasks (Depends resolved)            ║
-║     --all: loops all ready tasks                                 ║
+║     --all: loops all ready tasks in dependency order             ║
 ║     TASK-NNN: run specific task                                  ║
 ║                                                                  ║
 ║  2. git worktree add                                             ║
@@ -83,54 +88,32 @@ They share one artifact: `[project]/.claude/cleared-queue.md`
 ║  3. exec_prompt (Sonnet)                                         ║
 ║     Context files inlined — no cold reads                        ║
 ║     Spec + Scenarios + Artifacts + Produces in prompt            ║
-║     "Make all changes to satisfy every scenario"                 ║
 ║                                                                  ║
 ║  4. Hallucination guard                                          ║
-║     git status --porcelain → empty on impl = CTO-STOP            ║
+║     git status --porcelain empty on impl = CTO-STOP              ║
 ║                                                                  ║
 ║  5. Validation chain (Haiku per step)                            ║
-║     research    →  researcher → cro → cpo                        ║
-║     engineering →  dev → qa → em                                 ║
-║     infra       →  dev → cto                                     ║
-║     Each validator sees: Spec + Scenarios + Artifacts + summary  ║
+║     research    → researcher → cro → cpo                         ║
+║     engineering → dev → qa → em                                  ║
+║     infra       → dev → cto                                      ║
 ║                                                                  ║
 ║  6. Shell verify                                                 ║
 ║     Runs Verify: commands — exit code 0 = pass                   ║
-║     Deterministic; no LLM judgment                               ║
 ║                                                                  ║
-║  7a. PASS → commit worktree → remove worktree                    ║
-║      → auto-merge to main (--no-ff)                              ║
-║      → delete branch                                             ║
-║      → Discord: ✓ TASK-NNN done (feature thread or main)        ║
+║  7a. PASS → commit → remove worktree                             ║
+║      → auto-merge to main (--no-ff) → delete branch             ║
+║      → Discord: ✓ TASK-NNN done (in feature thread)             ║
 ║                                                                  ║
-║  7b. FAIL → log spec lesson (if spec-related)                    ║
-║             leave worktree open for review                       ║
-║             → Discord: ⚑ TASK-NNN cto-stop (with reason)        ║
-║             dependent tasks: blocked                             ║
-║             other tasks: continue                                ║
+║  7b. FAIL → spec lesson if reason matches signals                ║
+║      → leave worktree open for review                            ║
+║      → Discord: ⚑ TASK-NNN cto-stop (in feature thread)        ║
+║      → dependent tasks blocked; other tasks continue            ║
 ╚══════════════════════════════════════════════════════════════════╝
          │                              │
          ▼                              ▼
-  done branches                   cto-stop branches
-  merged to main                  review at next OMS session
-  automatically                   → re-spec → new TASK-NNN
-         │
-         ▼
-╔══════════════════════════════════════════════════════════════════╗
-║  TRAINING LOOP  (improves spec quality over time)                ║
-║                                                                  ║
-║  Source 1 — Trainer (Step 6, every session)                      ║
-║    Scores new tasks: SHALL clarity · scenario completeness       ║
-║    artifact precision · produces usability (1–5 each)           ║
-║    Score ≤ 2 → lesson written to task-elaboration/lessons.md     ║
-║                                                                  ║
-║  Source 2 — oms-work (on validation fail)                        ║
-║    Checks reason for spec signals: "ambiguous", "edge case"...   ║
-║    Match → lesson appended to task-elaboration/lessons.md        ║
-║                                                                  ║
-║  Next session: Elaboration agent loads lessons.md first          ║
-║  → past failures prevent same spec errors                        ║
-╚══════════════════════════════════════════════════════════════════╝
+  merged to main                  cto-stop branches
+  automatically                   review at next OMS session
+                                  → re-spec → new TASK-NNN
 ```
 
 ---
@@ -139,25 +122,50 @@ They share one artifact: `[project]/.claude/cleared-queue.md`
 
 Run once per project before the first `/oms` session.
 
-```
-/oms-start
-```
-
-What it does:
-1. Asks: project name, type (app/service/research), target users, north-star metric
-2. Reads any supplied material: PRD, CLAUDE.md, raw notes, links
-3. Runs departmental intake: CTO (architecture constraints), CPO (product direction), CLO (legal/compliance), CFO (financial model)
+1. Asks: project name, type, target users, north-star metric
+2. Reads supplied material: PRD, CLAUDE.md, raw notes
+3. Runs departmental intake: CTO, CPO, CLO, CFO
 4. Generates all project ctx files:
-   - `.claude/agents/company-belief.ctx.md` — why this exists, core assumptions
-   - `.claude/agents/product-direction.ctx.md` — milestones, priorities, success criteria
-   - `.claude/agents/architecture.ctx.md` — tech stack, constraints, patterns
-   - `.claude/agents/tech-stack.ctx.md` — languages, frameworks, dependencies
-   - `.claude/agents/ceo-mandate.ctx.md` — non-negotiables, hard constraints
-   - `.claude/agents/ceo-decisions.ctx.md` — strategic items pending CEO decision
-5. Creates `cleared-queue.md` (empty, ready for tasks)
-6. Writes `router.ctx.md` (marks initialization complete)
+   - `company-belief.ctx.md` — why this exists, core assumptions
+   - `product-direction.ctx.md` — **named milestones and features** — every future task Feature: field comes from here
+   - `architecture.ctx.md` — tech stack, constraints, patterns
+   - `tech-stack.ctx.md` — languages, frameworks, dependencies
+   - `ceo-mandate.ctx.md` — non-negotiables, hard constraints
+   - `ceo-decisions.ctx.md` — strategic items pending CEO decision
+5. Creates `cleared-queue.md` (empty)
+6. Writes `router.ctx.md` (marks init complete)
 
-After `/oms-start`: every subsequent `/oms <task>` in this project proceeds without the bootstrap step.
+---
+
+## Alignment: How Tasks Stay Tied to Product Direction
+
+The alignment chain runs through every step:
+
+```
+product-direction.ctx.md          ← source of truth for milestones
+         │
+         ▼
+Synthesizer (Step 4)              ← reads product-direction; tags each action_item
+  action_item.feature = "auth-revamp"   with the exact milestone name
+         │
+         ▼
+Task Elaboration Agent (Step 8.5) ← reads feature from action_item; writes Feature: verbatim
+  Feature: auth-revamp                  never invents a name; flags if milestone unknown
+         │
+         ▼
+cleared-queue.md                  ← every task has Feature: tied to product-direction
+         │
+         ▼
+Discord feature thread            ← one thread per milestone; CEO sees progress per feature
+  Thread: Feature: auth-revamp
+    ✓ TASK-001 done
+    ⚑ TASK-002 cto-stop
+```
+
+**If an action item doesn't map to any milestone in `product-direction.ctx.md`:**
+- Synthesizer uses `feature: "none"` — rare, for truly standalone ops tasks
+- This signals the CEO that the work is drifting from roadmap
+- At the next session, CPO should either add the milestone or question the task
 
 ---
 
@@ -166,184 +174,96 @@ After `/oms-start`: every subsequent `/oms <task>` in this project proceeds with
 ### Running a session
 
 ```bash
-/oms <task>          # in the project directory — runs a full discussion session
+/oms <task>    # in the project directory
 ```
 
-OMS checks `company-belief.ctx.md` first. If missing → tells CEO to run `/oms-start` and stops.
+OMS checks `company-belief.ctx.md` first. Missing → tells CEO to run `/oms-start`.
 
-The Router determines tier (0–3) based on task complexity, domain count, and reversibility.
-Tier drives: how many agents activate, how many rounds, whether C-suite gates fire.
+### When CEO has no blocking questions
 
-### Surfacing questions to CEO
+OMS proceeds directly to Synthesis → Step 8.5 Queue Commit → `cleared-queue.md`.
+CEO sees: `Queue Commit: X tasks queued. Queued: TASK-001 — title, TASK-002 — title`
 
-CEO Gate (Step 3.5) fires when:
-- A domain agent raises a blocking constraint with no clear resolution
-- CLO flags a legal risk at `high` or `critical`
-- Agents disagree on an irreversible architectural choice
+### When CEO Gate fires
 
-Phase 1 (Haiku): classifies whether CEO input is genuinely required.
-Phase 2 (if triggered): C-suite NGT round → inject constraint if resolved, else → CEO Brief + PAUSE.
+OMS posts the question to Discord and pauses.
+CEO replies → bot injects response → discussion resumes from Step 4.
 
-When OMS pauses for CEO input, it posts the question to Discord and waits.
-CEO replies in Discord → bot injects into pipeline → discussion resumes from Step 4.
-
-### When CEO has no questions
-
-OMS proceeds directly to Synthesis (Step 4) → Step 8.5 Queue Commit.
-Action items are elaborated, reviewed, gate-checked, and written to `cleared-queue.md`.
-No CEO interaction needed beyond the initial task statement.
-
-### Generating a task or feature list without a question
+### Generating a feature list or roadmap breakdown
 
 ```bash
 /oms roadmap for [feature or milestone]
 ```
 
-Runs at Tier 1–2 with CPO + CTO. Synthesis produces action_items[]. Step 8.5 queues them all.
-CEO sees: `Queue Commit: X tasks queued. Queued: TASK-001 — title, TASK-002 — title`
+Runs at Tier 1–2 with CPO + CTO. Synthesis maps all action_items to milestones.
+Step 8.5 queues them all, grouped by feature.
 
 ---
 
 ## OMS-Work — Autonomous Execution
 
-### CLI trigger (terminal — leave your Mac and walk away)
+### CLI (terminal — safe to leave running)
 
 ```bash
-python3 ~/.claude/bin/oms-work.py <project-slug> --all
+python3 ~/.claude/bin/oms-work.py <slug> --all       # all ready tasks
+python3 ~/.claude/bin/oms-work.py <slug> TASK-003    # one specific task
+python3 ~/.claude/bin/oms-work.py <slug> --dry-run   # show plan only
 ```
 
-Loops all ready tasks in dependency order. Posts to Discord on every task completion.
-Terminal output also shows progress. Safe to run overnight.
-
-```bash
-python3 ~/.claude/bin/oms-work.py <project-slug> TASK-003   # run one specific task
-python3 ~/.claude/bin/oms-work.py <project-slug> --dry-run  # show plan, no execution
-```
+Loops tasks in dependency order. Posts to Discord on every outcome. Safe overnight.
 
 ### Discord trigger
 
 ```
-!oms-work <project-slug>
-!oms-work <project-slug> --all
-!oms-work <project-slug> TASK-003
+!oms-work <slug>
+!oms-work <slug> --all
+!oms-work <slug> TASK-003
 ```
 
-Both triggers post to Discord identically. The Discord bot does not need to be the trigger
-for Discord notifications to appear — oms-work.py handles Discord directly via `oms_discord.py`.
+Both triggers post to Discord identically — `oms_discord.py` handles this directly,
+not the bot. No double-posting. Token read from `~/.config/discord/token`.
 
 ---
 
 ## Discord Notification Model
 
-### Feature threads
-
-Each task has a `Feature:` field. All tasks in the same feature share one Discord thread.
+One message per task. Grouped into feature threads from `product-direction.ctx.md`.
 
 ```
 #project-channel
 ├── Thread: Feature: auth-revamp
 │     ✓ TASK-001 — JWT refresh rotation  done
-│     ✓ TASK-002 — Token family revoke   done
-│     ⚑ TASK-003 — Redis session store  cto-stop
+│     ⚑ TASK-002 — Redis session store  cto-stop
 │                  > FAIL (cto): SessionStore interface not exported
 │
 └── Thread: Feature: re-engagement
-      ✓ TASK-004 — Research notification timing  done
-      ✓ TASK-005 — Push notification impl        done
+      ✓ TASK-003 — Research notification timing  done
+      ✓ TASK-004 — Push notification impl        done
 ```
 
-Tasks with `Feature: none` post directly to the main project channel (no thread).
+Tasks with `Feature: none` post directly to the main channel (no thread).
+Thread IDs persisted in `[project]/.claude/oms-work-threads.json` — reused across runs.
 
-### What CEO sees
-
-- One message per task: `✓ TASK-NNN — title  done` or `⚑ TASK-NNN — title  cto-stop`
-- On `cto-stop`: the failure reason is appended (max 180 chars)
-- No step-by-step updates, no intermediate logs, no validator names
-- At the end of a `--all` run: nothing extra — the individual task messages are the summary
-
-### Thread persistence
-
-Thread IDs are stored in `[project]/.claude/oms-work-threads.json`.
-On next run, existing threads are reused. New features get a new thread created automatically.
+CEO sees only: `✓ done` or `⚑ cto-stop [reason]`. No step names, no validator names.
 
 ---
 
 ## Merge Flow
 
 ```
-worktree (oms-work/task-nnn) → all validators pass → shell verify pass
+All validation + shell verify pass
   → git commit in worktree
   → git worktree remove
-  → git checkout main
   → git merge --no-ff oms-work/task-nnn -m "oms-work: TASK-NNN — title"
   → git branch -d oms-work/task-nnn
   → Discord: ✓ TASK-NNN done
 ```
 
-Auto-merge fails gracefully in two cases:
-- Working tree not clean → leaves branch open, posts `branch ready — merge manually`
-- Merge conflict → runs `git merge --abort`, leaves branch open, posts `merge conflict, merge manually`
+Auto-merge fails gracefully:
+- Working tree not clean → leaves branch, posts `branch ready — merge manually`
+- Merge conflict → `git merge --abort`, leaves branch, posts `merge conflict, merge manually`
 
-In both cases the task is still marked `done` in the queue (work passed validation).
-The CEO merges manually at the next session.
-
----
-
-## What Changed This Session
-
-### Task Schema — `cleared-queue.md` format
-
-| Field | Before | After |
-|---|---|---|
-| `Spec:` | 1–3 sentence prose | `The system SHALL [verb] [object] so that [outcome].` |
-| `Acceptance:` | pipe-separated text | Renamed to `Scenarios:` — `GIVEN/WHEN/THEN` per scenario |
-| `Feature:` | — | New: Discord thread grouping key |
-| `Artifacts:` | — | New: `path/file — exports: x, y` — executor knows exactly what to produce |
-| `Produces:` | — | New: downstream contract wired into dependent task's `Context:` |
-| `Verify:` | — | New: shell commands run after agent chain (deterministic) |
-| Queue gate | 5 checks | 8 checks — adds SHALL enforcement, forward-reference guard, Artifacts, Produces |
-
-### oms-work.py execution
-
-| Mechanism | Before | After |
-|---|---|---|
-| Context loading | `Read first: path/to/file` (cold reads) | Files inlined into prompt at execution time |
-| Executor knows what to produce | Nothing — agent guesses | Artifacts field in prompt |
-| Change detection | None | Hallucination guard: `git status --porcelain` empty = CTO-STOP |
-| Verification | Agent chain only | Agent chain → shell verify (sequential) |
-| Merge | Manual | Auto-merge to main after all validation passes |
-| Discord | Only when triggered via Discord bot | Always — oms_discord.py posts regardless of trigger |
-| Failure learning | Nothing logged | Spec-related failures → `task-elaboration/lessons.md` |
-
-### Step 8.5 — Queue Commit pipeline
-
-| Before | After |
-|---|---|
-| classify → queue gate → write | classify → chain pre-check → elaborate → review → queue gate → write |
-| No intermediate artifacts | Spec Exploration checklist before every field |
-| Reviewer inferred from text | Reviewer derived from `type` + `infra_critical` + activated C-suite |
-| Chain type inferred at elaboration | `chain_type` set by Synthesizer during discussion |
-
-### Synthesizer `action_items[]`
-
-```
-Before: { action, owner, priority }
-
-After:  { action, owner, priority,
-          type,           // impl | research
-          infra_critical, // true only on impl, never research
-          depends_on,     // upstream items this needs
-          chain_type }    // value_substitution | direction_selection | null
-```
-
-### New components
-
-| Component | Purpose |
-|---|---|
-| `agents/task-elaboration/persona.md` | Drafts full OpenSpec tasks; runs 5-question Spec Exploration checklist; loads lessons first |
-| `agents/task-elaboration/lessons.md` | Accumulates spec failures from Trainer + oms-work; read each session |
-| `bin/oms_discord.py` | Discord helper: create/find feature threads, post final task status |
-| Trainer `task_spec_review` output | Scores 4 spec dimensions per task; writes lessons on weak scores |
+Task is still `done` in queue — work passed. CEO merges the branch at next session.
 
 ---
 
@@ -354,26 +274,25 @@ After:  { action, owner, priority,
 | `impl` standard | dev → qa → em | EM | System behavior (HTTP, state, output) |
 | `impl` infra-critical | dev → cto | CTO | System behavior + irreversibility |
 | `research` | researcher → cro → cpo | CPO | Output document quality |
-| `research` → infra impl | researcher → cro → cpo | CTO | Output document quality |
+| `research` → infra impl downstream | researcher → cro → cpo | CTO | Output document quality |
 
 ## Chain Rule Reference
 
 | chain_type | What it means | Action |
 |---|---|---|
-| `value_substitution` | Research fills in a value; impl is already decided | Both tasks queued with `Depends:` |
-| `direction_selection` | Research could redirect or cancel the impl | Research only; impl held in `ceo-decisions.ctx.md` |
-| `null` | No dependency | Single task, no chain |
+| `value_substitution` | Research fills in a value; impl direction already decided | Both tasks queued with `Depends:` |
+| `direction_selection` | Research could change or cancel the impl | Research only; impl held in `ceo-decisions.ctx.md` |
+| `null` | No dependency | Single task |
 
 ## CLI Reference
 
 | Command | What it does |
 |---|---|
-| `/oms-start` | Initialize a new project — generates all ctx files |
-| `/oms <task>` | Run a full discussion session — produces action_items[] |
+| `/oms-start` | Initialize a new project — generates all ctx files including product-direction milestones |
+| `/oms <task>` | Full discussion session → action_items[] → queue commit |
 | `/oms exec` | C-suite strategic session (auto-triggered at milestones) |
-| `/oms audit` | Force a full context optimizer audit |
-| `/oms-implement` | Execute action_items[] directly (skips discussion) |
-| `oms-work.py <slug>` | Run first ready task in project queue |
+| `/oms audit` | Force full context optimizer audit |
+| `oms-work.py <slug>` | Run first ready task |
 | `oms-work.py <slug> --all` | Run all ready tasks in order |
 | `oms-work.py <slug> TASK-NNN` | Run one specific task |
 | `oms-work.py <slug> --dry-run` | Show plan without executing |
