@@ -2,6 +2,7 @@
 
 Multi-agent discussion engine. OMS answers "what should we build and why?" — not "how do we build it."
 Skills: /oms (discuss) → /oms-implement (execute) → /oms-train (validate) → /oms-capture (capture failures) → /oms-start (init project)
+Full system diagram + change log: `~/.claude/agents/oms-work/overview.md`
 
 ## Triggers
 
