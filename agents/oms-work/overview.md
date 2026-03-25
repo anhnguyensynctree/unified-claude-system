@@ -189,14 +189,32 @@ CEO sees: `Queue Commit: X tasks queued. Queued: TASK-001 — title, TASK-002 �
 OMS posts the question to Discord and pauses.
 CEO replies → bot injects response → discussion resumes from Step 4.
 
+### Exec session — always CPO + CTO + CFO + CLO
+
+Fires when: milestone reached, queue empty (CEO runs /oms with no task), or Router
+detects a cross-department decision.
+
+| Agent | Exec responsibility |
+|---|---|
+| CPO | Milestone priorities, roadmap sequencing, what gets built next |
+| CTO | Arch prerequisites, technical risk of prioritization order |
+| CFO | Cost of sprint priorities, unit economics, budget constraints |
+| CLO | Legal/compliance flags on upcoming milestones before they hit the queue |
+| PM | Milestone health, gap analysis (milestones with no queued tasks), acceptance intent |
+| CRO | Conditional — activates only when a research gap is blocking a milestone |
+
+CFO and CLO must be in every exec session — sprint priorities have cost and legal implications
+that are far cheaper to surface now than after tasks are elaborated and queued.
+
 ### Generating a feature list or roadmap breakdown
 
 ```bash
 /oms roadmap for [feature or milestone]
 ```
 
-Runs at Tier 1–2 with CPO + CTO. Synthesis maps all action_items to milestones.
-Step 8.5 queues them all, grouped by feature.
+Runs as an exec session. CPO + CTO + CFO + CLO always active. CRO if research gap blocking
+a milestone. PM always active for milestone gap analysis.
+Synthesis maps all action_items to milestones. Step 8.5 queues them all grouped by feature.
 
 ---
 

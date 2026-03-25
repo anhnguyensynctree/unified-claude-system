@@ -245,9 +245,21 @@ Never merge discuss + implement in one /oms invocation.
 
 Router fires /oms exec automatically when:
 - Milestone in product-direction.ctx.md reached
+- Queue empty and CEO runs /oms with no task specified
 - Research synthesis requires product direction decision
 - C-suite agent raises cross-department concern
 - CLO raises high/critical legal risk
+
+## Exec session — always active agents
+
+CPO + CTO + CFO + CLO activate in every exec session. No exceptions.
+- CPO: milestone priorities, what gets built next, roadmap sequencing
+- CTO: arch prerequisites for upcoming milestones, technical risk of prioritization
+- CFO: cost implications of sprint priorities, unit economics, budget constraints
+- CLO: legal/compliance flags on upcoming milestones before they hit the queue
+
+CRO activates conditionally: only when a research gap is blocking a milestone decision.
+PM activates in every exec session: milestone health, gap analysis (milestones with no queued tasks), acceptance intent for the next sprint.
 
 ## Task log format
 
