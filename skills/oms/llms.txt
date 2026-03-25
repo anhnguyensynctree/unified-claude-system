@@ -96,39 +96,76 @@ Context Optimizer always runs after Trainer. Two modes based on state.
 
 ## Step 8.5 — Queue Commit
 
-Fires after CEO feedback confirms the synthesis. Converts `action_items[]` into cleared tasks.
+Fires after CEO feedback confirms the synthesis. Four sub-steps: Classify → Elaborate → Review → Commit.
 
-**Classify each action item:**
-- `executable` — impl or research, scope fits one Claude session, no open decisions → write to queue
-- `strategic` — requires a CEO/CTO decision before work begins → log to `ceo-decisions.ctx.md`, do not queue
+---
 
-**Queue gate — apply before writing each task:**
-- [ ] Spec has one correct interpretation
-- [ ] Acceptance criteria are testable (deterministic pass/fail)
-- [ ] All context files exist and are referenced
-- [ ] No decision needed that would affect other queued tasks
-- [ ] Scope is small-to-medium (completable in one Claude session)
+### Sub-step 1 — Classify
 
-If any box fails: surface to CEO now for re-spec. Do not write to queue until all boxes pass.
+For each action_item[]:
+- `executable` — impl or research, scope fits one Claude session, no open decisions → proceed to Elaborate
+- `strategic` — requires CEO/CTO decision before work begins → log to `ceo-decisions.ctx.md`, skip
 
-**Derive validation chain from activated agents:**
+---
+
+### Sub-step 2 — Elaborate (Task Elaboration Agent)
+
+Agent: `~/.claude/agents/task-elaboration/persona.md` | Model: Sonnet
+
+For each `executable` item, the elaboration agent drafts a complete task block:
+- `Spec:` — `The system SHALL [verb] [object] so that [outcome].`
+- `Scenarios:` — `GIVEN [pre] WHEN [trigger] THEN [outcome]` pipe-separated
+- `Artifacts:` — `path/file — exports: x, y` pipe-separated (impl) or document sections (research)
+- `Produces:` — what downstream tasks' `Context:` needs (or `none`)
+- `Verify:` — shell commands (or omit)
+- `Context:` — files to pre-load; includes `Produces:` from any upstream Depends task
+- `Validation:` — derived from activated agents (see chain table below)
+- `Depends:` — set if this task depends on another in this commit batch
+
+**Produces → Context wiring**: when task B depends on task A, copy A's `Produces:` value
+verbatim into B's `Context:` field. The executor pre-loads it — B starts knowing A's interface.
+
+**Split rule**: research + impl in one task → two tasks with `Depends`. Chain never exceeds 3 steps.
+
+---
+
+### Sub-step 3 — Lightweight Review (by task type)
+
+One reviewer per task. Run in parallel across all drafted tasks.
+
+| Task type | Reviewer | What they check |
+|---|---|---|
+| Infra-critical / arch change / new service | CTO | Spec is architecturally sound; Artifacts are complete; lock-in risk captured |
+| Research / produces findings for product | CPO | Scenarios test the right quality signal; Produces is actionable for downstream |
+| Standard engineering | EM | Artifacts scope fits one session; Verify commands exist and are valid |
+
+Reviewer outputs: `APPROVE` or `REWORK — [specific issue]`.
+On `REWORK`: elaboration agent re-drafts that task. Surface to CEO if second draft still fails.
+
+---
+
+### Sub-step 4 — Queue Gate + Commit
+
+Each approved task must pass all 7 checks before writing:
+- [ ] Spec uses SHALL — one correct interpretation
+- [ ] Every scenario is GIVEN/WHEN/THEN — deterministic pass/fail
+- [ ] Artifacts lists every file to produce with exports (or document sections for research)
+- [ ] Produces declares downstream contract (or explicitly `none`)
+- [ ] All Context files exist and are referenced by path
+- [ ] No decision required that would change other queued tasks
+- [ ] Scope is completable in one Claude session
+
+If any box fails: surface to CEO for re-spec now. Do not write to queue.
+
+**Derive validation chain:**
 | Task type | Chain |
 |---|---|
 | Research | researcher → cro → cpo |
 | Engineering (any) | dev → qa → em |
 | CTO / infra-critical | dev → cto |
 
-Max 3 steps. Research + impl in one task = split it, use Depends to link them.
-
 **Write to `[project]/.claude/cleared-queue.md`** using schema from
 `~/.claude/agents/oms-work/task-schema.md`. Append; do not overwrite existing tasks.
-
-Required fields per task (queue gate rejects incomplete tasks):
-- `Spec:` — `The system SHALL [verb] [object] so that [outcome].` — one correct interpretation
-- `Scenarios:` — `GIVEN [pre] WHEN [trigger] THEN [outcome]` pipe-separated — QA tests each one
-- `Artifacts:` — `path/file — exports: x, y` pipe-separated — executor produces exactly these files
-- `Produces:` — what downstream tasks' `Context:` fields depend on (or `none`)
-- `Verify:` — shell commands pipe-separated — run after agent validation (or omit if none)
 
 **TASK-NNN numbering**: read existing queue, increment highest N by 1. Start at TASK-001 if empty.
 
