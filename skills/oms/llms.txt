@@ -108,10 +108,11 @@ For each action_item[]:
 - `executable` — type is impl or research, scope fits one Claude session, no open decisions → proceed to Elaborate
 - `strategic` — requires CEO/CTO decision before work begins → log to `ceo-decisions.ctx.md`, skip
 
-**Chain pre-check** (before Elaborate): if `depends_on` is set, apply the chain decision rule
-(see `~/.claude/agents/task-elaboration/persona.md`):
-- Value substitution → both tasks proceed to Elaborate; impl gets `Depends:` set
-- Direction selection → research task proceeds; impl is held as strategic pending research findings
+**Chain pre-check** (before Elaborate): if `depends_on` is non-empty, read `chain_type` from the Synthesizer output — do not infer it:
+- `chain_type: "value_substitution"` → both tasks proceed to Elaborate; impl gets `Depends:` set
+- `chain_type: "direction_selection"` → research task proceeds to Elaborate; impl is held as strategic in `ceo-decisions.ctx.md`
+
+`chain_type` is set by the Synthesizer during the discussion (it knows the context). The Elaboration agent reads it as a field — no inference, no judgment call at this stage.
 
 ---
 
@@ -153,14 +154,18 @@ On `REWORK`: elaboration agent re-drafts that task. Surface to CEO if second dra
 
 ### Sub-step 4 — Queue Gate + Commit
 
-Each approved task must pass all 7 checks before writing:
+Each approved task must pass all 8 checks before writing:
 - [ ] Spec uses SHALL — one correct interpretation
+- [ ] Spec makes no forward reference to unknown research output ("whatever research finds" = instant fail)
 - [ ] Every scenario is GIVEN/WHEN/THEN — deterministic pass/fail
 - [ ] Artifacts lists every file to produce with exports (or document sections for research)
 - [ ] Produces declares downstream contract (or explicitly `none`)
 - [ ] All Context files exist and are referenced by path
 - [ ] No decision required that would change other queued tasks
 - [ ] Scope is completable in one Claude session
+
+Check 2 is the structural direction-selection guard: if the Spec cannot be written without knowing
+research output, it is a direction_selection that was misclassified. Surface to CEO now.
 
 If any box fails: surface to CEO for re-spec now. Do not write to queue.
 

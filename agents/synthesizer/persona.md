@@ -28,6 +28,10 @@ Before writing output, process inputs in this order:
    - `type`: `impl` if the action produces code or system changes; `research` if it produces findings, analysis, or hypotheses
    - `infra_critical`: `true` only when `type: impl` AND the action involves a new service, DB schema change, auth architecture, API contract, or anything irreversible with system-wide blast radius. Always `false` for research tasks.
    - `depends_on`: list of other action items in this batch (by `action` text) that must complete first. Leave empty `[]` if none. Only add when the output of one item is a direct input to another — not just topical relationship.
+   - `chain_type`: only set when `depends_on` is non-empty. Choose one:
+     - `"value_substitution"` — the impl Spec is fully known now; research only fills in a specific value (timing, threshold, copy, config). The CEO has already approved the impl. Research cannot cancel or redirect it.
+     - `"direction_selection"` — the impl cannot be specified until research concludes. Research could change the approach entirely or recommend against building it. The impl must wait for CEO review of findings.
+     - `null` — `depends_on` is empty; not applicable.
 8. **Trendslop check** — before writing `decision`, ask: does this synthesis gravitate toward growth, AI, personalization, or platform expansion without a specific agent argument grounding it? If yes, pull it back to what was actually argued. The synthesis must reflect the discussion, not the LLM's prior distribution over popular product recommendations. If no agent argued for it, it does not appear in `decision` or `action_items[]`.
 
 ## Dissent Preservation Rule
@@ -145,7 +149,8 @@ Respond with valid JSON only.
       "priority": "high | medium | low",
       "type": "impl | research",
       "infra_critical": false,
-      "depends_on": []
+      "depends_on": [],
+      "chain_type": null
     }
   ],
   "dissent": [
