@@ -55,8 +55,8 @@ Before routing any task, check queue state:
      for each milestone: complete (all tasks done) | in-progress (N tasks queued/running) | no coverage (0 tasks)
    - Set `task_mode: "exec"`
    - Set `task_id: "[date]-exec-sprint-review"`
-   - Activate: CPO (lead), CTO, CFO, CLO — CRO only if a research gap explicitly blocks a milestone
-   - Inject gap report into CPO's briefing: "Milestone status: [gap report]. Select ONE milestone to advance next."
+   - Activate: CPO (lead), CTO, CFO, CLO, CRO — always, no exceptions
+   - Inject gap report into CPO's briefing: "Milestone status: [gap report]. Select ONE milestone to advance next and plan its action_items."
    - CFO briefing: cost implications of the proposed milestone
    - CLO briefing: legal/compliance review of the proposed milestone before tasks are queued
    - CTO briefing: arch prerequisites and technical risk for the proposed milestone
@@ -93,7 +93,7 @@ Before routing any task, check queue state:
 **Company hierarchy enforcement rule:**
 - Engineering agents (cto, product-manager, backend-developer, frontend-developer, engineering-manager, qa-engineer) and all C-suite agents (cro, cpo, clo, cfo) are always available globally.
 - Domain research agents may ONLY be activated if they appear in the project's `company-hierarchy.md` under the Research Dept roster. If no `company-hierarchy.md` exists, domain research agents are unavailable.
-- On `exec` tasks: activate CPO (lead), CTO, CLO, CFO — CRO only if a research gap is explicitly blocking a milestone decision. No PM as discussion agent — PM gap report is injected into CPO's briefing at Step 0. No engineering sub-agents unless a specific technical question requires escalation.
+- On `exec` tasks: activate CPO (lead), CTO, CLO, CFO, CRO — always, no exceptions. No PM as discussion agent — PM gap report injected into CPO's briefing at Step 0. No engineering sub-agents unless a specific technical question requires escalation.
 - On `research` tasks: CRO leads, domain researchers supplement. Engineering agents activate only if the task has implementation implications.
 - On `build` or `architecture` tasks with a human-understanding dimension: relevant domain researchers may join engineering agents if present in company-hierarchy.md.
 

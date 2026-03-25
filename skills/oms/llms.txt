@@ -280,20 +280,19 @@ Router fires /oms exec automatically when:
 
 ## Exec session — always active agents
 
-CPO + CTO + CFO + CLO activate in every exec session. No exceptions.
-- CPO: picks the next milestone to advance; owns product-direction.ctx.md update post-exec
-- CTO: arch prerequisites for the chosen milestone, technical risk of prioritization
+CPO + CTO + CFO + CLO + CRO activate in every exec session. No exceptions.
+- CPO (lead): selects the next milestone; produces action_items; updates product-direction.ctx.md post-exec
+- CTO: arch prerequisites and technical risk for the chosen milestone
 - CFO: cost of the proposed sprint, unit economics, budget constraints
-- CLO: legal/compliance flags on the chosen milestone before tasks are queued
-
-CRO activates conditionally: only when a research gap is blocking a milestone decision.
+- CLO: legal/compliance flags before tasks are queued
+- CRO: research perspective — what is known, what is unknown, what needs research before building
 
 PM does NOT participate as a discussion agent in exec sessions.
-PM's gap report (milestone status: complete / in-progress / no coverage) is generated at Step 0
-and injected into CPO's briefing as context — not as a discussion participant.
+PM gap report (milestone status: complete / in-progress / no coverage) is generated at Step 0
+and injected into CPO's briefing as context — not a discussion participant.
 
-One exec session = one milestone selected. Tasks for that milestone are queued.
-When the queue empties again, exec fires and the next milestone is selected.
+One exec session = one milestone selected AND planned. action_items for that milestone are
+queued at Step 8.5 in the same session. When queue empties → exec fires → next milestone.
 
 ## Task log format
 

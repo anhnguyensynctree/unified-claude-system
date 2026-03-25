@@ -219,11 +219,11 @@ Fires when queue is empty and CEO runs `/oms` with no task. One exec = one miles
 
 | Agent | Role |
 |---|---|
-| CPO (lead) | Picks next milestone; owns product-direction.ctx.md update after exec |
+| CPO (lead) | Picks next milestone; produces action_items; updates product-direction.ctx.md post-exec |
 | CTO | Arch prerequisites and technical risk for the chosen milestone |
-| CFO | Cost of proposed sprint work, unit economics, budget constraints |
+| CFO | Cost of the sprint, unit economics, budget constraints |
 | CLO | Legal/compliance flags before tasks are queued |
-| CRO | Conditional — only if a research gap blocks the milestone decision |
+| CRO | Research perspective — what is known, unknown, needs research before building |
 
 **PM is not a discussion agent in exec.** The Router generates a milestone gap report at Step 0
 (complete / in-progress / no coverage per milestone) and injects it into CPO's briefing.
