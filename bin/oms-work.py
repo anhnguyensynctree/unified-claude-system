@@ -49,13 +49,18 @@ def parse_queue(path: Path) -> list[dict]:
             continue
         f = dict(FIELD.findall(chunk))
         deps_raw = f.get('Depends', 'none').strip()
+        # Scenarios: new field; fall back to Acceptance for backwards compat
+        scenarios_raw = f.get('Scenarios', f.get('Acceptance', ''))
         tasks.append({
             'id':         m.group(1),
             'title':      m.group(2).strip(),
             'status':     f.get('Status', 'queued').strip().lower(),
             'type':       f.get('Type', 'impl').strip().lower(),
             'spec':       f.get('Spec', '').strip(),
-            'acceptance': [a.strip() for a in f.get('Acceptance', '').split('|') if a.strip()],
+            'scenarios':  [s.strip() for s in scenarios_raw.split('|') if s.strip()],
+            'artifacts':  [a.strip() for a in f.get('Artifacts', '').split('|') if a.strip()],
+            'produces':   f.get('Produces', 'none').strip(),
+            'verify':     [v.strip() for v in f.get('Verify', '').split('|') if v.strip()],
             'context':    [c.strip() for c in f.get('Context', '').split(',')
                            if c.strip() and c.strip() != 'none'],
             'validation': [v.strip() for v in re.split(r'\s*→\s*', f.get('Validation', ''))
@@ -148,22 +153,48 @@ def run_claude(prompt: str, cwd: Path, model: str, allow_writes: bool = False) -
 
 # ── Execution + validation ────────────────────────────────────────────────────
 
-def exec_prompt(task: dict) -> str:
-    criteria = '\n'.join(f'- {a}' for a in task['acceptance'])
-    ctx = f"\nRead first: {', '.join(task['context'])}." if task['context'] else ''
-    action = ('Write findings to logs/research/{id}.md. Include ≥3 evidence-backed findings, '
-              'each with a testable prediction.').format(id=task['id']) \
-             if task['type'] == 'research' else 'Make all required file changes.'
+def exec_prompt(task: dict, wt: Path) -> str:
+    scenarios  = '\n'.join(f'- {s}' for s in task['scenarios'])
+    artifacts  = '\n'.join(f'- {a}' for a in task['artifacts'])
+    produces   = task['produces']
+
+    # Pre-load context files — no cold reads during execution
+    ctx_blocks: list[str] = []
+    for rel in task['context']:
+        full = wt / rel
+        if full.exists():
+            content = full.read_text(encoding='utf-8', errors='replace')[:3000]
+            ctx_blocks.append(f'### {rel}\n```\n{content}\n```')
+        else:
+            ctx_blocks.append(f'### {rel}\n(not found — create it)')
+    ctx_section = ('\n\n## Context Files\n\n' + '\n\n'.join(ctx_blocks)) if ctx_blocks else ''
+
+    artifact_section = (f'\n\n## Required Artifacts\nYou MUST produce exactly these files:\n{artifacts}'
+                        if artifacts else '')
+    produces_section = (f'\n\n## Produces (downstream contract)\n{produces}'
+                        if produces and produces.lower() != 'none' else '')
+
+    if task['type'] == 'research':
+        action = ('Write findings to logs/research/{id}.md. '
+                  'Include ≥3 evidence-backed findings, each with a testable prediction.'
+                  ).format(id=task['id'])
+    else:
+        action = 'Make all required file changes to satisfy every scenario.'
+
     return (f"OMS work task ({task['id']}): {task['spec']}\n\n"
-            f"Acceptance criteria:\n{criteria}\n{ctx}\n\n{action}\n\n"
+            f"## Behavioral Scenarios\n{scenarios}"
+            f"{artifact_section}{produces_section}{ctx_section}\n\n"
+            f"{action}\n\n"
             "Output a 1–2 sentence summary when complete.")
 
 
 def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[bool, str]:
     role = VALIDATOR_ROLE.get(validator.lower(),
-                               f'Validate as {validator}: confirm acceptance criteria are met.')
-    criteria = '\n'.join(f'- {a}' for a in task['acceptance'])
-    prompt = (f"Task ({task['id']}): {task['spec']}\n\nAcceptance:\n{criteria}\n\n"
+                               f'Validate as {validator}: confirm all scenarios are met.')
+    scenarios = '\n'.join(f'- {s}' for s in task['scenarios'])
+    artifacts = '\n'.join(f'- {a}' for a in task['artifacts'])
+    artifact_section = f'\n\nRequired artifacts:\n{artifacts}' if artifacts else ''
+    prompt = (f"Task ({task['id']}): {task['spec']}\n\nScenarios:\n{scenarios}{artifact_section}\n\n"
               f"Work summary: {summary}\n\nYour role: {role}\n\n"
               "Output EXACTLY: PASS — [reason]  OR  FAIL — [reason]. Nothing else.")
     out, _ = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
@@ -179,7 +210,7 @@ def execute_task(task: dict, project_path: Path, dry_run: bool) -> tuple[bool, s
 
     wt, branch = create_worktree(project_path, task['id'])
     try:
-        work_out, code = run_claude(exec_prompt(task), wt, 'claude-sonnet-4-6', allow_writes=True)
+        work_out, code = run_claude(exec_prompt(task, wt), wt, 'claude-sonnet-4-6', allow_writes=True)
         if code != 0:
             remove_worktree(project_path, task['id'])
             return False, f'CTO-STOP: claude execution failed (exit {code})'
@@ -187,12 +218,30 @@ def execute_task(task: dict, project_path: Path, dry_run: bool) -> tuple[bool, s
         summary = work_out[:300].replace('\n', ' ').strip()
         print(f'[oms-work]   exec: {summary[:120]}', flush=True)
 
+        # Hallucination guard — impl tasks must produce file changes
+        if task['type'] != 'research':
+            gs = subprocess.run(['git', 'status', '--porcelain'],
+                                capture_output=True, text=True, cwd=wt)
+            if not gs.stdout.strip():
+                remove_worktree(project_path, task['id'])
+                return False, f'CTO-STOP: hallucination — no files changed in worktree'
+
         for validator in task['validation']:
             passed, reason = validate_step(validator, task, summary, wt)
             print(f'[oms-work]   {"✓" if passed else "✗"} {validator}: {reason[:100]}', flush=True)
             if not passed:
                 stop_type = 'CTO-STOP' if validator == 'cto' else 'FAIL'
                 return False, f'{stop_type} ({validator}): {reason[:200]} | branch: {branch}'
+
+        # Shell verification — deterministic command-tier check
+        for cmd in task['verify']:
+            vr = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+                                cwd=wt, timeout=120)
+            label = '✓' if vr.returncode == 0 else '✗'
+            print(f'[oms-work]   {label} verify `{cmd[:60]}`', flush=True)
+            if vr.returncode != 0:
+                output = (vr.stdout + vr.stderr)[-300:].strip()
+                return False, f'FAIL (verify `{cmd}`): {output} | branch: {branch}'
 
         commit_worktree(wt, task['id'], task['title'])
         remove_worktree(project_path, task['id'])

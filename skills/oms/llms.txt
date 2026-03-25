@@ -123,6 +123,13 @@ Max 3 steps. Research + impl in one task = split it, use Depends to link them.
 **Write to `[project]/.claude/cleared-queue.md`** using schema from
 `~/.claude/agents/oms-work/task-schema.md`. Append; do not overwrite existing tasks.
 
+Required fields per task (queue gate rejects incomplete tasks):
+- `Spec:` — `The system SHALL [verb] [object] so that [outcome].` — one correct interpretation
+- `Scenarios:` — `GIVEN [pre] WHEN [trigger] THEN [outcome]` pipe-separated — QA tests each one
+- `Artifacts:` — `path/file — exports: x, y` pipe-separated — executor produces exactly these files
+- `Produces:` — what downstream tasks' `Context:` fields depend on (or `none`)
+- `Verify:` — shell commands pipe-separated — run after agent validation (or omit if none)
+
 **TASK-NNN numbering**: read existing queue, increment highest N by 1. Start at TASK-001 if empty.
 
 **Report to CEO:**
