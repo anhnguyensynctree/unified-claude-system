@@ -31,9 +31,14 @@ Derived from `Activated` at queue-write time. Written explicitly into each task.
 | Activated includes | Validation chain |
 |---|---|
 | Any researcher agent | researcher → cro → cpo |
-| Any engineering agent (dev, qa, frontend, backend, etc.) | dev → qa → em |
+| Any researcher + product-manager | researcher → cro → cpo → pm |
+| Engineering, internal (refactor / infra / bug) | dev → qa → em |
+| Engineering, user-facing feature | dev → qa → pm → em |
 | CTO or infra-only work | dev → cto |
-| Research outputs feeding impl | researcher → cro → cpo → dev → qa → em |
+| Research outputs feeding impl | researcher → cro → cpo → dev → qa → pm → em |
+
+**PM position**: between QA and EM on user-facing tasks. QA checks it works — PM checks it
+matches product intent — EM gives final approval. Omit PM on internal-only tasks.
 
 **Extensibility**: new agent types (e.g. game-dev, ml-engineer) are added to `Activated`
 and derive their own chain position. No hardcoded modes — chain follows activated agents.

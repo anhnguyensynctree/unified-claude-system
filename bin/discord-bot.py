@@ -1177,7 +1177,7 @@ async def handle_project_message(
         return
 
     # !work — run cleared-queue tasks for this project (background-safe)
-    if content.strip().lower() in ("!work", "/work"):
+    if content.strip().lower() in ("!work", "/work", "!oms-work", "/oms-work"):
         queue_path = Path(proj.get("path", "")) / ".claude" / "cleared-queue.md"
         if not queue_path.exists():
             await message.reply(
