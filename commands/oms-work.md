@@ -1,9 +1,11 @@
 # oms-work — Execute Cleared Task Queue
 
 Runs pre-cleared tasks from `[project]/.claude/cleared-queue.md`.
-No CEO gate. Validation chain runs per task. One stop: `cto-stop` (surfaces next daily session).
+No CEO gate. Each task runs in an isolated git worktree. Validation chain runs per task.
+One stop: `cto-stop` (branch left open, surfaces next daily session).
 
 Schema: `~/.claude/agents/oms-work/task-schema.md`
+Background trigger: send `!work` in any project Discord channel.
 
 ---
 
@@ -83,8 +85,15 @@ Instructions:
 
 After each subagent returns:
 
-**If DONE**: update `cleared-queue.md` — set Status: done, add summary as Notes.
-**If CTO-STOP**: update `cleared-queue.md` — set Status: cto-stop, add stop reason as Notes.
+**If DONE**:
+- Commit all changes in the worktree: `git add -A && git commit -m "oms-work: TASK-NNN — title"`
+- Remove the worktree (branch stays for merge): `git worktree remove --force .claude/worktrees/TASK-NNN`
+- Update `cleared-queue.md`: Status: done, Notes: branch name
+
+**If CTO-STOP**:
+- Leave the worktree open — CTO or CEO reviews the branch directly
+- Update `cleared-queue.md`: Status: cto-stop, Notes: stop reason + branch name
+- Do NOT merge. Do NOT delete the worktree.
 
 After a task completes (done), check if any blocked tasks are now unblocked.
 If yes: run them immediately (they become the next wave of parallel agents).
@@ -110,3 +119,14 @@ Next daily session: resolve TASK-003 (CTO-STOP) before requeueing.
 ```
 
 If everything passed: "Queue clear — all tasks done."
+
+## Merge guidance (after /oms-work completes)
+
+Done tasks have committed branches named `oms-work/task-nnn`.
+To merge all done tasks into main:
+```
+git merge oms-work/task-001 oms-work/task-002 ...
+```
+Or review each branch first: `git diff main oms-work/task-001`
+
+CTO-stop branches: do not merge. Resolve at next daily session, re-spec the task, re-queue.

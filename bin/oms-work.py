@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-oms-work — sequential MVP executor for pre-cleared OMS tasks.
+oms-work — execute pre-cleared OMS tasks with worktree isolation.
 
-Usage: oms-work.py <project-slug> [--dry-run] [--task TASK-NNN]
+Usage:
+  oms-work.py <project-slug>              # run first ready task
+  oms-work.py <project-slug> --all        # run all ready tasks (background mode)
+  oms-work.py <project-slug> --dry-run    # show plan without executing
+  oms-work.py <project-slug> TASK-NNN     # run specific task
 
-Reads [project]/.claude/cleared-queue.md, executes first ready task,
-runs validation chain, updates queue status.
-
-Exit 0 = task processed (done or cto-stop). Exit 1 = queue empty or fatal.
+Each task gets its own git worktree (branch: oms-work/task-nnn).
+On done: commit + remove worktree. On cto-stop: leave worktree open for review.
 """
 import json
 import re
@@ -15,19 +17,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONFIG    = Path.home() / '.claude' / 'oms-config.json'
-CLAUDE    = Path.home() / '.local' / 'bin' / 'claude'
-TEMPLATE  = Path.home() / '.claude' / 'agents' / 'oms-work' / 'cleared-queue-template.md'
+CONFIG   = Path.home() / '.claude' / 'oms-config.json'
+CLAUDE   = Path.home() / '.local' / 'bin' / 'claude'
+TEMPLATE = Path.home() / '.claude' / 'agents' / 'oms-work' / 'cleared-queue-template.md'
 
 VALIDATOR_ROLE: dict[str, str] = {
-    'dev':        'Review this implementation for correctness, completeness, and code quality.',
-    'qa':         'Test against each acceptance criterion. Identify any failing cases.',
-    'em':         'Final approval: confirm the spec is met and output is ready to merge.',
-    'researcher': 'Evaluate research quality: methodology sound, findings complete and supported.',
-    'cro':        'Validate findings are rigorous, aligned with the research question, and actionable.',
-    'cpo':        'Confirm the output creates clear product direction or actionable roadmap items.',
-    'cto':        'Review for architectural soundness. Name any technical risk that blocks merging.',
-    'pm':         'Confirm requirements coverage: output matches spec and acceptance criteria fully.',
+    'dev':        'Review for correctness, completeness, and code quality against acceptance criteria.',
+    'qa':         'Test each acceptance criterion. Identify any failing cases or edge cases.',
+    'em':         'Final approval: spec met, all criteria passed, ready to merge.',
+    'researcher': 'Evaluate methodology soundness and finding completeness.',
+    'cro':        'Validate findings are rigorous, aligned with research question, and actionable.',
+    'cpo':        'Confirm output creates clear product direction or actionable roadmap items.',
+    'cto':        'Review for architectural soundness. Name any blocking technical risk.',
+    'pm':         'Confirm requirements coverage: output matches spec and acceptance criteria.',
 }
 
 
@@ -40,27 +42,27 @@ FIELD       = re.compile(r'^- \*\*([^:]+):\*\* (.+)$', re.MULTILINE)
 def parse_queue(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    text = path.read_text()
-    # Split on task headers, keeping header as part of chunk
-    chunks = re.split(r'(?=^## TASK-)', text, flags=re.MULTILINE)
+    chunks = re.split(r'(?=^## TASK-)', path.read_text(), flags=re.MULTILINE)
     tasks = []
     for chunk in chunks:
         m = TASK_HEADER.match(chunk)
         if not m:
             continue
-        fields = dict(FIELD.findall(chunk))
-        deps_raw = fields.get('Depends', 'none').strip()
+        f = dict(FIELD.findall(chunk))
+        deps_raw = f.get('Depends', 'none').strip()
         tasks.append({
             'id':         m.group(1),
             'title':      m.group(2).strip(),
-            'status':     fields.get('Status', 'queued').strip().lower(),
-            'type':       fields.get('Type', 'impl').strip().lower(),
-            'spec':       fields.get('Spec', '').strip(),
-            'acceptance': [a.strip() for a in fields.get('Acceptance', '').split('|') if a.strip()],
-            'context':    [c.strip() for c in fields.get('Context', '').split(',') if c.strip() and c.strip() != 'none'],
-            'activated':  [a.strip() for a in fields.get('Activated', '').split(',') if a.strip()],
-            'validation': [v.strip() for v in re.split(r'\s*→\s*', fields.get('Validation', '')) if v.strip()],
-            'depends':    [] if deps_raw.lower() == 'none' else [d.strip() for d in deps_raw.split(',') if d.strip()],
+            'status':     f.get('Status', 'queued').strip().lower(),
+            'type':       f.get('Type', 'impl').strip().lower(),
+            'spec':       f.get('Spec', '').strip(),
+            'acceptance': [a.strip() for a in f.get('Acceptance', '').split('|') if a.strip()],
+            'context':    [c.strip() for c in f.get('Context', '').split(',')
+                           if c.strip() and c.strip() != 'none'],
+            'validation': [v.strip() for v in re.split(r'\s*→\s*', f.get('Validation', ''))
+                           if v.strip()],
+            'depends':    [] if deps_raw.lower() == 'none'
+                          else [d.strip() for d in deps_raw.split(',') if d.strip()],
         })
     return tasks
 
@@ -75,9 +77,13 @@ def find_ready(tasks: list[dict], target_id: str | None = None) -> dict | None:
     return None
 
 
-def update_status(path: Path, task_id: str, status: str, notes: str = '') -> None:
-    text = path.read_text()
+def find_all_ready(tasks: list[dict]) -> list[dict]:
+    done = {t['id'] for t in tasks if t['status'] == 'done'}
+    return [t for t in tasks
+            if t['status'] == 'queued' and all(d in done for d in t['depends'])]
 
+
+def update_status(path: Path, task_id: str, status: str, notes: str = '') -> None:
     def replacer(m: re.Match) -> str:
         block = m.group(0)
         block = re.sub(r'(- \*\*Status:\*\*) \S+', rf'\1 {status}', block)
@@ -85,12 +91,43 @@ def update_status(path: Path, task_id: str, status: str, notes: str = '') -> Non
             if '**Notes:**' in block:
                 block = re.sub(r'(- \*\*Notes:\*\*) .+', rf'\1 {notes}', block)
             else:
-                # insert before first blank line or end
                 block = block.rstrip('\n') + f'\n- **Notes:** {notes}\n'
         return block
-
     pattern = rf'(## {re.escape(task_id)} — .+?)(?=\n## TASK-|\Z)'
-    path.write_text(re.sub(pattern, replacer, text, flags=re.DOTALL))
+    path.write_text(re.sub(pattern, replacer, path.read_text(), flags=re.DOTALL))
+
+
+# ── Worktree management ───────────────────────────────────────────────────────
+
+def _wt_path(project_path: Path, task_id: str) -> Path:
+    return project_path / '.claude' / 'worktrees' / task_id
+
+
+def create_worktree(project_path: Path, task_id: str) -> tuple[Path, str]:
+    branch = f'oms-work/{task_id.lower()}'
+    wt = _wt_path(project_path, task_id)
+    wt.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(['git', 'worktree', 'add', str(wt), '-b', branch, 'HEAD'],
+                       capture_output=True, text=True, cwd=project_path)
+    if r.returncode != 0:
+        # Branch exists from prior attempt — reuse
+        subprocess.run(['git', 'worktree', 'add', str(wt), branch],
+                       capture_output=True, cwd=project_path)
+    return wt, branch
+
+
+def commit_worktree(wt: Path, task_id: str, title: str) -> bool:
+    subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
+    r = subprocess.run(['git', 'commit', '--allow-empty',
+                        '-m', f'oms-work: {task_id} — {title}'],
+                       capture_output=True, text=True, cwd=wt)
+    return r.returncode == 0
+
+
+def remove_worktree(project_path: Path, task_id: str) -> None:
+    subprocess.run(['git', 'worktree', 'remove', '--force',
+                    str(_wt_path(project_path, task_id))],
+                   capture_output=True, cwd=project_path)
 
 
 # ── Claude invocation ─────────────────────────────────────────────────────────
@@ -99,98 +136,87 @@ def run_claude(prompt: str, cwd: Path, model: str, allow_writes: bool = False) -
     args = [str(CLAUDE), '--print', '--output-format', 'json', '--model', model, '-p', prompt]
     if allow_writes:
         args.append('--dangerously-skip-permissions')
-    result = subprocess.run(args, capture_output=True, text=True, cwd=cwd, timeout=600)
-    if result.returncode != 0:
-        print(f'[oms-work] claude exit {result.returncode}: {result.stderr[:200]}', file=sys.stderr)
-        return '', result.returncode
+    r = subprocess.run(args, capture_output=True, text=True, cwd=cwd, timeout=600)
+    if r.returncode != 0:
+        print(f'[oms-work] claude exit {r.returncode}: {r.stderr[:200]}', file=sys.stderr)
+        return '', r.returncode
     try:
-        data = json.loads(result.stdout)
+        data = json.loads(r.stdout)
         return data.get('result') or data.get('content') or '', 0
     except Exception:
-        return result.stdout.strip(), 0
+        return r.stdout.strip(), 0
 
 
 # ── Execution + validation ────────────────────────────────────────────────────
 
 def exec_prompt(task: dict) -> str:
     criteria = '\n'.join(f'- {a}' for a in task['acceptance'])
-    ctx = f"\nRead these files first: {', '.join(task['context'])}." if task['context'] else ''
-    research_note = (
-        'Write findings to logs/research/{id}.md. Minimum: 3 evidence-backed findings, '
-        'each with a testable prediction.'
-    ).format(id=task['id']) if task['type'] == 'research' else 'Make all required file changes.'
-    return (
-        f"OMS work task ({task['id']}): {task['spec']}\n\n"
-        f"Acceptance criteria:\n{criteria}\n"
-        f"{ctx}\n\n"
-        f"{research_note}\n\n"
-        "Output a 1–2 sentence summary of what you did when complete."
-    )
+    ctx = f"\nRead first: {', '.join(task['context'])}." if task['context'] else ''
+    action = ('Write findings to logs/research/{id}.md. Include ≥3 evidence-backed findings, '
+              'each with a testable prediction.').format(id=task['id']) \
+             if task['type'] == 'research' else 'Make all required file changes.'
+    return (f"OMS work task ({task['id']}): {task['spec']}\n\n"
+            f"Acceptance criteria:\n{criteria}\n{ctx}\n\n{action}\n\n"
+            "Output a 1–2 sentence summary when complete.")
 
 
-def validate_step(validator: str, task: dict, work_summary: str, cwd: Path) -> tuple[bool, str]:
-    role = VALIDATOR_ROLE.get(validator.lower(), f'Validate as {validator}: confirm acceptance criteria are met.')
+def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[bool, str]:
+    role = VALIDATOR_ROLE.get(validator.lower(),
+                               f'Validate as {validator}: confirm acceptance criteria are met.')
     criteria = '\n'.join(f'- {a}' for a in task['acceptance'])
-    prompt = (
-        f"Task ({task['id']}): {task['spec']}\n\n"
-        f"Acceptance criteria:\n{criteria}\n\n"
-        f"Work summary: {work_summary}\n\n"
-        f"Your role: {role}\n\n"
-        "Output EXACTLY one of:\n"
-        "  PASS — [one sentence reason]\n"
-        "  FAIL — [one sentence reason]\n"
-        "Nothing else."
-    )
+    prompt = (f"Task ({task['id']}): {task['spec']}\n\nAcceptance:\n{criteria}\n\n"
+              f"Work summary: {summary}\n\nYour role: {role}\n\n"
+              "Output EXACTLY: PASS — [reason]  OR  FAIL — [reason]. Nothing else.")
     out, _ = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
-    first_line = out.strip().split('\n')[0].upper()
-    passed = first_line.startswith('PASS')
-    return passed, out.strip()
+    return out.strip().upper().startswith('PASS'), out.strip()
 
 
 def execute_task(task: dict, project_path: Path, dry_run: bool) -> tuple[bool, str]:
     print(f'\n[oms-work] ▶ {task["id"]} — {task["title"]}', flush=True)
-
     if dry_run:
         print(f'[oms-work]   DRY RUN: {task["spec"]}')
-        chain_str = ' → '.join(task['validation'])
-        print(f'[oms-work]   Validation chain: {chain_str}')
+        print(f'[oms-work]   Chain: {" → ".join(task["validation"])}')
         return True, 'dry-run'
 
-    # Step 1: implementation
-    work_out, code = run_claude(
-        exec_prompt(task), project_path,
-        model='claude-sonnet-4-6', allow_writes=True,
-    )
-    if code != 0:
-        return False, f'CTO-STOP: execution failed (claude exit {code})'
+    wt, branch = create_worktree(project_path, task['id'])
+    try:
+        work_out, code = run_claude(exec_prompt(task), wt, 'claude-sonnet-4-6', allow_writes=True)
+        if code != 0:
+            remove_worktree(project_path, task['id'])
+            return False, f'CTO-STOP: claude execution failed (exit {code})'
 
-    summary = work_out[:300].replace('\n', ' ').strip()
-    print(f'[oms-work]   exec: {summary[:120]}', flush=True)
+        summary = work_out[:300].replace('\n', ' ').strip()
+        print(f'[oms-work]   exec: {summary[:120]}', flush=True)
 
-    # Step 2: validation chain
-    for validator in task['validation']:
-        passed, reason = validate_step(validator, task, summary, project_path)
-        marker = '✓' if passed else '✗'
-        print(f'[oms-work]   {marker} {validator}: {reason[:100]}', flush=True)
-        if not passed:
-            stop = 'CTO-STOP' if validator == 'cto' else 'FAIL'
-            return False, f'{stop} ({validator}): {reason[:200]}'
+        for validator in task['validation']:
+            passed, reason = validate_step(validator, task, summary, wt)
+            print(f'[oms-work]   {"✓" if passed else "✗"} {validator}: {reason[:100]}', flush=True)
+            if not passed:
+                stop_type = 'CTO-STOP' if validator == 'cto' else 'FAIL'
+                return False, f'{stop_type} ({validator}): {reason[:200]} | branch: {branch}'
 
-    return True, summary[:200]
+        commit_worktree(wt, task['id'], task['title'])
+        remove_worktree(project_path, task['id'])
+        return True, f'{summary[:180]} | branch: {branch} — merge when ready'
+
+    except Exception as e:
+        remove_worktree(project_path, task['id'])
+        return False, f'CTO-STOP: exception — {e}'
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print('Usage: oms-work.py <project-slug> [--dry-run] [--task TASK-NNN]', file=sys.stderr)
+        print('Usage: oms-work.py <project-slug> [--all] [--dry-run] [TASK-NNN]', file=sys.stderr)
         sys.exit(1)
 
     slug      = sys.argv[1]
+    run_all   = '--all' in sys.argv
     dry_run   = '--dry-run' in sys.argv
     target_id = next((a for a in sys.argv[2:] if a.startswith('TASK-')), None)
 
-    cfg = json.loads(CONFIG.read_text())
+    cfg  = json.loads(CONFIG.read_text())
     proj = cfg.get('projects', {}).get(slug)
     if not proj:
         print(f'[oms-work] Unknown project: {slug}', file=sys.stderr)
@@ -199,40 +225,47 @@ def main() -> None:
     project_path = Path(proj['path'])
     queue_path   = project_path / '.claude' / 'cleared-queue.md'
 
-    # Bootstrap empty queue from template if needed
     if not queue_path.exists() and TEMPLATE.exists():
         queue_path.write_text(TEMPLATE.read_text())
-        print(f'[oms-work] Created cleared-queue.md from template at {queue_path}')
+        print(f'[oms-work] Created queue at {queue_path}')
 
-    tasks = parse_queue(queue_path)
-    if not tasks:
-        print('[oms-work] Queue empty or not found.')
-        sys.exit(1)
+    results: list[tuple[str, str, bool]] = []  # (id, title, passed)
 
-    # Summary
-    queued   = [t for t in tasks if t['status'] == 'queued']
-    done_ids = {t['id'] for t in tasks if t['status'] == 'done'}
-    ready    = [t for t in queued if all(d in done_ids for d in t['depends'])]
-    blocked  = [t for t in queued if not all(d in done_ids for d in t['depends'])]
-    print(f'[oms-work] Queue: {len(ready)} ready, {len(blocked)} blocked, {len(done_ids)} done')
+    while True:
+        tasks    = parse_queue(queue_path)
+        done_ids = {t['id'] for t in tasks if t['status'] == 'done'}
+        ready    = find_all_ready(tasks)
+        blocked  = [t for t in tasks if t['status'] == 'queued' and t not in ready]
+        print(f'[oms-work] Queue: {len(ready)} ready, {len(blocked)} blocked, '
+              f'{len(done_ids)} done', flush=True)
 
-    task = find_ready(tasks, target_id)
-    if not task:
-        msg = f'task {target_id} not ready' if target_id else 'no ready tasks'
-        print(f'[oms-work] {msg}')
-        sys.exit(1)
+        task = find_ready(tasks, target_id) if target_id else (ready[0] if ready else None)
+        if not task:
+            break
 
-    update_status(queue_path, task['id'], 'in-progress')
-    passed, notes = execute_task(task, project_path, dry_run)
+        update_status(queue_path, task['id'], 'in-progress')
+        passed, notes = execute_task(task, project_path, dry_run)
+        final = 'done' if passed else 'cto-stop'
+        update_status(queue_path, task['id'], final, notes)
+        results.append((task['id'], task['title'], passed))
 
-    final_status = 'done' if passed else 'cto-stop'
-    update_status(queue_path, task['id'], final_status, notes)
+        if not run_all or not passed and 'CTO-STOP' in notes:
+            break  # single-task mode, or CTO-stop: stop this chain
 
-    if passed:
-        print(f'\n## OMS Work\n✓ {task["id"]} — {task["title"]} complete.\n{notes}')
-    else:
-        print(f'\n## OMS Work\n⚑ {task["id"]} — {task["title"]} blocked.\n{notes}')
+        if not run_all:
+            break
 
+    # Report
+    done_r  = [(i, t) for i, t, p in results if p]
+    stops   = [(i, t) for i, t, p in results if not p]
+    lines   = ['## OMS Work']
+    for i, t in done_r:
+        lines.append(f'✓ {i} — {t}')
+    for i, t in stops:
+        lines.append(f'⚑ {i} — {t} [cto-stop]')
+    if not results:
+        lines.append('No tasks ran.')
+    print('\n'.join(lines))
     sys.exit(0)
 
 

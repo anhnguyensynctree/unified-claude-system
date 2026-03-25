@@ -1176,6 +1176,28 @@ async def handle_project_message(
         await handle_undo(message, slug, content, reply_target=message)
         return
 
+    # !work — run cleared-queue tasks for this project (background-safe)
+    if content.strip().lower() in ("!work", "/work"):
+        queue_path = Path(proj.get("path", "")) / ".claude" / "cleared-queue.md"
+        if not queue_path.exists():
+            await message.reply(
+                "No cleared-queue.md found. Run /oms session first to generate tasks.",
+                mention_author=False,
+            )
+            return
+        await message.add_reaction("⚙️")
+        proc = await asyncio.create_subprocess_exec(
+            "python3", str(Path.home() / ".claude" / "bin" / "oms-work.py"), slug, "--all",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=7200)
+        output = stdout.decode().strip()
+        if bot.user:
+            await message.remove_reaction("⚙️", bot.user)
+        await channel.send(output or f"[{slug}] oms-work: no tasks ran")
+        return
+
     # /oms with no task → auto-pick from backlog
     bare_oms = content.strip().lower() in ("/oms", "!oms", "/oms ", "!oms ")
     if bare_oms or content.lower() in ("continue", "yes", "y", "approved", "approve"):

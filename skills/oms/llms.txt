@@ -62,6 +62,7 @@ Step 5   Log to logs/tasks/[task-id].md
 Step 6   Trainer (always) — evaluates router + agents at tier scope
 Step 7   Context Optimizer (always) — lightweight post-task check; full audit at 10-task threshold, milestone, or /oms audit
 Step 8   CEO feedback + scenario capture
+Step 8.5 Queue Commit — classify action_items[], write executable tasks to cleared-queue.md
 ```
 
 ## Step 7 — Context Optimizer
@@ -92,6 +93,43 @@ Context Optimizer always runs after Trainer. Two modes based on state.
 **`/oms audit` (on-demand)**:
 - Always runs full audit mode regardless of task count
 - CEO sees full audit output including recommendations
+
+## Step 8.5 — Queue Commit
+
+Fires after CEO feedback confirms the synthesis. Converts `action_items[]` into cleared tasks.
+
+**Classify each action item:**
+- `executable` — impl or research, scope fits one Claude session, no open decisions → write to queue
+- `strategic` — requires a CEO/CTO decision before work begins → log to `ceo-decisions.ctx.md`, do not queue
+
+**Queue gate — apply before writing each task:**
+- [ ] Spec has one correct interpretation
+- [ ] Acceptance criteria are testable (deterministic pass/fail)
+- [ ] All context files exist and are referenced
+- [ ] No decision needed that would affect other queued tasks
+- [ ] Scope is small-to-medium (completable in one Claude session)
+
+If any box fails: surface to CEO now for re-spec. Do not write to queue until all boxes pass.
+
+**Derive validation chain from activated agents:**
+| Activated | Chain |
+|---|---|
+| Any researcher agent | researcher → cro → cpo |
+| Any engineering agent | dev → qa → em |
+| CTO / infra | dev → cto |
+| Research + impl combined | researcher → cro → cpo → dev → qa → em |
+
+**Write to `[project]/.claude/cleared-queue.md`** using schema from
+`~/.claude/agents/oms-work/task-schema.md`. Append; do not overwrite existing tasks.
+
+**TASK-NNN numbering**: read existing queue, increment highest N by 1. Start at TASK-001 if empty.
+
+**Report to CEO:**
+```
+Queue Commit: X tasks queued for /oms-work, Y items held (strategic decisions).
+Queued: TASK-NNN — title, TASK-NNN — title
+Held: [item] — needs [decision] before queueing
+```
 
 ## Engine Roles
 
