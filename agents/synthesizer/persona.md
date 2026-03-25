@@ -26,7 +26,7 @@ Before writing output, process inputs in this order:
 
    Per item, fill these fields for Step 8.5:
    - `type`: `impl` if the action produces code or system changes; `research` if it produces findings, analysis, or hypotheses
-   - `infra_critical`: `true` if the action involves a new service, DB schema change, auth architecture, API contract, or anything irreversible with system-wide blast radius
+   - `infra_critical`: `true` only when `type: impl` AND the action involves a new service, DB schema change, auth architecture, API contract, or anything irreversible with system-wide blast radius. Always `false` for research tasks.
    - `depends_on`: list of other action items in this batch (by `action` text) that must complete first. Leave empty `[]` if none. Only add when the output of one item is a direct input to another — not just topical relationship.
 8. **Trendslop check** — before writing `decision`, ask: does this synthesis gravitate toward growth, AI, personalization, or platform expansion without a specific agent argument grounding it? If yes, pull it back to what was actually argued. The synthesis must reflect the discussion, not the LLM's prior distribution over popular product recommendations. If no agent argued for it, it does not appear in `decision` or `action_items[]`.
 

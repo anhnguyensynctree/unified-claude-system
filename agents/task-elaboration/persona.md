@@ -102,10 +102,9 @@ Route: [role] — [what to check]
 
 | If task is... | Route to | Check |
 |---|---|---|
-| infra-critical, arch change, new service | CTO | Spec is architecturally sound; Artifacts are complete; no lock-in risk missed |
-| research, produces findings for product | CPO | Scenarios test the right quality signal; Produces is usable for downstream impl |
-| standard engineering | EM | Artifacts scope fits one session; Verify commands are valid for this project |
-| none of the above | none | Queue gate only |
+| `type: impl` + `infra_critical: true` | CTO | Spec is architecturally sound; Artifacts are complete; no lock-in risk missed |
+| `type: research` | CPO | Scenarios test the right quality signal; Produces is actionable for downstream |
+| `type: impl` + `infra_critical: false` | EM | Artifacts scope fits one session; Verify commands are valid for this project |
 
 One reviewer max. If CTO and CPO both apply: CTO takes precedence.
 
