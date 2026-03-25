@@ -102,9 +102,16 @@ Fires after CEO feedback confirms the synthesis. Four sub-steps: Classify → El
 
 ### Sub-step 1 — Classify
 
+Synthesizer now tags each action_item with `type`, `infra_critical`, and `depends_on` — use these directly.
+
 For each action_item[]:
-- `executable` — impl or research, scope fits one Claude session, no open decisions → proceed to Elaborate
+- `executable` — type is impl or research, scope fits one Claude session, no open decisions → proceed to Elaborate
 - `strategic` — requires CEO/CTO decision before work begins → log to `ceo-decisions.ctx.md`, skip
+
+**Chain pre-check** (before Elaborate): if `depends_on` is set, apply the chain decision rule
+(see `~/.claude/agents/task-elaboration/persona.md`):
+- Value substitution → both tasks proceed to Elaborate; impl gets `Depends:` set
+- Direction selection → research task proceeds; impl is held as strategic pending research findings
 
 ---
 

@@ -120,3 +120,26 @@ Flag for split (do not produce a single task) when:
 - Estimated scope exceeds one Claude session
 
 Output two separate task blocks with `Depends: TASK-NNN` on the second.
+
+---
+
+## Chain decision rule — value substitution vs direction selection
+
+When `depends_on` is set on an action_item (research feeds an impl), ask:
+
+> "Could the research output invalidate or redirect the impl?"
+
+**Value substitution → auto-chain (safe)**
+Research only fills in a specific value the impl already needs.
+CEO already approved the impl; research just provides the parameter.
+Examples: "find the best send-time" → impl uses that time. "benchmark which cache TTL" → impl uses that TTL.
+→ Produce both task blocks with `Depends:`. Wire `Produces:` → `Context:` explicitly.
+
+**Direction selection → hold impl, flag strategic**
+Research might find that the impl shouldn't happen at all, or should be a completely different approach.
+The impl cannot be specified until research concludes and CEO chooses a direction.
+Examples: "research whether notifications or email works better" → impl depends on which channel CEO picks.
+"research 3 auth strategies" → impl approach is unknown until CEO decides.
+→ Produce the research task only. Add a note:
+`HOLD: [impl description] — queued after CEO reviews research findings`
+Log the held impl to `ceo-decisions.ctx.md`.

@@ -23,6 +23,11 @@ Before writing output, process inputs in this order:
 5. **Check Domain Lead override** — if the synthesis overrides the Domain Lead's position on a risk-related claim, `domain_lead_overridden` must be `true` with an explicit `domain_lead_override_reason`. A synthesis that silently ignores the Domain Lead fails M2.
 6. **Check Primary Recommender alignment** — did the synthesis align with the Primary Recommender's core contribution? Note any divergence.
 7. **Draft action items** — concrete, assignable, ordered. Each action item names the responsible agent/role. Vague actions ("look into X") are not permitted.
+
+   Per item, fill these fields for Step 8.5:
+   - `type`: `impl` if the action produces code or system changes; `research` if it produces findings, analysis, or hypotheses
+   - `infra_critical`: `true` if the action involves a new service, DB schema change, auth architecture, API contract, or anything irreversible with system-wide blast radius
+   - `depends_on`: list of other action items in this batch (by `action` text) that must complete first. Leave empty `[]` if none. Only add when the output of one item is a direct input to another — not just topical relationship.
 8. **Trendslop check** — before writing `decision`, ask: does this synthesis gravitate toward growth, AI, personalization, or platform expansion without a specific agent argument grounding it? If yes, pull it back to what was actually argued. The synthesis must reflect the discussion, not the LLM's prior distribution over popular product recommendations. If no agent argued for it, it does not appear in `decision` or `action_items[]`.
 
 ## Dissent Preservation Rule
@@ -134,7 +139,14 @@ Respond with valid JSON only.
     "claim traceable to [agent] Round [N]: [specific claim]"
   ],
   "action_items": [
-    { "action": "specific concrete action", "owner": "backend-developer", "priority": "high | medium | low" }
+    {
+      "action": "specific concrete action",
+      "owner": "backend-developer",
+      "priority": "high | medium | low",
+      "type": "impl | research",
+      "infra_critical": false,
+      "depends_on": []
+    }
   ],
   "dissent": [
     {
