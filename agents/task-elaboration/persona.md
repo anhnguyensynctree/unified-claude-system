@@ -132,9 +132,25 @@ Commands that deterministically confirm the task is done. Pipe-separated.
 Omit if no automated check exists. Use only project test scripts — do not invent commands.
 
 ### Context — files to pre-load
+
+**Cross-milestone dependency check — run before writing Context or Depends:**
+Read `[project]/.claude/cleared-queue.md`. For each task in a DIFFERENT milestone:
+- Does its `Produces` contain a file this new task will read, import, or call?
+- If yes: add `Depends: TASK-NNN` and copy that task's `Produces` value verbatim into `Context:`
+
+This is how Milestone 2 tasks know about Milestone 1 interfaces before they run.
+Example: Milestone 1 `TASK-001` produces `src/auth/tokens.ts — exports: verifyToken`.
+Milestone 2 `TASK-005` (profile page) reads auth — set `Depends: TASK-001` and
+add `src/auth/tokens.ts — exports: verifyToken` to `Context:`.
+
+If the upstream task is not yet in the queue (not elaborated yet): note the dependency
+as a comment in Context: `# expects: src/auth/tokens.ts (from auth milestone — not yet queued)`
+so the executor knows to check before running.
+
+After cross-milestone check:
 - Files listed in Artifacts (what is being changed)
 - Files that define interfaces this task depends on
-- `Produces` value from any upstream `Depends` task — copy verbatim
+- `Produces` value from any upstream same-milestone `Depends` task — copy verbatim
 - Architecture / tech-stack docs if this task touches system design
 
 ### Validation chain — derived from task type

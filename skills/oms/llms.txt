@@ -55,12 +55,13 @@ Check for `.claude/agents/company-belief.ctx.md`:
 
 Queue state check (always — runs after bootstrap checks):
 - Read `[project]/.claude/cleared-queue.md`
-- If `cto-stop` tasks exist → brief CEO before accepting new work:
-  `"⚑ N tasks blocked: TASK-NNN (title), TASK-NNN (title). Re-spec before new work? [yes/skip]"`
-  - yes → re-spec inline; new TASK-NNN written; oms-work picks them up next run
-  - skip → proceed to new task
-- If no `queued` tasks remain (queue empty or all done/cto-stop) AND CEO provides no task →
-  auto-trigger exec session (CPO + CTO + CFO + CLO) to pick ONE milestone and queue its tasks
+- If `cto-stop` or `needs-review` tasks exist → brief CEO before accepting new work:
+  `"⚑ N tasks need attention: TASK-NNN (cto-stop), TASK-NNN (needs-review — upstream interface changed)"`
+  - `cto-stop` → re-spec inline; new TASK-NNN written; oms-work picks up next run
+  - `needs-review` → CEO confirms "Context still valid → reset to queued" OR "interface changed → re-spec"
+  - skip any → proceed to new task
+- If no `queued` tasks remain (queue empty or all done/cto-stop/needs-review) AND CEO provides no task →
+  auto-trigger exec session (CPO + CTO + CFO + CLO + CRO) to pick ONE milestone and queue its tasks
   → PM gap report injected into CPO's briefing (not an active discussion agent)
   → one exec session = one milestone selected = action_items for that milestone queued
   → repeat next time queue empties

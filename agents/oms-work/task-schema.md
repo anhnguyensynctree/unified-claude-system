@@ -102,10 +102,13 @@ answer YES to all of the following:
 ```
 queued → in-progress → done
                      → cto-stop
+queued → needs-review  (set by oms-work cross-milestone dependency scan)
+needs-review → queued  (CEO confirms Context still valid)
+needs-review → [re-spec → new TASK-NNN]  (CEO confirms interface changed)
 ```
 
-- `cto-stop`: that task pauses; all other tasks continue; CEO reviews at next daily session
-- A task that hits `cto-stop` is never re-queued automatically — CEO must re-spec and re-add
+- `cto-stop`: validation or verify failed; CEO re-specs at next session; task never auto-retried
+- `needs-review`: an upstream task in a different milestone completed; oms-work detected this task's Context references that task's Produces; CEO confirms the interface is still valid before execution resumes
 
 ---
 

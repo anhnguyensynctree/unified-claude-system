@@ -127,6 +127,49 @@ def update_status(path: Path, task_id: str, status: str, notes: str = '') -> Non
     path.write_text(re.sub(pattern, replacer, path.read_text(), flags=re.DOTALL))
 
 
+# ── Cross-milestone dependency scan ───────────────────────────────────────────
+
+def _produces_paths(produces: str) -> list[str]:
+    """Extract file paths from a Produces field value."""
+    paths = []
+    for part in produces.split('|'):
+        part = part.strip()
+        path = part.split(' — ')[0].strip() if ' — ' in part else part
+        if path and path.lower() != 'none':
+            paths.append(path)
+    return paths
+
+
+def flag_downstream_tasks(queue_path: Path, completed: dict,
+                          channel_id: str) -> None:
+    """After an impl task completes, flag queued tasks in OTHER milestones
+    whose Context references this task's Produces files."""
+    if completed['type'] == 'research':
+        return  # research Produces are documents, not interfaces
+    paths = _produces_paths(completed.get('produces', 'none'))
+    if not paths:
+        return
+
+    tasks = parse_queue(queue_path)
+    for task in tasks:
+        if task['status'] != 'queued':
+            continue
+        if task['milestone'] == completed['milestone']:
+            continue  # same milestone — already handled by Depends: chain
+        if not any(p in ctx or ctx in p
+                   for p in paths for ctx in task['context']):
+            continue
+        note = (f'upstream {completed["id"]} ({completed["milestone"]}) completed — '
+                f'verify Context still matches Produces: {completed["produces"][:120]}')
+        update_status(queue_path, task['id'], 'needs-review', note)
+        msg = (f'⚠ **{task["id"]}** — {task["title"]} `needs-review`\n'
+               f'> {completed["id"]} ({completed["milestone"]}) just completed. '
+               f'Confirm this task\'s Context is still valid before running.')
+        discord.post_message(channel_id, msg)
+        print(f'[oms-work] ⚠ {task["id"]} → needs-review '
+              f'(cross-milestone dep on {completed["id"]})', flush=True)
+
+
 # ── Worktree + merge ──────────────────────────────────────────────────────────
 
 def _wt_path(project_path: Path, task_id: str) -> Path:
@@ -249,7 +292,7 @@ def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[
 
 def execute_task(task: dict, project_path: Path,
                  channel_id: str, threads_file: Path,
-                 dry_run: bool) -> tuple[bool, str]:
+                 queue_path: Path, dry_run: bool) -> tuple[bool, str]:
     print(f'\n[oms-work] ▶ {task["id"]} — {task["title"]}', flush=True)
     if dry_run:
         print(f'[oms-work]   DRY RUN: {task["spec"]}')
@@ -307,6 +350,7 @@ def execute_task(task: dict, project_path: Path,
         notes = f'{summary[:180]} | {merge_notes}'
         discord.notify_task(channel_id, threads_file, task['milestone'],
                             task['id'], task['title'], True, notes)
+        flag_downstream_tasks(queue_path, task, channel_id)
         return True, notes
 
     except Exception as e:
@@ -359,7 +403,7 @@ def main() -> None:
             break
 
         update_status(queue_path, task['id'], 'in-progress')
-        passed, notes = execute_task(task, project_path, channel_id, threads_file, dry_run)
+        passed, notes = execute_task(task, project_path, channel_id, threads_file, queue_path, dry_run)
         final = 'done' if passed else 'cto-stop'
         update_status(queue_path, task['id'], final, notes)
         results.append((task['id'], task['title'], passed))
