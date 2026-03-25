@@ -17,9 +17,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONFIG   = Path.home() / '.claude' / 'oms-config.json'
-CLAUDE   = Path.home() / '.local' / 'bin' / 'claude'
-TEMPLATE = Path.home() / '.claude' / 'agents' / 'oms-work' / 'cleared-queue-template.md'
+CONFIG        = Path.home() / '.claude' / 'oms-config.json'
+CLAUDE        = Path.home() / '.local' / 'bin' / 'claude'
+TEMPLATE      = Path.home() / '.claude' / 'agents' / 'oms-work' / 'cleared-queue-template.md'
+ELAB_LESSONS  = Path.home() / '.claude' / 'agents' / 'task-elaboration' / 'lessons.md'
 
 VALIDATOR_ROLE: dict[str, str] = {
     'dev':        'Review for correctness, completeness, and code quality against acceptance criteria.',
@@ -30,6 +31,33 @@ VALIDATOR_ROLE: dict[str, str] = {
     'cpo':        'Confirm output creates clear product direction or actionable roadmap items.',
     'cto':        'Review for architectural soundness. Name any blocking technical risk.',
 }
+
+
+# ── Spec failure logging ──────────────────────────────────────────────────────
+
+SPEC_FAILURE_SIGNALS = [
+    'ambiguous', 'unclear', 'missing scenario', 'incomplete', 'not specified',
+    'criteria', 'undefined', 'no test', 'edge case', 'not covered',
+    'missing artifact', 'wrong file', 'wrong export', 'path not found',
+]
+
+
+def _is_spec_failure(reason: str) -> bool:
+    low = reason.lower()
+    return any(sig in low for sig in SPEC_FAILURE_SIGNALS)
+
+
+def log_spec_failure(task: dict, validator: str, reason: str) -> None:
+    """Append a spec lesson to task-elaboration/lessons.md when failure is spec-related."""
+    if not _is_spec_failure(reason):
+        return
+    lesson = (f'- [{task["id"]}] {validator} FAIL — {reason[:200].strip()}'
+              f' | Spec: "{task["spec"][:120]}"')
+    try:
+        with ELAB_LESSONS.open('a') as f:
+            f.write(lesson + '\n')
+    except OSError:
+        pass  # non-fatal
 
 
 # ── Queue parsing ─────────────────────────────────────────────────────────────
@@ -230,6 +258,7 @@ def execute_task(task: dict, project_path: Path, dry_run: bool) -> tuple[bool, s
             passed, reason = validate_step(validator, task, summary, wt)
             print(f'[oms-work]   {"✓" if passed else "✗"} {validator}: {reason[:100]}', flush=True)
             if not passed:
+                log_spec_failure(task, validator, reason)
                 stop_type = 'CTO-STOP' if validator == 'cto' else 'FAIL'
                 return False, f'{stop_type} ({validator}): {reason[:200]} | branch: {branch}'
 

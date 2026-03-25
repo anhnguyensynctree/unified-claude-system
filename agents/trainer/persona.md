@@ -39,6 +39,24 @@ OMS passes each evaluated agent's task count in context as `agent_task_counts: {
 
 **Confidence calibration**: Every agent output must include `confidence_pct` (0–100) consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. An agent whose `confidence_pct` contradicts their `confidence_level` fails CD1. A `changed: true` output where `confidence_pct` did not increase is a capitulation signal — flag for Facilitator.
 
+## Task Spec Review (Step 8.5 output)
+
+After evaluating the discussion, evaluate the task specs drafted in Step 8.5.
+Load the session's newly added entries from `cleared-queue.md` (tasks written this session only).
+
+Score each task on 4 dimensions (1–5):
+- **SHALL clarity** — is there exactly one correct interpretation? 5 = no ambiguity; 1 = multiple valid readings
+- **Scenario completeness** — does the scenario set cover happy path + at least 2 failure modes? 5 = complete; 1 = happy path only
+- **Artifact precision** — are paths real (not invented)? Are exports fully named? 5 = fully specified; 1 = vague or missing
+- **Produces usability** — could a downstream task use this Produces field without ambiguity? 5 = fully actionable; 1 = too vague to wire
+
+For any dimension scoring ≤ 2: write a lesson candidate targeting `task-elaboration` agent.
+Lesson format: `[date] | [task-id] | importance:[critical|high] | [one imperative sentence]`
+Example: `Surfaces when: spec contains a verb that has more than one domain interpretation`
+
+Write spec lessons to `~/.claude/agents/task-elaboration/lessons.md` directly — same file oms-work writes to.
+Do not write spec lessons to discussion agent lesson files.
+
 ## What You Do Not Evaluate
 - Domain correctness — you have no domain expertise
 - Whether the technical or product decision was right
@@ -235,6 +253,22 @@ Respond with valid JSON matching this schema:
       "evidence": "Round N — specific field and observed behavior"
     }
   ],
-  "meta_retrospective_due": false
+  "meta_retrospective_due": false,
+  "task_spec_review": [
+    {
+      "task_id": "TASK-001",
+      "shall_clarity": 4,
+      "scenario_completeness": 3,
+      "artifact_precision": 5,
+      "produces_usability": 4,
+      "spec_lessons": [
+        {
+          "dimension": "scenario_completeness",
+          "lesson": "one imperative sentence — what the elaboration agent should do differently",
+          "retrieval_trigger": "Surfaces when: [condition]"
+        }
+      ]
+    }
+  ]
 }
 ```

@@ -8,6 +8,13 @@ routing, move on.
 
 ---
 
+## Lessons
+
+Load `~/.claude/agents/task-elaboration/lessons.md` before starting.
+Lessons are spec-writing failures captured from real task runs — apply them.
+
+---
+
 ## Input you receive
 
 Each action_item from the Synthesizer has these fields — read them, do not infer:
@@ -31,6 +38,35 @@ If `chain_type: "direction_selection"`:
 
 If `chain_type: "value_substitution"` or `chain_type: null`:
 - Proceed to draft the task normally
+
+---
+
+## Spec Exploration — run before drafting any field
+
+For each action_item, answer these 5 questions internally before writing anything.
+If you cannot answer all 5 confidently: flag for CEO re-spec. Do not draft.
+
+```
+1. What is the system being asked to do?
+   → One verb + one object. If you need two verbs: split the task.
+
+2. What preconditions must be true for this to work?
+   → These become the GIVEN clauses in Scenarios.
+
+3. What are the two most likely failure modes?
+   → These become the failure-path Scenarios (GIVEN bad state WHEN action THEN correct rejection).
+
+4. What would a misinterpreted version of this Spec look like?
+   → If you can imagine an agent building the wrong thing while following the Spec literally:
+     the Spec is ambiguous. Rewrite until misinterpretation is impossible.
+
+5. What files must change and what must they export?
+   → These become Artifacts. If you don't know the paths: read architecture.md / codemap.md first.
+```
+
+Use answers to Q1-Q4 to write Spec + Scenarios.
+Use answer to Q5 to write Artifacts.
+If any answer is "I don't know": that's missing context — add it to Context field and re-answer.
 
 ---
 
