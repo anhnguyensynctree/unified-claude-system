@@ -108,7 +108,9 @@ needs-review → [re-spec → new TASK-NNN]  (CEO confirms interface changed)
 ```
 
 - `cto-stop`: validation or verify failed; CEO re-specs at next session; task never auto-retried
-- `needs-review`: an upstream task in a different milestone completed; oms-work detected this task's Context references that task's Produces; CEO confirms the interface is still valid before execution resumes
+- `needs-review`: an upstream task in a different milestone changed its interface — oms-work checked the actual file and found an export this task's Context references is missing or renamed. CEO re-specs this task only. All other tasks continue unaffected.
+
+Note: if the upstream task completed without changing its interface, oms-work confirms automatically and the task stays `queued` — no CEO input, no Discord noise.
 
 ---
 

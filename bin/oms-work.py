@@ -140,13 +140,39 @@ def _produces_paths(produces: str) -> list[str]:
     return paths
 
 
-def flag_downstream_tasks(queue_path: Path, completed: dict,
-                          channel_id: str) -> None:
-    """After an impl task completes, flag queued tasks in OTHER milestones
-    whose Context references this task's Produces files."""
+def _contract_still_holds(project_path: Path, produces: str,
+                           context_refs: list[str]) -> tuple[bool, str]:
+    """Check that exports named in Produces still exist in the actual file.
+    Only checks files referenced in context_refs.
+    Returns (still_valid, detail)."""
+    for part in produces.split('|'):
+        part = part.strip()
+        if ' — exports: ' not in part:
+            continue
+        file_str, exports_str = part.split(' — exports: ', 1)
+        file_path = file_str.strip()
+        if not any(file_path in ctx or ctx in file_path for ctx in context_refs):
+            continue
+        full = project_path / file_path
+        if not full.exists():
+            return False, f'{file_path} no longer exists'
+        content = full.read_text(errors='replace')
+        missing = [e.strip() for e in exports_str.split(',')
+                   if e.strip() and e.strip() not in content]
+        if missing:
+            return False, f'{file_path} — missing exports: {", ".join(missing)}'
+    return True, 'contract satisfied'
+
+
+def flag_downstream_tasks(queue_path: Path, project_path: Path,
+                          completed: dict, channel_id: str) -> None:
+    """After an impl task completes, check queued tasks in OTHER milestones
+    whose Context references this task's Produces.
+    Auto-confirms if contract still holds — only flags when interface actually changed."""
     if completed['type'] == 'research':
-        return  # research Produces are documents, not interfaces
-    paths = _produces_paths(completed.get('produces', 'none'))
+        return
+    produces = completed.get('produces', 'none')
+    paths = _produces_paths(produces)
     if not paths:
         return
 
@@ -155,19 +181,24 @@ def flag_downstream_tasks(queue_path: Path, completed: dict,
         if task['status'] != 'queued':
             continue
         if task['milestone'] == completed['milestone']:
-            continue  # same milestone — already handled by Depends: chain
+            continue
         if not any(p in ctx or ctx in p
                    for p in paths for ctx in task['context']):
             continue
-        note = (f'upstream {completed["id"]} ({completed["milestone"]}) completed — '
-                f'verify Context still matches Produces: {completed["produces"][:120]}')
+        # Contract check — no CEO input needed if exports still exist
+        valid, detail = _contract_still_holds(project_path, produces, task['context'])
+        if valid:
+            print(f'[oms-work] ✓ {task["id"]} contract check passed '
+                  f'({completed["id"]} Produces unchanged)', flush=True)
+            continue  # task stays queued, no action needed
+        # Interface actually changed — flag for CEO
+        note = f'upstream {completed["id"]} interface changed: {detail}'
         update_status(queue_path, task['id'], 'needs-review', note)
         msg = (f'⚠ **{task["id"]}** — {task["title"]} `needs-review`\n'
-               f'> {completed["id"]} ({completed["milestone"]}) just completed. '
-               f'Confirm this task\'s Context is still valid before running.')
+               f'> {completed["id"]} ({completed["milestone"]}) changed its interface: {detail}\n'
+               f'> Re-spec this task before running.')
         discord.post_message(channel_id, msg)
-        print(f'[oms-work] ⚠ {task["id"]} → needs-review '
-              f'(cross-milestone dep on {completed["id"]})', flush=True)
+        print(f'[oms-work] ⚠ {task["id"]} → needs-review: {detail}', flush=True)
 
 
 # ── Worktree + merge ──────────────────────────────────────────────────────────
@@ -350,7 +381,7 @@ def execute_task(task: dict, project_path: Path,
         notes = f'{summary[:180]} | {merge_notes}'
         discord.notify_task(channel_id, threads_file, task['milestone'],
                             task['id'], task['title'], True, notes)
-        flag_downstream_tasks(queue_path, task, channel_id)
+        flag_downstream_tasks(queue_path, project_path, task, channel_id)
         return True, notes
 
     except Exception as e:

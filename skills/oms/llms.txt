@@ -58,7 +58,7 @@ Queue state check (always — runs after bootstrap checks):
 - If `cto-stop` or `needs-review` tasks exist → brief CEO before accepting new work:
   `"⚑ N tasks need attention: TASK-NNN (cto-stop), TASK-NNN (needs-review — upstream interface changed)"`
   - `cto-stop` → re-spec inline; new TASK-NNN written; oms-work picks up next run
-  - `needs-review` → CEO confirms "Context still valid → reset to queued" OR "interface changed → re-spec"
+  - `needs-review` → interface actually changed (oms-work verified); CEO re-specs this task only
   - skip any → proceed to new task
 - If no `queued` tasks remain (queue empty or all done/cto-stop/needs-review) AND CEO provides no task →
   auto-trigger exec session (CPO + CTO + CFO + CLO + CRO) to pick ONE milestone and queue its tasks
