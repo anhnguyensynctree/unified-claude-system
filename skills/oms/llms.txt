@@ -28,6 +28,21 @@ Skip /oms when:
 /oms audit                   Audit — manual full efficiency audit; triggers context-optimizer in full mode
 ```
 
+## Hierarchy
+
+Every task in the queue traces back through this chain — no exceptions:
+
+```
+Milestone          product-direction.ctx.md — named product goal with success criteria
+    └── Action Item    Synthesizer output — concrete action advancing that milestone
+              └── Task     cleared-queue.md — one-session unit with full OpenSpec
+```
+
+- One milestone → many action items (across multiple OMS sessions over time)
+- One action item → one task; or two tasks if Elaboration Agent splits (research + impl)
+- A task without an action item is not allowed — it has no milestone anchor
+- An action item with `feature: "none"` is allowed but rare — signals drift from roadmap
+
 ## First-run check (Step 0)
 
 Check for `.claude/agents/router.ctx.md`:
@@ -37,6 +52,16 @@ Check for `.claude/agents/router.ctx.md`:
 Check for `.claude/agents/company-belief.ctx.md`:
 - Not found → tell CEO: "Run /oms-start first" → stop
 - Found → proceed
+
+Queue state check (always — runs after bootstrap checks):
+- Read `[project]/.claude/cleared-queue.md`
+- If `cto-stop` tasks exist → brief CEO before accepting new work:
+  `"⚑ N tasks blocked: TASK-NNN (title), TASK-NNN (title). Re-spec before new work? [yes/skip]"`
+  - yes → re-spec inline; new TASK-NNN written; oms-work picks them up next run
+  - skip → proceed to new task
+- If no `queued` tasks remain (queue empty or all done/cto-stop) AND CEO provides no task →
+  auto-trigger exec session (CPO + CTO + CFO + CLO + PM) to review milestones and queue next sprint
+- Otherwise → proceed normally
 
 ## Tier activation (Router output)
 
@@ -227,12 +252,12 @@ chief-research-officer (lead), human-behavior-researcher, data-intelligence-anal
 |---|---|
 | router | all shared context + codemap |
 | cto | architecture.md, tech-stack.md, cross-agent-patterns.md |
-| product-manager | company-belief.ctx.md, product-direction.ctx.md |
+| product-manager | product-direction.ctx.md + cleared-queue.md summary (queued/done/cto-stop counts per milestone) |
 | frontend-developer | tech-stack.md + codemap |
 | backend-developer | tech-stack.md, architecture.md + codemap |
 | qa-engineer | tech-stack.md + codemap |
 | ceo-gate | all discussion round outputs + ceo-mandate.ctx.md (project) or ceo-mandate.md (global default) |
-| synthesizer | reads from disk log only + ceo_decision constraint if CEO Gate fired |
+| synthesizer | reads from disk log only + ceo_decision constraint if CEO Gate fired + product-direction.ctx.md (for feature tagging) |
 | trainer | validation-criteria.md only |
 
 ## OMS scope rule

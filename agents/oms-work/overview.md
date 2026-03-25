@@ -3,9 +3,16 @@
 Two separate loops. OMS decides. OMS-Work executes.
 They share one artifact: `[project]/.claude/cleared-queue.md`
 
-Every task in the queue traces back to a milestone in `product-direction.ctx.md`.
-The Synthesizer is the enforcement point — it maps each action_item to a named milestone
-before the Elaboration Agent writes a single field.
+Every task in the queue traces back through a three-level hierarchy:
+
+```
+Milestone          product-direction.ctx.md — named product goal with success criteria
+    └── Action Item    Synthesizer output — concrete action advancing that milestone
+              └── Task     cleared-queue.md — one-session unit with full OpenSpec
+```
+
+The Synthesizer enforces the link: every action_item must carry a `feature` field matching
+a named milestone. The Elaboration Agent reads it verbatim — never invents a milestone name.
 
 ---
 
@@ -175,6 +182,23 @@ Discord feature thread            ← one thread per milestone; CEO sees progres
 
 ```bash
 /oms <task>    # in the project directory
+/oms           # no task — triggers queue check then exec if queue empty
+```
+
+Step 0 always runs a queue check before accepting any task:
+
+```
+cto-stop tasks exist?
+  → yes → brief CEO: "⚑ N tasks blocked: TASK-NNN, TASK-NNN. Re-spec or skip?"
+           re-spec inline → new TASK-NNN queued → oms-work picks up next run
+
+queue empty AND no task given?
+  → auto-trigger exec session (CPO + CTO + CFO + CLO + PM)
+  → PM reports milestone coverage gaps
+  → C-suite agrees next sprint priorities
+  → Step 8.5 queues next batch of tasks
+
+otherwise → proceed with stated task
 ```
 
 OMS checks `company-belief.ctx.md` first. Missing → tells CEO to run `/oms-start`.

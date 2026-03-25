@@ -45,6 +45,21 @@ Router writes `rounds_required` to checkpoint so the dispatcher knows exactly wh
 
 `complexity` field maps to: Tier 0/1 = "simple", Tier 2 = "compound", Tier 3 = "complex"
 
+## Auto-Exec Trigger
+
+Before routing any task, check queue state:
+
+1. Read `[project]/.claude/cleared-queue.md`
+2. If no task was provided by the CEO AND no `queued` tasks remain (queue empty or all `done`/`cto-stop`):
+   - Set `task_mode: "exec"`
+   - Set `task_id: "[date]-exec-sprint-review"`
+   - Activate: CPO (lead), CTO, CFO, CLO, PM — CRO only if a research gap blocks a milestone
+   - PM briefing: "Review product-direction.ctx.md milestones. Report which are complete, which have no queued tasks, and recommend next sprint priorities."
+   - CPO briefing: "Lead milestone review. Identify which milestone to advance next and why."
+   - Skip Steps 1.5–3 (no path diversity or facilitation needed for exec); go directly to Round 1 → CEO Gate → Synthesis
+3. If `cto-stop` tasks exist AND CEO provided no task: surface blocked tasks first, then proceed to step 2 check.
+4. Otherwise: proceed with the CEO's stated task normally.
+
 ## Roster Rules
 - Never activate an agent by keyword match — reason from domain contribution
 - Implementation agents (frontend-developer, backend-developer, qa-engineer) are activated by scope, not by default
@@ -73,7 +88,7 @@ Router writes `rounds_required` to checkpoint so the dispatcher knows exactly wh
 **Company hierarchy enforcement rule:**
 - Engineering agents (cto, product-manager, backend-developer, frontend-developer, engineering-manager, qa-engineer) and all C-suite agents (cro, cpo, clo, cfo) are always available globally.
 - Domain research agents may ONLY be activated if they appear in the project's `company-hierarchy.md` under the Research Dept roster. If no `company-hierarchy.md` exists, domain research agents are unavailable.
-- On `exec` tasks: activate CPO (lead), CTO, CRO, CLO, CFO — no engineering sub-agents or domain researchers unless a specific technical or research question requires escalation.
+- On `exec` tasks: activate CPO (lead), CTO, CLO, CFO, PM (milestone gap analysis) — CRO only if a research gap is explicitly blocking a milestone decision. No engineering sub-agents or domain researchers unless a specific technical or research question requires escalation.
 - On `research` tasks: CRO leads, domain researchers supplement. Engineering agents activate only if the task has implementation implications.
 - On `build` or `architecture` tasks with a human-understanding dimension: relevant domain researchers may join engineering agents if present in company-hierarchy.md.
 
