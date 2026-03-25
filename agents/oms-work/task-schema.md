@@ -11,7 +11,7 @@ Written by the daily OMS session. Executed by `/oms-work`. No CEO gate during ex
 ## TASK-NNN — [title]
 - **Status:** queued
 - **Type:** impl | research
-- **Feature:** [feature group name] | none
+- **Milestone:** [milestone name from product-direction.ctx.md] | none
 - **Spec:** The system SHALL [verb] [object] so that [outcome].
 - **Scenarios:** GIVEN [precondition] WHEN [trigger] THEN [outcome] | GIVEN ...
 - **Artifacts:** [src/path/file.ts — exports: foo, bar] | [src/path/other.ts — exists with real impl]
@@ -46,9 +46,9 @@ dependent tasks' `Context:` field. Write `none` if nothing is consumed downstrea
 Pipe-separated. Use project-relative paths.
 `npm test src/auth | npm run lint`
 
-**Feature** — groups related tasks under one Discord thread. All tasks in the same feature
-share one thread in Discord. Use `none` for standalone tasks. Must be a stable name
-(e.g. `auth-revamp`, `re-engagement`) — oms-work uses it as the thread lookup key.
+**Milestone** — the named milestone from `product-direction.ctx.md` this task advances.
+All tasks under the same milestone share one Discord thread. Use `none` only for standalone
+ops tasks with no milestone anchor. Name must match exactly as it appears in product-direction.
 
 **Context** — files the executor reads as background. Inlined into the dispatch prompt
 at execution time — no cold reads. List only files that exist.

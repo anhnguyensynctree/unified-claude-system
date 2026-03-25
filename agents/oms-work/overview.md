@@ -213,22 +213,24 @@ CEO sees: `Queue Commit: X tasks queued. Queued: TASK-001 — title, TASK-002 �
 OMS posts the question to Discord and pauses.
 CEO replies → bot injects response → discussion resumes from Step 4.
 
-### Exec session — always CPO + CTO + CFO + CLO
+### Exec session — CPO + CTO + CFO + CLO
 
-Fires when: milestone reached, queue empty (CEO runs /oms with no task), or Router
-detects a cross-department decision.
+Fires when queue is empty and CEO runs `/oms` with no task. One exec = one milestone selected.
 
-| Agent | Exec responsibility |
+| Agent | Role |
 |---|---|
-| CPO | Milestone priorities, roadmap sequencing, what gets built next |
-| CTO | Arch prerequisites, technical risk of prioritization order |
-| CFO | Cost of sprint priorities, unit economics, budget constraints |
-| CLO | Legal/compliance flags on upcoming milestones before they hit the queue |
-| PM | Milestone health, gap analysis (milestones with no queued tasks), acceptance intent |
-| CRO | Conditional — activates only when a research gap is blocking a milestone |
+| CPO (lead) | Picks next milestone; owns product-direction.ctx.md update after exec |
+| CTO | Arch prerequisites and technical risk for the chosen milestone |
+| CFO | Cost of proposed sprint work, unit economics, budget constraints |
+| CLO | Legal/compliance flags before tasks are queued |
+| CRO | Conditional — only if a research gap blocks the milestone decision |
 
-CFO and CLO must be in every exec session — sprint priorities have cost and legal implications
-that are far cheaper to surface now than after tasks are elaborated and queued.
+**PM is not a discussion agent in exec.** The Router generates a milestone gap report at Step 0
+(complete / in-progress / no coverage per milestone) and injects it into CPO's briefing.
+CPO uses it to anchor the milestone selection — no extra voice needed in the room.
+
+After exec synthesis: CPO updates `product-direction.ctx.md` to mark the chosen milestone
+as in-progress. Step 8.5 queues action_items for that milestone only.
 
 ### Generating a feature list or roadmap breakdown
 
@@ -273,17 +275,17 @@ One message per task. Grouped into feature threads from `product-direction.ctx.m
 
 ```
 #project-channel
-├── Thread: Feature: auth-revamp
+├── Thread: Milestone: auth-revamp
 │     ✓ TASK-001 — JWT refresh rotation  done
 │     ⚑ TASK-002 — Redis session store  cto-stop
 │                  > FAIL (cto): SessionStore interface not exported
 │
-└── Thread: Feature: re-engagement
+└── Thread: Milestone: re-engagement
       ✓ TASK-003 — Research notification timing  done
       ✓ TASK-004 — Push notification impl        done
 ```
 
-Tasks with `Feature: none` post directly to the main channel (no thread).
+Tasks with `Milestone: none` post directly to the main channel (no thread).
 Thread IDs persisted in `[project]/.claude/oms-work-threads.json` — reused across runs.
 
 CEO sees only: `✓ done` or `⚑ cto-stop [reason]`. No step names, no validator names.

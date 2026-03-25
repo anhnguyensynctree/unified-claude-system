@@ -81,7 +81,7 @@ def parse_queue(path: Path) -> list[dict]:
             'title':      m.group(2).strip(),
             'status':     f.get('Status', 'queued').strip().lower(),
             'type':       f.get('Type', 'impl').strip().lower(),
-            'feature':    f.get('Feature', 'none').strip(),
+            'milestone':  f.get('Milestone', 'none').strip(),
             'spec':       f.get('Spec', '').strip(),
             'scenarios':  [s.strip() for s in scenarios_raw.split('|') if s.strip()],
             'artifacts':  [a.strip() for a in f.get('Artifacts', '').split('|') if a.strip()],
@@ -261,7 +261,7 @@ def execute_task(task: dict, project_path: Path,
         if code != 0:
             remove_worktree(project_path, task['id'])
             notes = f'CTO-STOP: claude execution failed (exit {code})'
-            discord.notify_task(channel_id, threads_file, task['feature'],
+            discord.notify_task(channel_id, threads_file, task['milestone'],
                                 task['id'], task['title'], False, notes)
             return False, notes
 
@@ -274,7 +274,7 @@ def execute_task(task: dict, project_path: Path,
             if not gs.stdout.strip():
                 remove_worktree(project_path, task['id'])
                 notes = 'CTO-STOP: hallucination — no files changed in worktree'
-                discord.notify_task(channel_id, threads_file, task['feature'],
+                discord.notify_task(channel_id, threads_file, task['milestone'],
                                     task['id'], task['title'], False, notes)
                 return False, notes
 
@@ -285,7 +285,7 @@ def execute_task(task: dict, project_path: Path,
                 log_spec_failure(task, validator, reason)
                 stop_type = 'CTO-STOP' if validator == 'cto' else 'FAIL'
                 notes = f'{stop_type} ({validator}): {reason[:200]} | branch: {branch}'
-                discord.notify_task(channel_id, threads_file, task['feature'],
+                discord.notify_task(channel_id, threads_file, task['milestone'],
                                     task['id'], task['title'], False, notes)
                 return False, notes
 
@@ -296,7 +296,7 @@ def execute_task(task: dict, project_path: Path,
             if vr.returncode != 0:
                 output = (vr.stdout + vr.stderr)[-300:].strip()
                 notes = f'FAIL (verify `{cmd}`): {output} | branch: {branch}'
-                discord.notify_task(channel_id, threads_file, task['feature'],
+                discord.notify_task(channel_id, threads_file, task['milestone'],
                                     task['id'], task['title'], False, notes)
                 return False, notes
 
@@ -305,14 +305,14 @@ def execute_task(task: dict, project_path: Path,
 
         _merged, merge_notes = merge_to_main(project_path, branch, task['id'], task['title'])
         notes = f'{summary[:180]} | {merge_notes}'
-        discord.notify_task(channel_id, threads_file, task['feature'],
+        discord.notify_task(channel_id, threads_file, task['milestone'],
                             task['id'], task['title'], True, notes)
         return True, notes
 
     except Exception as e:
         remove_worktree(project_path, task['id'])
         notes = f'CTO-STOP: exception — {e}'
-        discord.notify_task(channel_id, threads_file, task['feature'],
+        discord.notify_task(channel_id, threads_file, task['milestone'],
                             task['id'], task['title'], False, notes)
         return False, notes
 

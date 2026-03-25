@@ -60,7 +60,10 @@ Queue state check (always — runs after bootstrap checks):
   - yes → re-spec inline; new TASK-NNN written; oms-work picks them up next run
   - skip → proceed to new task
 - If no `queued` tasks remain (queue empty or all done/cto-stop) AND CEO provides no task →
-  auto-trigger exec session (CPO + CTO + CFO + CLO + PM) to review milestones and queue next sprint
+  auto-trigger exec session (CPO + CTO + CFO + CLO) to pick ONE milestone and queue its tasks
+  → PM gap report injected into CPO's briefing (not an active discussion agent)
+  → one exec session = one milestone selected = action_items for that milestone queued
+  → repeat next time queue empties
 - Otherwise → proceed normally
 
 ## Tier activation (Router output)
@@ -278,13 +281,19 @@ Router fires /oms exec automatically when:
 ## Exec session — always active agents
 
 CPO + CTO + CFO + CLO activate in every exec session. No exceptions.
-- CPO: milestone priorities, what gets built next, roadmap sequencing
-- CTO: arch prerequisites for upcoming milestones, technical risk of prioritization
-- CFO: cost implications of sprint priorities, unit economics, budget constraints
-- CLO: legal/compliance flags on upcoming milestones before they hit the queue
+- CPO: picks the next milestone to advance; owns product-direction.ctx.md update post-exec
+- CTO: arch prerequisites for the chosen milestone, technical risk of prioritization
+- CFO: cost of the proposed sprint, unit economics, budget constraints
+- CLO: legal/compliance flags on the chosen milestone before tasks are queued
 
 CRO activates conditionally: only when a research gap is blocking a milestone decision.
-PM activates in every exec session: milestone health, gap analysis (milestones with no queued tasks), acceptance intent for the next sprint.
+
+PM does NOT participate as a discussion agent in exec sessions.
+PM's gap report (milestone status: complete / in-progress / no coverage) is generated at Step 0
+and injected into CPO's briefing as context — not as a discussion participant.
+
+One exec session = one milestone selected. Tasks for that milestone are queued.
+When the queue empties again, exec fires and the next milestone is selected.
 
 ## Task log format
 
