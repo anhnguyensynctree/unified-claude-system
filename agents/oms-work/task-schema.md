@@ -11,6 +11,7 @@ Written by the daily OMS session. Executed by `/oms-work`. No CEO gate during ex
 ## TASK-NNN — [title]
 - **Status:** queued
 - **Type:** impl | research
+- **Feature:** [feature group name] | none
 - **Spec:** The system SHALL [verb] [object] so that [outcome].
 - **Scenarios:** GIVEN [precondition] WHEN [trigger] THEN [outcome] | GIVEN ...
 - **Artifacts:** [src/path/file.ts — exports: foo, bar] | [src/path/other.ts — exists with real impl]
@@ -44,6 +45,10 @@ dependent tasks' `Context:` field. Write `none` if nothing is consumed downstrea
 **Verify** — shell commands to run after agent validation. Deterministic pass/fail.
 Pipe-separated. Use project-relative paths.
 `npm test src/auth | npm run lint`
+
+**Feature** — groups related tasks under one Discord thread. All tasks in the same feature
+share one thread in Discord. Use `none` for standalone tasks. Must be a stable name
+(e.g. `auth-revamp`, `re-engagement`) — oms-work uses it as the thread lookup key.
 
 **Context** — files the executor reads as background. Inlined into the dispatch prompt
 at execution time — no cold reads. List only files that exist.
@@ -80,6 +85,7 @@ At the end of every daily session, before writing to `cleared-queue.md`, each ta
 answer YES to all of the following:
 
 - [ ] Spec uses SHALL — one correct interpretation, no ambiguity
+- [ ] Spec makes no forward reference to unknown research output ("whatever research finds" = instant fail)
 - [ ] Every scenario is GIVEN/WHEN/THEN — deterministic pass/fail without CEO judgment
 - [ ] Artifacts list every file the executor must produce, with exports
 - [ ] Produces declares what downstream tasks depend on (or explicitly `none`)

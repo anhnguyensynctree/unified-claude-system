@@ -4,12 +4,14 @@ oms-work — execute pre-cleared OMS tasks with worktree isolation.
 
 Usage:
   oms-work.py <project-slug>              # run first ready task
-  oms-work.py <project-slug> --all        # run all ready tasks (background mode)
+  oms-work.py <project-slug> --all        # run all ready tasks
   oms-work.py <project-slug> --dry-run    # show plan without executing
   oms-work.py <project-slug> TASK-NNN     # run specific task
 
 Each task gets its own git worktree (branch: oms-work/task-nnn).
-On done: commit + remove worktree. On cto-stop: leave worktree open for review.
+Pass → auto-merge to main + remove worktree.
+Fail → leave worktree open for review + notify Discord.
+Always posts final task status to Discord (CLI or Discord trigger).
 """
 import json
 import re
@@ -17,10 +19,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONFIG        = Path.home() / '.claude' / 'oms-config.json'
-CLAUDE        = Path.home() / '.local' / 'bin' / 'claude'
-TEMPLATE      = Path.home() / '.claude' / 'agents' / 'oms-work' / 'cleared-queue-template.md'
-ELAB_LESSONS  = Path.home() / '.claude' / 'agents' / 'task-elaboration' / 'lessons.md'
+sys.path.insert(0, str(Path.home() / '.claude' / 'bin'))
+import oms_discord as discord  # noqa: E402  # type: ignore[import]
+
+CONFIG       = Path.home() / '.claude' / 'oms-config.json'
+CLAUDE       = Path.home() / '.local' / 'bin' / 'claude'
+TEMPLATE     = Path.home() / '.claude' / 'agents' / 'oms-work' / 'cleared-queue-template.md'
+ELAB_LESSONS = Path.home() / '.claude' / 'agents' / 'task-elaboration' / 'lessons.md'
 
 VALIDATOR_ROLE: dict[str, str] = {
     'dev':        'Review for correctness, completeness, and code quality against acceptance criteria.',
@@ -32,9 +37,6 @@ VALIDATOR_ROLE: dict[str, str] = {
     'cto':        'Review for architectural soundness. Name any blocking technical risk.',
 }
 
-
-# ── Spec failure logging ──────────────────────────────────────────────────────
-
 SPEC_FAILURE_SIGNALS = [
     'ambiguous', 'unclear', 'missing scenario', 'incomplete', 'not specified',
     'criteria', 'undefined', 'no test', 'edge case', 'not covered',
@@ -42,14 +44,10 @@ SPEC_FAILURE_SIGNALS = [
 ]
 
 
-def _is_spec_failure(reason: str) -> bool:
-    low = reason.lower()
-    return any(sig in low for sig in SPEC_FAILURE_SIGNALS)
-
+# ── Spec failure logging ──────────────────────────────────────────────────────
 
 def log_spec_failure(task: dict, validator: str, reason: str) -> None:
-    """Append a spec lesson to task-elaboration/lessons.md when failure is spec-related."""
-    if not _is_spec_failure(reason):
+    if not any(s in reason.lower() for s in SPEC_FAILURE_SIGNALS):
         return
     lesson = (f'- [{task["id"]}] {validator} FAIL — {reason[:200].strip()}'
               f' | Spec: "{task["spec"][:120]}"')
@@ -57,7 +55,7 @@ def log_spec_failure(task: dict, validator: str, reason: str) -> None:
         with ELAB_LESSONS.open('a') as f:
             f.write(lesson + '\n')
     except OSError:
-        pass  # non-fatal
+        pass
 
 
 # ── Queue parsing ─────────────────────────────────────────────────────────────
@@ -77,13 +75,13 @@ def parse_queue(path: Path) -> list[dict]:
             continue
         f = dict(FIELD.findall(chunk))
         deps_raw = f.get('Depends', 'none').strip()
-        # Scenarios: new field; fall back to Acceptance for backwards compat
         scenarios_raw = f.get('Scenarios', f.get('Acceptance', ''))
         tasks.append({
             'id':         m.group(1),
             'title':      m.group(2).strip(),
             'status':     f.get('Status', 'queued').strip().lower(),
             'type':       f.get('Type', 'impl').strip().lower(),
+            'feature':    f.get('Feature', 'none').strip(),
             'spec':       f.get('Spec', '').strip(),
             'scenarios':  [s.strip() for s in scenarios_raw.split('|') if s.strip()],
             'artifacts':  [a.strip() for a in f.get('Artifacts', '').split('|') if a.strip()],
@@ -129,7 +127,7 @@ def update_status(path: Path, task_id: str, status: str, notes: str = '') -> Non
     path.write_text(re.sub(pattern, replacer, path.read_text(), flags=re.DOTALL))
 
 
-# ── Worktree management ───────────────────────────────────────────────────────
+# ── Worktree + merge ──────────────────────────────────────────────────────────
 
 def _wt_path(project_path: Path, task_id: str) -> Path:
     return project_path / '.claude' / 'worktrees' / task_id
@@ -142,7 +140,6 @@ def create_worktree(project_path: Path, task_id: str) -> tuple[Path, str]:
     r = subprocess.run(['git', 'worktree', 'add', str(wt), '-b', branch, 'HEAD'],
                        capture_output=True, text=True, cwd=project_path)
     if r.returncode != 0:
-        # Branch exists from prior attempt — reuse
         subprocess.run(['git', 'worktree', 'add', str(wt), branch],
                        capture_output=True, cwd=project_path)
     return wt, branch
@@ -160,6 +157,31 @@ def remove_worktree(project_path: Path, task_id: str) -> None:
     subprocess.run(['git', 'worktree', 'remove', '--force',
                     str(_wt_path(project_path, task_id))],
                    capture_output=True, cwd=project_path)
+
+
+def merge_to_main(project_path: Path, branch: str, task_id: str, title: str) -> tuple[bool, str]:
+    """Merge task branch to main. Returns (merged, notes)."""
+    # Only merge if working tree is clean
+    gs = subprocess.run(['git', 'status', '--porcelain'],
+                        capture_output=True, text=True, cwd=project_path)
+    if gs.stdout.strip():
+        return False, f'branch {branch} ready — merge manually (working tree not clean)'
+
+    cur = subprocess.run(['git', 'branch', '--show-current'],
+                         capture_output=True, text=True, cwd=project_path)
+    if cur.stdout.strip() != 'main':
+        subprocess.run(['git', 'checkout', 'main'], capture_output=True, cwd=project_path)
+
+    r = subprocess.run(
+        ['git', 'merge', '--no-ff', branch, '-m', f'oms-work: {task_id} — {title}'],
+        capture_output=True, text=True, cwd=project_path,
+    )
+    if r.returncode != 0:
+        subprocess.run(['git', 'merge', '--abort'], cwd=project_path, capture_output=True)
+        return False, f'branch {branch} ready — merge conflict, merge manually'
+
+    subprocess.run(['git', 'branch', '-d', branch], capture_output=True, cwd=project_path)
+    return True, 'merged to main'
 
 
 # ── Claude invocation ─────────────────────────────────────────────────────────
@@ -182,11 +204,10 @@ def run_claude(prompt: str, cwd: Path, model: str, allow_writes: bool = False) -
 # ── Execution + validation ────────────────────────────────────────────────────
 
 def exec_prompt(task: dict, wt: Path) -> str:
-    scenarios  = '\n'.join(f'- {s}' for s in task['scenarios'])
-    artifacts  = '\n'.join(f'- {a}' for a in task['artifacts'])
-    produces   = task['produces']
+    scenarios = '\n'.join(f'- {s}' for s in task['scenarios'])
+    artifacts = '\n'.join(f'- {a}' for a in task['artifacts'])
+    produces  = task['produces']
 
-    # Pre-load context files — no cold reads during execution
     ctx_blocks: list[str] = []
     for rel in task['context']:
         full = wt / rel
@@ -202,18 +223,15 @@ def exec_prompt(task: dict, wt: Path) -> str:
     produces_section = (f'\n\n## Produces (downstream contract)\n{produces}'
                         if produces and produces.lower() != 'none' else '')
 
-    if task['type'] == 'research':
-        action = ('Write findings to logs/research/{id}.md. '
-                  'Include ≥3 evidence-backed findings, each with a testable prediction.'
-                  ).format(id=task['id'])
-    else:
-        action = 'Make all required file changes to satisfy every scenario.'
+    action = ('Write findings to logs/research/{id}.md. '
+              'Include ≥3 evidence-backed findings, each with a testable prediction.'
+              ).format(id=task['id']) if task['type'] == 'research' \
+             else 'Make all required file changes to satisfy every scenario.'
 
     return (f"OMS work task ({task['id']}): {task['spec']}\n\n"
             f"## Behavioral Scenarios\n{scenarios}"
             f"{artifact_section}{produces_section}{ctx_section}\n\n"
-            f"{action}\n\n"
-            "Output a 1–2 sentence summary when complete.")
+            f"{action}\n\nOutput a 1–2 sentence summary when complete.")
 
 
 def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[bool, str]:
@@ -229,11 +247,12 @@ def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[
     return out.strip().upper().startswith('PASS'), out.strip()
 
 
-def execute_task(task: dict, project_path: Path, dry_run: bool) -> tuple[bool, str]:
+def execute_task(task: dict, project_path: Path,
+                 channel_id: str, threads_file: Path,
+                 dry_run: bool) -> tuple[bool, str]:
     print(f'\n[oms-work] ▶ {task["id"]} — {task["title"]}', flush=True)
     if dry_run:
         print(f'[oms-work]   DRY RUN: {task["spec"]}')
-        print(f'[oms-work]   Chain: {" → ".join(task["validation"])}')
         return True, 'dry-run'
 
     wt, branch = create_worktree(project_path, task['id'])
@@ -241,18 +260,23 @@ def execute_task(task: dict, project_path: Path, dry_run: bool) -> tuple[bool, s
         work_out, code = run_claude(exec_prompt(task, wt), wt, 'claude-sonnet-4-6', allow_writes=True)
         if code != 0:
             remove_worktree(project_path, task['id'])
-            return False, f'CTO-STOP: claude execution failed (exit {code})'
+            notes = f'CTO-STOP: claude execution failed (exit {code})'
+            discord.notify_task(channel_id, threads_file, task['feature'],
+                                task['id'], task['title'], False, notes)
+            return False, notes
 
         summary = work_out[:300].replace('\n', ' ').strip()
         print(f'[oms-work]   exec: {summary[:120]}', flush=True)
 
-        # Hallucination guard — impl tasks must produce file changes
         if task['type'] != 'research':
             gs = subprocess.run(['git', 'status', '--porcelain'],
                                 capture_output=True, text=True, cwd=wt)
             if not gs.stdout.strip():
                 remove_worktree(project_path, task['id'])
-                return False, f'CTO-STOP: hallucination — no files changed in worktree'
+                notes = 'CTO-STOP: hallucination — no files changed in worktree'
+                discord.notify_task(channel_id, threads_file, task['feature'],
+                                    task['id'], task['title'], False, notes)
+                return False, notes
 
         for validator in task['validation']:
             passed, reason = validate_step(validator, task, summary, wt)
@@ -260,25 +284,37 @@ def execute_task(task: dict, project_path: Path, dry_run: bool) -> tuple[bool, s
             if not passed:
                 log_spec_failure(task, validator, reason)
                 stop_type = 'CTO-STOP' if validator == 'cto' else 'FAIL'
-                return False, f'{stop_type} ({validator}): {reason[:200]} | branch: {branch}'
+                notes = f'{stop_type} ({validator}): {reason[:200]} | branch: {branch}'
+                discord.notify_task(channel_id, threads_file, task['feature'],
+                                    task['id'], task['title'], False, notes)
+                return False, notes
 
-        # Shell verification — deterministic command-tier check
         for cmd in task['verify']:
             vr = subprocess.run(cmd, shell=True, capture_output=True, text=True,
                                 cwd=wt, timeout=120)
-            label = '✓' if vr.returncode == 0 else '✗'
-            print(f'[oms-work]   {label} verify `{cmd[:60]}`', flush=True)
+            print(f'[oms-work]   {"✓" if vr.returncode == 0 else "✗"} verify `{cmd[:60]}`', flush=True)
             if vr.returncode != 0:
                 output = (vr.stdout + vr.stderr)[-300:].strip()
-                return False, f'FAIL (verify `{cmd}`): {output} | branch: {branch}'
+                notes = f'FAIL (verify `{cmd}`): {output} | branch: {branch}'
+                discord.notify_task(channel_id, threads_file, task['feature'],
+                                    task['id'], task['title'], False, notes)
+                return False, notes
 
         commit_worktree(wt, task['id'], task['title'])
         remove_worktree(project_path, task['id'])
-        return True, f'{summary[:180]} | branch: {branch} — merge when ready'
+
+        _merged, merge_notes = merge_to_main(project_path, branch, task['id'], task['title'])
+        notes = f'{summary[:180]} | {merge_notes}'
+        discord.notify_task(channel_id, threads_file, task['feature'],
+                            task['id'], task['title'], True, notes)
+        return True, notes
 
     except Exception as e:
         remove_worktree(project_path, task['id'])
-        return False, f'CTO-STOP: exception — {e}'
+        notes = f'CTO-STOP: exception — {e}'
+        discord.notify_task(channel_id, threads_file, task['feature'],
+                            task['id'], task['title'], False, notes)
+        return False, notes
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -300,13 +336,15 @@ def main() -> None:
         sys.exit(1)
 
     project_path = Path(proj['path'])
+    channel_id   = proj.get('channel_id', '')
+    threads_file = project_path / '.claude' / 'oms-work-threads.json'
     queue_path   = project_path / '.claude' / 'cleared-queue.md'
 
     if not queue_path.exists() and TEMPLATE.exists():
         queue_path.write_text(TEMPLATE.read_text())
         print(f'[oms-work] Created queue at {queue_path}')
 
-    results: list[tuple[str, str, bool]] = []  # (id, title, passed)
+    results: list[tuple[str, str, bool]] = []
 
     while True:
         tasks    = parse_queue(queue_path)
@@ -321,21 +359,17 @@ def main() -> None:
             break
 
         update_status(queue_path, task['id'], 'in-progress')
-        passed, notes = execute_task(task, project_path, dry_run)
+        passed, notes = execute_task(task, project_path, channel_id, threads_file, dry_run)
         final = 'done' if passed else 'cto-stop'
         update_status(queue_path, task['id'], final, notes)
         results.append((task['id'], task['title'], passed))
 
-        if not run_all or not passed and 'CTO-STOP' in notes:
-            break  # single-task mode, or CTO-stop: stop this chain
-
-        if not run_all:
+        if not run_all or (not passed and 'CTO-STOP' in notes):
             break
 
-    # Report
-    done_r  = [(i, t) for i, t, p in results if p]
-    stops   = [(i, t) for i, t, p in results if not p]
-    lines   = ['## OMS Work']
+    done_r = [(i, t) for i, t, p in results if p]
+    stops  = [(i, t) for i, t, p in results if not p]
+    lines  = ['## OMS Work']
     for i, t in done_r:
         lines.append(f'✓ {i} — {t}')
     for i, t in stops:

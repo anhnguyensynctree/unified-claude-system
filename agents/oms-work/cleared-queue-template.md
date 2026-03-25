@@ -23,6 +23,7 @@ Use for: any feature, bug fix, refactor, or API change
 ## TASK-001 — Add JWT refresh token rotation
 - **Status:** queued
 - **Type:** impl
+- **Feature:** auth-revamp
 - **Spec:** The system SHALL rotate refresh tokens on each use and invalidate the full token family on reuse detection so that stolen tokens cannot be replayed.
 - **Scenarios:** GIVEN a valid refresh token WHEN POST /auth/refresh THEN response contains new access + refresh pair | GIVEN a reused refresh token WHEN POST /auth/refresh THEN all tokens in the family are invalidated and response is 401 | GIVEN an access token older than 15 minutes WHEN any protected endpoint is called THEN response is 401 with WWW-Authenticate header
 - **Artifacts:** src/auth/tokens.ts — exports: generateToken, verifyToken, revokeFamily | src/auth/middleware.ts — modified: calls verifyToken on all protected routes
@@ -44,6 +45,7 @@ Scenarios test OUTPUT QUALITY, not implementation behavior.
 ## TASK-002 — Research user re-engagement patterns after day-3 drop-off
 - **Status:** queued
 - **Type:** research
+- **Feature:** re-engagement
 - **Spec:** The system SHALL synthesise evidence-backed re-engagement hypotheses from behavioural psychology and product analytics so that the highest-confidence trigger strategy can be selected for implementation.
 - **Scenarios:** GIVEN the research output WHEN reviewed by CRO THEN ≥3 hypotheses are present each with a testable prediction | GIVEN the research output WHEN reviewed by CPO THEN at least one hypothesis maps to an existing product capability | GIVEN a hypothesis was excluded WHEN the document is read THEN the exclusion reason is documented
 - **Artifacts:** logs/research/TASK-002-reengagement.md — sections: hypotheses (≥3) each with evidence and testable prediction, excluded approaches with reasons, recommended implementation order
@@ -65,6 +67,7 @@ Use for: new services, DB schema changes, auth architecture, API contracts,
 ## TASK-003 — Add Redis session store for horizontal scaling
 - **Status:** queued
 - **Type:** impl
+- **Feature:** none
 - **Spec:** The system SHALL replace the in-process session store with Redis so that multiple API instances share session state without sticky routing.
 - **Scenarios:** GIVEN two API instances running WHEN a user authenticates on instance A THEN instance B accepts their session token | GIVEN Redis is unavailable WHEN any authenticated request arrives THEN the API returns 503 and logs a structured error | GIVEN a session expires WHEN the TTL elapses in Redis THEN subsequent requests return 401
 - **Artifacts:** src/session/store.ts — exports: createSessionStore, SessionStore (interface) | src/session/redis-store.ts — exports: RedisSessionStore implements SessionStore | src/app.ts — modified: passes createSessionStore(config) to session middleware | docker-compose.yml — modified: adds redis service with healthcheck
@@ -85,6 +88,7 @@ Note how TASK-005 Context includes TASK-004's Produces verbatim.
 ## TASK-004 — Research notification timing for day-3 re-engagement
 - **Status:** queued
 - **Type:** research
+- **Feature:** re-engagement
 - **Spec:** The system SHALL identify the optimal send-time and message framing for a day-3 re-engagement push notification so that TASK-005 can implement with a specific trigger condition and copy.
 - **Scenarios:** GIVEN the research output WHEN reviewed by CRO THEN a recommended send-time window is present with supporting evidence | GIVEN the research output WHEN reviewed by CPO THEN the recommended copy variant is testable as an A/B experiment | GIVEN the research output WHEN reviewed THEN one primary recommendation is ranked above all alternatives
 - **Artifacts:** logs/research/TASK-004-notification-timing.md — sections: timing analysis, copy variants ranked by predicted CTR, implementation spec (trigger condition + message body)
@@ -98,6 +102,7 @@ Note how TASK-005 Context includes TASK-004's Produces verbatim.
 ## TASK-005 — Implement day-3 re-engagement push notification
 - **Status:** queued
 - **Type:** impl
+- **Feature:** re-engagement
 - **Spec:** The system SHALL fire a push notification exactly once at 72h post-onboarding using the trigger condition and message body from TASK-004 so that the highest-confidence re-engagement strategy is active in production.
 - **Scenarios:** GIVEN a user who completed onboarding 72h ago and has not returned WHEN the scheduler runs THEN exactly one push notification is sent with the TASK-004 message body | GIVEN a user who returned within 72h WHEN the scheduler runs THEN no notification is sent | GIVEN a notification was already sent WHEN the scheduler runs again THEN no duplicate is sent | GIVEN the scheduler fires outside the TASK-004 send-time window THEN notification is queued until the window opens
 - **Artifacts:** src/notifications/reengagement.ts — exports: scheduleReengagement, cancelReengagement | src/notifications/scheduler.ts — modified: calls scheduleReengagement on onboarding-complete event | src/notifications/index.ts — re-exports scheduleReengagement, cancelReengagement
