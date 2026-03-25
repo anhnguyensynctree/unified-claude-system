@@ -31,15 +31,18 @@ Derived from `Activated` at queue-write time. Written explicitly into each task.
 | Task type | Validation chain |
 |---|---|
 | Research | researcher → cro → cpo |
-| Research with product decision output | researcher → cro → cpo → pm |
-| Engineering, internal (refactor / infra / bug) | dev → qa → em |
-| Engineering, user-facing feature | dev → qa → pm → em |
+| Engineering (any) | dev → qa → em |
 | CTO / infra-critical | dev → cto |
 
-**PM position**: between QA and EM on user-facing tasks only. Omit on internal tasks.
+**Why no PM in engineering chains**: PM's contribution is the spec and acceptance criteria,
+written at queue-commit time. By the time a task enters the queue, PM has already done their job.
+QA tests against those criteria. Adding PM after QA asks them to verify their own prior work.
 
-**Research + impl in one task = queue gate rejection.** Split into two tasks with a Depends link.
-The chain never exceeds 4 steps. If yours is longer, the task is too big.
+**CPO in research chains**: research produces new findings not known at queue-commit time.
+CPO evaluates strategic fit of those findings — genuinely new judgment required.
+
+**Research + impl in one task = queue gate rejection.** Split into two tasks with Depends.
+The chain never exceeds 3 steps.
 
 **Extensibility**: new agent types (e.g. game-dev, ml-engineer) are added to `Activated`
 and derive their own chain position. No hardcoded modes — chain follows activated agents.

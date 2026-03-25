@@ -115,12 +115,10 @@ If any box fails: surface to CEO now for re-spec. Do not write to queue until al
 | Task type | Chain |
 |---|---|
 | Research | researcher → cro → cpo |
-| Research with product decision output | researcher → cro → cpo → pm |
-| Engineering, internal (refactor/infra/bug) | dev → qa → em |
-| Engineering, user-facing feature | dev → qa → pm → em |
+| Engineering (any) | dev → qa → em |
 | CTO / infra-critical | dev → cto |
 
-Max 4 steps. Research + impl in one task = split it. Use Depends to link them.
+Max 3 steps. Research + impl in one task = split it, use Depends to link them.
 
 **Write to `[project]/.claude/cleared-queue.md`** using schema from
 `~/.claude/agents/oms-work/task-schema.md`. Append; do not overwrite existing tasks.

@@ -29,7 +29,6 @@ VALIDATOR_ROLE: dict[str, str] = {
     'cro':        'Validate findings are rigorous, aligned with research question, and actionable.',
     'cpo':        'Confirm output creates clear product direction or actionable roadmap items.',
     'cto':        'Review for architectural soundness. Name any blocking technical risk.',
-    'pm':         'Confirm requirements coverage: output matches spec and acceptance criteria.',
 }
 
 
