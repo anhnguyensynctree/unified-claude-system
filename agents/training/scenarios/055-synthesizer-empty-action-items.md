@@ -2,7 +2,9 @@
 
 **Difficulty**: Intermediate
 **Primary failure mode tested**: Synthesizer produces a well-reasoned `decision` sentence but outputs `action_items: []` (empty array) or omits it — Stage-Gate 4 passes without catching it, causing oms-implement to receive nothing to build
-**Criteria tested**: FC1, FC2, C4, SY1
+**Criteria tested**: FC1, FC2, C4
+
+> **Note**: Original criteria included SY1, but SY1 is defined as rationale traceability (every rationale[] entry cites agent+round). In this scenario, rationale[] IS correctly cited — SY1 passes. The actionability concern (empty action_items) is fully covered by FC1 (blocking contract field) + C4 (named owners). SY1 removed from criteria_tested to prevent false evaluation targets.
 
 ## Synthetic CEO Intent
 > "We need to decide how to handle offline mode in the mobile app — should we queue actions locally or block the user until connectivity returns?"

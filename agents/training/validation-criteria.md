@@ -407,9 +407,86 @@ These invert or replace the engineering convergence criteria (C1–C4) for `rese
 
 ---
 
+## Concern 37 — Exec Pipeline Completeness
+
+**EP1**: Exec session runs all Steps 1-8.5 without silent stops. A session log that shows synthesis output but no Trainer evaluation section (Step 6), no Context Optimizer entry (Step 7), or no FEATURE drafts in cleared-queue.md (Step 8.5) fails EP1. Each completed step must be traceable in the task log.
+
+**EP2**: Step 8.5 after exec writes FEATURE-NNN draft blocks to cleared-queue.md — not OpenSpec tasks and not raw action_items[]. A cleared-queue.md entry from exec that contains `Spec:`, `Scenarios:`, or `Artifacts:` fields (instead of `Why:`, `Acceptance:`, `Exec-decision:`) fails EP2 — tasks are written after `/oms FEATURE-NNN`, not during exec.
+
+**EP3**: Step 8 is blocking — OMS must wait for CEO acknowledgment before proceeding to Step 8.5. A session where FEATURE drafts are written without a recorded CEO response to the synthesis fails EP3.
+
+---
+
+## Concern 38 — Feature Discussion Routing
+
+**FD1**: When CEO invokes `/oms FEATURE-NNN`, Router reads the feature's `Departments[]` as a starting hint and applies Cynefin judgment to determine the final agent roster. A Router that copies `Departments[]` verbatim into `activated_agents` without applying domain_breadth and complexity analysis fails FD1 — the department list is CPO's starting recommendation, not a binding roster.
+
+**FD2**: The `Exec-decision` field from the FEATURE draft must be injected into every agent's briefing as a hard constraint. An agent discussion that contradicts the Exec-decision (without flagging `exec_decision_conflict: true`) fails FD2. Exec-decisions cannot be overturned by engineering agents.
+
+**FD3**: A cross-functional feature discussion produces one task draft per department — never a merged task combining multiple departments' work. A feature with `Departments: [backend-developer, frontend-developer]` that produces a single task fails FD3.
+
+---
+
+## Concern 39 — Research Gate Enforcement
+
+**RG1**: When a feature has `Research-gate: true`, Elaboration Agent elaborates research tasks only. Engineering tasks must be written as `draft` with the note `Blocked: awaiting research findings from TASK-NNN`. Elaborating an engineering task's full OpenSpec when `research_gate: true` fails RG1.
+
+**RG2**: When a feature has `Research-gate: false`, the interface-contract agreed in the feature discussion must appear in every task's `Context:` field. A task in a `Research-gate: false` feature missing the interface-contract in its Context fails RG2.
+
+---
+
+## Concern 40 — Task Sizing Enforcement
+
+**TS1**: Elaboration Agent splits any task that violates a sizing rule: Spec requires two sentences, >4 files changed, research+impl mixed in one task, or scope exceeds one Claude session. Producing a single oversized task instead of splitting fails TS1.
+
+**TS2**: When splitting, the downstream task must have `Depends: TASK-NNN` pointing to the upstream task. A split pair where the second task has `Depends: none` fails TS2 — the dependency chain is how the queue enforces sequencing.
+
+**TS3**: Impl tasks spanning more than 3 distinct user interactions must be split at elaboration time — never written to cleared-queue.md as a single task. Writing a task with a ⚠ annotation, "LARGE" label, or "consider splitting" note fails TS3 — the flag is not a mitigation, it is the failure. Split happens at elaboration; if it cannot be split during elaboration, escalate to CEO before writing to the queue.
+
+---
+
+## Concern 41 — Milestone and Feature Tracking
+
+**MF1**: When all tasks in a feature reach `done` status and feature-level sign-off is complete, CPO updates the feature `Status:` to `done` in cleared-queue.md. A feature with all tasks `done` but `Status: in-progress` fails MF1.
+
+**MF2**: When all features in a milestone are `done`, CPO updates `product-direction.ctx.md` to reflect the milestone completion. A milestone where all features are done but `product-direction.ctx.md` still shows it as active fails MF2.
+
+---
+
+## Concern 42 — CEO Gate Behavior
+
+**CG1**: CEO-mandatory categories (1, 2, 4, 9) always surface to CEO — never absorbed by C-suite, regardless of delegation level or C-suite resolution.
+
+**CG2**: C-suite receives the Decision Log before posting Phase 2 positions. Positions that contradict a prior CEO decision without flagging `prior_decision_conflict: true` fail CG2.
+
+**CG3**: `hard_block: true` from any single C-suite agent prevents resolution regardless of majority alignment. A synthesis that proceeds over a hard block fails CG3.
+
+**CG4**: Any agent posting `prior_decision_conflict: true` forces a CEO brief even when C-suite is otherwise resolved. C-suite resolution does not override a logged CEO decision.
+
+**CG5**: If Phase 1 Decision Log check finds a prior CEO decision that fully covers the territory, CEO Gate routes to `synthesize` immediately — no C-suite round, no brief. Failing to apply auto-pilot when the territory is fully covered fails CG5.
+
+**CG6**: CEO reaction round (after CEO decision) is suppressed when all C-suite reactions are `aligned` with no flags. Running an unnecessary reaction round wastes steps; omitting it when reactions are aligned is correct.
+
+**CG7**: Ratification Brief is used for mandatory category + C-suite resolved. Strategic Brief is used for unresolved decisions. Using Strategic Brief for a mandatory + resolved case fails CG7.
+
+**CG8**: When CEO replies `research: [question]`, CEO Gate routes to CRO + relevant domain researcher and re-presents the brief with findings before accepting a decision. Accepting a CEO decision before research findings are returned fails CG8.
+
+---
+
+## Concern 43 — Implementation Quality
+
+**IQ1** (Dependency Dir Tracking): `git ls-files` must never contain paths under `node_modules/`, `.next/`, `dist/`, `out/`, or `.pnpm-store/` after any task commit. Applies to every task on every project — not scaffold-specific. A `.gitignore` covering these dirs is an implicit mandatory artifact of any task that runs a package install; missing it fails IQ1.
+
+**IQ2** (Build Artifact Tracking): `git ls-files` must never contain paths under `coverage/`, `build/`, or other generated output directories. A test task that runs coverage and commits the output without a `.gitignore` entry fails IQ2. Check runs universally — not only on test tasks.
+
+**IQ3** (Sensitive / Oversized Files): No `.env` file containing non-placeholder values may appear in the git index (`.env.example` is allowed). No single file over 500KB may be staged. Both checks run on every commit. Failure = CTO-STOP regardless of task type.
+
+---
+
 ## Criteria Gap Log
 *Trainer appends here when behavior is observed that no criterion covers.*
 <!-- Format: [date] Gap: [description] Suggested criterion: [draft wording] -->
+<!-- 2026-03-25 Gap: Scenario 055 maps empty action_items to SY1 failure, but SY1 is defined as rationale traceability — every rationale[] entry cites agent+round. In the seeded output, rationale[] IS correctly cited (PM Round 1, CTO Round 2), so SY1 passes. The actionability/completeness concern is fully covered by FC1 (action_items[] is a blocking Stage 4 required field) and C4 (named owners required). Scenario 055 updated to remove SY1 from criteria_tested. No new criterion needed — FC1 + C4 cover the seam. -->
 
 <!-- 2026-03-15 Gap: E1 (Round 2+ cross-agent engagement) cannot be evaluated in Tier 1 scenarios where agents agree in Round 1 — the inline synthesis path skips Round 2 per oms.md spec. Scenario 001 lists E1 as tested but it is only triggerable on disagreement. Suggested criterion: E1 scope note — "E1 only applies when Round 2+ exists; Tier 1 inline synthesis path is exempt." -->
 <!-- 2026-03-17 Gap: Scenario 033 (tier3-golden-path) expects an 'architect' and 'tech-lead' agent that do not exist in the current roster (confirmed: ls agents/ shows no architect dir). Router correctly identified the gap in coverage_gap field and substituted CTO. R7 partial failure is a scenario expectation mismatch, not a Router failure. Suggested action: (A) Create architect and tech-lead agent personas, OR (B) Update scenario 033 expected behavior to use 'cto' as architecture authority and remove architect/tech-lead from expected activated_agents. Suggested R7 note: "If an expected domain agent is absent from the roster, Router coverage_gap identification + closest available agent substitution is accepted behavior — flag as roster gap, not Router failure." -->

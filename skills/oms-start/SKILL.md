@@ -78,72 +78,86 @@ After ingesting material, reason silently across four dimensions. Do NOT show th
 - Prioritise: only surface questions where the answer changes what gets built or how
 - Skip questions where a sensible default exists and can be stated
 
-## Step 3 — Present Analysis + Get CEO Alignment
+## Step 3 — Scope + Roster Confirmation (with agent gate)
 
-In ONE message, show CEO the analysis and ask everything needed. Format:
+In ONE message, show CEO the analysis and propose the roster. Format:
 
 ```
 Here's what I understand so far:
 [2-3 sentence summary of what they're building and for whom]
 
-Recommended scope: [departments] — [one sentence reasoning]
-Non-standard agents needed: [list with one-line rationale each, or "none"]
+Recommended departments: [list] — [one sentence reasoning]
 
-Before I generate ctx files, I need answers to [N] open questions:
+Standard roster: [list active standard agents]
 
-**Must answer (changes the architecture):**
-1. [question]
-2. [question]
+Non-standard agents proposed:
+- [agent-name] — [one-line domain rationale]
+  CPO: [does this map to a product outcome? yes/no + reason]
+  CTO: [knowledge gap requiring new agent, or ctx.md entry? + reason]
+  → Recommend: create / defer to ctx.md
 
-**Good to answer (improves ctx quality):**
-3. [question]
+[or "None — standard roster covers this project"]
 
-Confirm scope + answer any questions — or just say "looks right, go" to proceed with defaults.
+Confirm scope and roster — or say "go" to accept all recommendations.
 ```
 
-CEO replies. If they say "go" or confirm: proceed to Step 4 with defaults for unanswered questions.
-If they answer questions: incorporate answers, then proceed.
+CEO replies. "Go" or confirmation → proceed to Step 3.5. If CEO rejects a proposed agent → use ctx.md extension for that domain instead.
 
 **Rules:**
-- Max 5 questions total — ruthlessly cut anything that has a sensible default
-- Never ask about things already stated in the idea
-- Scope and roster proposals go here, not in a separate step
-- In Bot Mode: skip entirely — use analysis results silently, write files with TBD for unknowns
+- Max 3 non-standard agent proposals — if more are needed, prioritise by recurring need
+- Never propose an agent where CTO says "ctx.md is sufficient"
+- In Bot Mode: skip entirely — accept all recommended agents, proceed to Step 3.5
 
-## Step 4 — Departmental Intake (parallel)
+## Step 3.5 — Create Approved Non-Standard Agents
 
-Based on scope answer, run intake questions from each active department's lead. Present ALL questions in ONE message — CEO answers everything at once.
+For each non-standard agent approved by CEO in Step 3:
 
-**Engineering (always — asked by CTO perspective):**
-1. What are you building? (one sentence — core function)
-2. Who is it for? (target user and their primary need)
-3. Tech stack? (frameworks, database, AI services, deployment)
-4. Current phase? (idea / prototype / MVP / live / scaling)
-5. Biggest technical constraint right now?
-6. What is explicitly out of scope?
+1. Read `~/.claude/agents/engine/agent-creation-rules.md`
+2. Write the persona file to `~/.claude/agents/[agent-name]/persona.md` following the required structure (Identity → Activation Condition → Primary Output → Non-Negotiables → Working Guidelines)
+3. Create empty `~/.claude/agents/[agent-name]/lessons.md` and `~/.claude/agents/[agent-name]/MEMORY.md`
+4. Add the agent to `company-hierarchy.md` under the correct department
 
-**Domain specialist detection** (auto — no question needed, infer from stack + answers):
-- Vercel detected (deployment answer or `vercel.json` / `next.config.js` present) → write `"deploy": "vercel"` to oms-config.json project entry, and add to `cto.ctx.md` under `## Deploy`
-- iOS / React Native / Expo detected → write `"mobile": "ios"` to oms-config.json project entry; note in `cto.ctx.md` that mobile testing requires simulator or device
-- GitHub Actions detected (`/.github/workflows/` exists) → note in `cto.ctx.md` under `## CI`; no separate Discord channel needed — engineering handles it
+These agents are now live and will participate in Step 4's question round.
+
+**Domain specialist detection** (auto — no CEO input needed):
+- Vercel detected → write `"deploy": "vercel"` to oms-config.json, add to `cto.ctx.md` under `## Deploy`, disable deployment protection (`ssoProtection: null`) via Vercel API using token at `~/.config/vercel/key`
+- iOS / React Native / Expo detected → write `"mobile": "ios"` to oms-config.json, note in `cto.ctx.md`
+- GitHub Actions detected → note in `cto.ctx.md` under `## CI`
 - Supabase detected → add to `backend-developer.ctx.md` under `## Database`
 
-**Research (if active — asked by CRO perspective):**
-7. What domains of knowledge does this product depend on? (e.g., behavioral psychology, content strategy, linguistics)
-8. What is the core research question the product is trying to answer about its users?
-9. Are there known risks to user wellbeing or safety that research should monitor?
-10. Which of these researcher types are relevant? (human behavior, data intelligence, content/platform, clinical safety, language/communication, philosophy/ethics, cultural/historical, biological/evolutionary)
+## Step 4 — Agent Question Round (parallel)
 
-**Legal (if active — asked by CLO perspective):**
-11. What jurisdictions will users be in? (affects privacy law)
-12. Does the product collect personal data? If so, what kind?
-13. What platforms will you distribute on? (App Store, YouTube, etc.)
-14. Any known IP, licensing, or content rights considerations?
+Run ALL active agents in parallel. Each agent reads `IDEA.md` (and any other material from Step 2) plus the scope summary from Step 3. Each agent produces:
 
-**Finance (if active — asked by CFO perspective):**
-15. What is the revenue model? (subscription, ads, one-time, freemium, etc.)
-16. What are the primary cost drivers? (API calls, infrastructure, content production)
-17. What financial milestone would trigger a CEO milestone report?
+1. **Domain summary** — 3–5 bullets: what they understand about the project from their domain
+2. **Blocking questions** — questions where the answer changes what gets built or how (max 2 per agent)
+3. **Clarifying questions** — questions that improve ctx quality but have sensible defaults (max 2 per agent)
+
+After all agents return, Router deduplicates and groups:
+- Questions covering the same ground → keep the sharpest version
+- Questions with obvious defaults → move to clarifying or drop
+
+Present to CEO in ONE message:
+
+```
+The team reviewed your idea. Here's what they need:
+
+**Must answer — these change what gets built:**
+[CTO] [question]
+[CPO] [question]
+[CLO] [question if legal active]
+
+**Good to answer — improves direction and ctx quality:**
+[Backend Dev] [question]
+[Researcher] [question if research active]
+[CFO] [question if finance active]
+
+Answer any or all — say "go" to proceed with defaults for anything unanswered.
+```
+
+CEO answers → each agent's answers are routed back to the agent that asked. Proceed to Step 5.
+
+**In Bot Mode:** skip question round — proceed to Step 5 with TBD for unknowns.
 
 ## Step 5 — Generate Ctx Files
 
@@ -298,10 +312,21 @@ Active departments: [list]
 [If research] Rostered researchers: [list agent names]
 [If Discord configured] Discord: #[slug] channel created — autonomous OMS ready
 
-Run /oms <task> to start.
-Run /oms exec for a strategic C-suite discussion.
-Run /oms-start again if the project pivots or a new department is needed.
+Running /oms-exec now to select the first milestone and draft initial features...
 ```
+
+## Step 8 — Auto-trigger /oms-exec
+
+Immediately after Step 7 output, run `/oms-exec` without waiting for CEO input.
+
+The C-suite picks the first milestone from `product-direction.ctx.md`, drafts FEATURE blocks, and appends them to `cleared-queue.md`. This completes the initialization chain — by the end of Step 8, the project has a direction, a milestone, and tasks ready to elaborate.
+
+**In Bot Mode:** write checkpoint `{"next": "exec", "project": "[slug]"}` to `.claude/oms-checkpoint.json` and output `## OMS Update\noms-start complete — exec queued` instead of running exec inline.
+
+**Rules:**
+- Do not ask CEO "shall I run exec?" — just run it
+- If exec fails or produces no features: tell CEO and suggest running `/oms-exec` manually
+- After exec completes, the full summary (oms-start init + exec features) is shown together as the final output
 
 ## Rules
 - **Never write to `~/.claude/agents/`** — all files go to the current project's `.claude/agents/`

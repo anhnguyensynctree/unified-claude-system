@@ -20,11 +20,46 @@
       "path": "/Users/Lewis/code/personal/daily-cosmos",
       "channel_id": "1485848137217212636",
       "active": true,
+      "auto_start": false,
+      "deploy": "vercel",
+      "mobile": null
+    },
+    "content-multiplier": {
+      "path": "/Users/Lewis/code/personal/content-multiplier",
+      "channel_id": "1486595905070305281",
+      "active": true,
+      "auto_start": true,
+      "deploy": null,
+      "mobile": null
+    },
+    "auto-leverage": {
+      "path": "/Users/Lewis/code/personal/auto-leverage",
+      "channel_id": "1486598534483415184",
+      "active": true,
       "auto_start": true,
       "deploy": "vercel",
       "mobile": null
+    },
+    "slug-optinum-i-want-to": {
+      "path": "/Users/Lewis/code/personal/slug-optinum-i-want-to",
+      "status": "idea"
+    },
+    "optinum": {
+      "path": "/Users/Lewis/code/personal/optinum",
+      "channel_id": "1486944820952956929",
+      "active": true,
+      "auto_start": true,
+      "deploy": null,
+      "mobile": null
+    },
+    "kyodaikoifishmarket-ecommerce-for-fish-market": {
+      "path": "/Users/Lewis/code/personal/kyodaikoifishmarket-ecommerce-for-fish-market",
+      "status": "idea"
     }
   },
   "claude_channel_id": "1485719966274552019",
-  "watcher_channel_id": "1486148555071688755"
+  "watcher_channel_id": "1486148555071688755",
+  "daily_brief_channel_id": "REPLACE_WITH_DISCORD_CHANNEL_ID",
+  "radar_channel_id": "REPLACE_WITH_DISCORD_CHANNEL_ID",
+  "projects_base_dir": "/Users/Lewis/code/personal"
 }

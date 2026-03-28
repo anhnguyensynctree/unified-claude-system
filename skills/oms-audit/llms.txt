@@ -1,0 +1,43 @@
+# oms-audit — LLM Reference
+
+Manual full-efficiency audit of the OMS system. Checks persona bloat, over-activation patterns, ctx file staleness, and memory bloat. Context Optimizer always runs post-task in lightweight mode — /oms-audit forces the full audit immediately.
+
+## Triggers — use /oms-audit when
+
+- Context Optimizer lightweight check flagged persistent warnings
+- Suspecting persona drift or bloat after heavy usage
+- Before a milestone boundary where clean-up is worth doing
+- CEO explicitly requests a system health check
+
+The Context Optimizer runs automatically every 10 tasks in full mode — /oms-audit forces it now.
+
+## Invocation
+
+```
+/oms-audit             # full audit: all ctx files, personas, last 10 task logs
+```
+
+## What it checks
+
+- Persona bloat: any agent persona over ~150 lines without proportional value
+- Unused ctx files: ctx files not referenced by any active agent or task in the last 10 runs
+- Over-activation patterns: agents activated in Tier 0/1 tasks where a single agent sufficed
+- Round efficiency: tasks hitting round cap without convergence (Router classification miss)
+- Memory bloat: facts.json entries over threshold, MEMORY.md over 80 lines
+- Task log size: logs over 2KB that should be archived
+
+## What it auto-fixes (no CEO approval needed)
+
+- facts.json consolidation if >40 entries
+- Task log archiving (moves old logs to .claude/logs/archive/)
+- metrics.md task count reset
+
+## What requires CEO approval before action
+
+- Trimming any agent persona
+- Removing an unused ctx file
+- Archiving a lessons.md section
+
+## Output
+
+3–5 bullet summary to CEO. Full JSON to .claude/logs/tasks/[audit-id].md.

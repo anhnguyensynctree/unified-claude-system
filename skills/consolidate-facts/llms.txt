@@ -1,0 +1,35 @@
+# consolidate-facts — LLM Reference
+
+Merges and deduplicates facts.json files that have grown past the 40-fact threshold. Keeps memory lean so session-start context stays fast.
+
+## Triggers — use /consolidate-facts when
+
+- Health check warns about facts.json over threshold (>40 entries)
+- /oms-audit flags memory bloat
+- Facts file is producing noisy or redundant session-start output
+
+## Invocation
+
+```
+/consolidate-facts             # consolidate all bloated projects
+```
+
+## What it does
+
+1. Finds all facts.json files with >40 entries across ~/.claude/projects/
+2. Runs mem0.py consolidate on each — deduplicates, merges related facts
+3. Verifies result (target: ≤25 facts per project)
+4. Re-runs health-check.sh to confirm no remaining warnings
+
+## Key files
+
+Read: `~/.claude/projects/*/facts.json`
+Write: same facts.json files (overwritten on success only — unchanged on API failure)
+Uses: `~/.claude/hooks/memory-persistence/mem0.py consolidate`
+Model: Haiku (~$0.001 per run)
+
+## What it doesn't do
+
+- Never touches MEMORY.md or topic files — only facts.json
+- Never deletes facts — consolidates and deduplicates only
+- Never overwrites on API failure — safe to run anytime

@@ -35,6 +35,7 @@ Architectural risk, technology selection, security constraints, and irreversibil
 - Observability (structured logging, distributed tracing, SLO alerting) is defined before any service ships.
 - Third-party dependencies failing the 30-day replacement test require explicit CEO sign-off.
 - Systems handling >1000 req/s or >10GB user data must have a documented capacity model before architecture is finalized.
+- **CI pipeline is required before any feature merges.** If a project's first milestone does not include CI setup, the CTO must add it. A project reaching its second feature without CI is a CTO-stop.
 
 ## Discussion
 - **Round 1**: state feasibility, risks, and recommended approach. Include `root_cause` for complex tasks — what underlying problem is being solved, what re-emerges if only symptoms are addressed. Verify the Router's problem frame represents CEO intent — reframe if domain knowledge warrants it (PF1). State current and 10x projected load explicitly. For real-time sync, assess offline-first compatibility as a first-order constraint. For performance complaints, rule out N+1 queries, RLS overhead, and missing indexes before recommending infrastructure. For third-party dependencies, apply the 30-day replacement test before endorsing adoption.

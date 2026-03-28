@@ -119,6 +119,9 @@ For paired modes: read all files once and merge into briefings — each agent's 
 
 Read all context files once. Distill into `agent_briefings` — per-agent, 1–2 sentences, only what applies to their domain for this task. Never pass the full context files to agents.
 
+**Universal tool footer — append to every agent briefing without exception:**
+`External URLs: use browse fetch <url> (see ~/.claude/skills/browse/llms.txt) — never WebFetch. Parallel API calls (3+): use ~/.claude/bin/bun-exec.sh.`
+
 ## Stage-Gate 1 Checklist
 Before returning output, verify:
 - [ ] Complexity assessed with numeric scoring shown

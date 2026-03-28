@@ -1,0 +1,35 @@
+# oms-start — LLM Reference
+
+One-time project initializer. Ingests any starting material (idea, PRD, notes, URLs), runs departmental intake, generates all .claude/agents/ ctx files. Run once per project.
+
+## Triggers — use /oms-start when
+
+- New project needs OMS — no company-belief.ctx.md exists
+- Major pivot requiring full ctx rebuild
+- Adding a new department to an existing project
+
+Never re-run on an active project unless rebuilding from scratch.
+Use /oms discover to re-scan an existing project's file structure.
+
+## Invocation
+
+```
+/oms-start                     # reads material already in project dir (README.md, IDEA.md, CLAUDE.md)
+/oms-start <idea text>         # inline idea or description
+```
+
+## What it generates
+
+All written to [project]/.claude/agents/:
+- company-belief.ctx.md — vision, values, constraints
+- product-direction.ctx.md — milestones with success criteria
+- company-hierarchy.md — active departments and rostered agents
+- ceo-decisions.ctx.md — standing CEO decisions log
+- tech-stack.ctx.md — stack, dependencies, deploy targets (code projects)
+- architecture.ctx.md — system design, data models, API contracts (code projects)
+
+## What it doesn't do
+
+- Never queues tasks — that's /oms-exec
+- Never runs discussions — that's /oms
+- Never modifies source code

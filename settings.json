@@ -7,7 +7,8 @@
       "Edit",
       "MultiEdit",
       "Glob",
-      "Grep"
+      "Grep",
+      "Agent"
     ]
   },
   "model": "claude-sonnet-4-6",
@@ -19,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo)' && echo '[Hook] Long-running process detected — consider using run_in_background or a separate terminal' >&2 || true"
+            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo)' && echo '[Hook] Long-running process detected \u2014 consider using run_in_background or a separate terminal' >&2 || true"
           }
         ]
       },
@@ -28,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' && echo \"$FILE\" | grep -qvE '(README|CLAUDE|codemap|plan-|research-|review-|session|\\.claude/|references/|docs/|specs/|decisions/|packages/agents/|logs/tasks/)' && echo 'Blocked: avoid creating loose .md files. Only README.md, CLAUDE.md, .claude/ files, and packages/agents/ system files are allowed.' >&2 && exit 2 || true"
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' || exit 0; echo \"$FILE\" | grep -qE '(ceo-decisions|company-briefing)' && echo 'Blocked: CEO-gated file \u2014 edit manually' >&2 && exit 2; echo \"$FILE\" | grep -qvE '(README|CLAUDE|codemap|plan-|research-|review-|session|\\.claude/|cleared-queue|references/|docs/|specs/|decisions/|packages/agents/|logs/tasks/|logs/research/|topics/|shared-lessons/|training/|agents/|design/stitch/)' && echo 'Blocked: avoid creating loose .md files. Only README.md, CLAUDE.md, .claude/ files, and packages/agents/ system files are allowed.' >&2 && exit 2 || true"
           }
         ]
       },
@@ -40,6 +41,33 @@
             "command": "jq -r '.tool_input.command' | grep -q 'git push' && echo '[Hook] Review your diff before pushing. Run /review-pr first.' >&2 || true"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // \"\"' 2>/dev/null); echo \"$FILE\" | grep -qE '(rules/security\\.md|CLAUDE\\.md|settings\\.json)' && exit 0; CONTENT=$(jq -r '.tool_input.content // .tool_input.new_string // \"\"' 2>/dev/null); echo \"$CONTENT\" | grep -qE 'anthropic\\.Anthropic\\(|new Anthropic\\(|AsyncAnthropic\\(|ANTHROPIC_API_KEY|config/anthropic/key|@anthropic-ai/sdk' && echo '[\u26d4 BLOCKED] Direct Anthropic API key usage requires Super Permission from Lewis. Use claude -p / claude --print (subscription) instead. See rules/security.md \u00a7 ANTHROPIC API KEY' >&2 && exit 2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Blocked: use browse fetch <url> instead of WebFetch \u2014 isolated context, handles JS, strips noise. See ~/.claude/skills/browse/llms.txt' >&2 && exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Blocked: use browse fetch <url> instead of WebSearch \u2014 isolated context, handles JS, strips noise. See ~/.claude/skills/browse/llms.txt' >&2 && exit 2"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -48,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' || exit 0; [ -f \"$FILE\" ] || exit 0; LINES=$(grep -c '[^[:space:]]' \"$FILE\" 2>/dev/null || echo 0); HAS_HEADING=$(grep -c '^#' \"$FILE\" 2>/dev/null || echo 0); HAS_PLACEHOLDER=$(grep -cE '^\\[|^TODO|^\\.\\.\\.' \"$FILE\" 2>/dev/null || echo 0); [ \"$HAS_HEADING\" -eq 0 ] && echo '[Hook] .md missing heading — add a # title' >&2; [ \"$LINES\" -lt 5 ] && echo \"[Hook] .md too sparse ($LINES lines) — every .md must justify its token cost\" >&2; [ \"$HAS_PLACEHOLDER\" -gt 0 ] && echo '[Hook] .md has unfilled placeholders — complete or remove them' >&2; true"
+            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' || exit 0; [ -f \"$FILE\" ] || exit 0; LINES=$(grep -c '[^[:space:]]' \"$FILE\" 2>/dev/null || echo 0); HAS_HEADING=$(grep -c '^#' \"$FILE\" 2>/dev/null || echo 0); HAS_PLACEHOLDER=$(grep -cE '^\\[|^TODO|^\\.\\.\\.' \"$FILE\" 2>/dev/null || echo 0); [ \"$HAS_HEADING\" -eq 0 ] && echo '[Hook] .md missing heading \u2014 add a # title' >&2; [ \"$LINES\" -lt 5 ] && echo \"[Hook] .md too sparse ($LINES lines) \u2014 every .md must justify its token cost\" >&2; [ \"$HAS_PLACEHOLDER\" -gt 0 ] && echo '[Hook] .md has unfilled placeholders \u2014 complete or remove them' >&2; true"
           }
         ]
       },
@@ -66,7 +94,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); [ -f \"$FILE\" ] && grep -n 'console\\.log' \"$FILE\" && echo '[Hook] console.log found — remove before committing' >&2 || true"
+            "command": "FILE=$(jq -r '.tool_input.file_path'); [ -f \"$FILE\" ] && grep -n 'console\\.log' \"$FILE\" && echo '[Hook] console.log found \u2014 remove before committing' >&2 || true"
           }
         ]
       },
@@ -183,6 +211,9 @@
   "skipDangerousModePermissionPrompt": true,
   "voiceEnabled": true,
   "env": {
-    "CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS": "60000"
+    "CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS": "60000",
+    "ENABLE_TOOL_SEARCH": "auto:5",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80",
+    "MAX_THINKING_TOKENS": "10000"
   }
 }

@@ -30,6 +30,7 @@ Legal risk, data privacy, platform compliance, and IP exposure — include when 
 - "We will add a ToS checkbox" does not equal informed consent — dark patterns in consent design are a legal and ethical liability.
 - Platform ToS violations that result in account banning can destroy a business overnight — treat platform compliance with the same urgency as security.
 - CLO finds solutions, not blocks — every flagged risk must be accompanied by the minimum compliant path.
+- Exception: `critical` severity legal risk with no viable compliant path within the current proposal is a hard-block. Set `hard_block: true` in CEO Gate output. C-suite majority cannot override it — CEO must decide or the proposal is revised first.
 
 ## Discussion
 - **Round 1**: Identify all legal exposure in the proposed initiative. Rate each risk: low (monitor), medium (mitigate), high (do not proceed without resolution), critical (stop). Propose the minimum compliant path.

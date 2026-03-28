@@ -6,15 +6,63 @@ description: Orchestrate a one-man-show multi-agent discussion. Usage: /oms foll
 
 Orchestrates the one-man-show multi-agent discussion engine. Invoked via `/oms` followed by your intent.
 
+## ⚑ Output Discipline — Read Before Any Step
+
+**NEVER output agent positions, round transcripts, internal engine reasoning, or JSON to the user.**
+
+All agent work (Router output, Round 1–N positions, Facilitator analysis, Synthesizer internals, Trainer output, Context Optimizer JSON) is written to the task log file and shown to no one. The only things displayed to the user are:
+
+1. **Router confirmation** (one line): `Routing: [task-id] | Tier [N] | [agents] | [N] rounds`
+2. **CEO Gate** (only if triggered): the brief requiring input
+3. **After synthesis** — invoke the Executive Briefing Agent (see Executive Briefing section above)
+4. **Step 8.5 queue write** (one line): tasks written to cleared-queue.md
+5. **Errors or blocking questions** that require CEO input
+
+Silence is correct behavior for Steps 1–7 internals. Do not narrate progress, do not display agent reasoning, do not summarize what each agent said during the discussion. The user reads the task log if they want the full transcript.
+
+---
+
+## Executive Briefing — Required at End of Every Workflow
+
+**Every workflow ends by writing `.claude/oms-briefing.md` then invoking the Executive Briefing Agent. No exceptions.**
+
+**Step 1 — Write the briefing file**
+Write `.claude/oms-briefing.md` using the schema at `~/.claude/agents/executive-briefing-agent/briefing-schema.md`.
+Populate it from: task log, `cleared-queue.md` state, `product-direction.ctx.md`, any risks/blockers surfaced.
+
+**Step 2 — Invoke the agent**
+Load `~/.claude/agents/executive-briefing-agent/persona.md` + `executive-briefing-agent/lessons.md`.
+The agent reads `.claude/oms-briefing.md` and outputs the executive brief. That is the final output to the CEO.
+
+**For `/oms all`**: write one briefing file per feature as it completes (agent reads each), then overwrite with roll-up data at the end for a final consolidated brief.
+**For `/oms-exec`**: briefing file includes which milestone was chosen, features drafted, queue state after write.
+**For `/oms-work`**: briefing file includes all tasks completed/stopped, milestone progress, product direction.
+
+**Step 3 — Append to daily log**
+After the agent outputs the brief, append to `.claude/oms-daily-log.md`:
+```
+## YYYY-MM-DDTHH:MMZ | [workflow-type]
+• [status bullet]
+• [win or blocker bullet]
+• [CEO action bullet or "No decision required"]
+Built: [item 1] — [impact on product/users]
+Built: [item 2] — [impact on product/users]
+```
+TL;DR bullets come from `### 📊 Executive TL;DR`. Built lines come from `### 🚀 What Was Done`.
+This file accumulates all workflow runs for the day. The Discord daily brief reads it each morning.
+
+---
+
 ## Invocation Modes
 
 | Input | Mode |
 |---|---|
 | `/oms <task>` | **Task** — default |
-| `/oms read <file/url>` | **Onboard** — team reads material, surfaces questions |
+| `/oms read <file/url>` | **Onboard** — team reads material, surfaces questions. For URLs: use browse `fetch <url>` (see `~/.claude/skills/browse/llms.txt`) — not WebFetch. |
 | `/oms discover` | **Discover** — explicit project bootstrap |
 | `/oms add <role> to the team` | **Task** — route to CTO + EM |
 | `/oms exec` | **Exec** — C-suite strategic discussion; auto-triggered at milestones |
+| `/oms all` | **Elaborate All** — runs `/oms FEATURE-NNN` for every `Status: draft` feature in `cleared-queue.md`, sequentially |
 | `/oms think [framework]: <question>` | **Framework** — CEO invokes a named lens on a specific question |
 
 ## Framework Invocation Mode
@@ -41,6 +89,15 @@ When CEO uses `/oms think [framework]: <question>`, route to the framework owner
 
 ---
 
+## Session-Level Rules — apply throughout this entire session
+
+- **External URLs**: always use browse `fetch <url>` (see `~/.claude/skills/browse/llms.txt`). Never use the built-in WebFetch tool for content extraction.
+- **Parallel API calls (3+)**: write a TS file and run `~/.claude/bin/bun-exec.sh`. Never make sequential tool calls for independent HTTP requests.
+
+These rules apply to the orchestrator, all agents, and all modes. No exceptions.
+
+---
+
 ## Step 0 — Project Bootstrap (first run only)
 Check if `.claude/agents/router.ctx.md` exists in the current project.
 
@@ -55,6 +112,43 @@ Check if `.claude/agents/router.ctx.md` exists in the current project.
 **If exists:** skip entirely.
 
 **Company context check:** if `.claude/agents/company-belief.ctx.md` does not exist in the current project, tell CEO: "Run `/oms-start` to initialize project context before routing this task." — then stop. Do not proceed to Step 1 until it exists.
+
+**Queue state check (always — runs after bootstrap):**
+Read `.claude/cleared-queue.md` if it exists. This is the ONLY file that counts as the task queue. Do NOT read `priority-queue.md` or any backlog file — those are CPO planning artifacts, not the executable queue.
+
+Always print one status line before proceeding — no exceptions:
+- File missing: `Queue: cleared-queue.md not found → empty`
+- File exists, no queued/draft tasks: `Queue: [N] tasks total, 0 active → exec`
+- File exists, draft tasks only: `Queue: [N] draft tasks — ready for /oms <task> discussion: [TASK-001 title, ...]`
+- File exists, queued tasks: `Queue: [N] queued — [TASK-001 title, TASK-002 title, ...]`
+- Attention needed: `Queue: ⚑ [N] need attention ([TASK-NNN cto-stop], [TASK-NNN needs-review])`
+
+1. If `cto-stop` or `needs-review` tasks exist → brief CEO before proceeding:
+   `"⚑ N tasks need attention: TASK-NNN (cto-stop — reason), TASK-NNN (needs-review — upstream changed)"`
+   - `cto-stop` → re-spec inline; write new task to queue; continue
+   - `needs-review` → interface changed upstream; re-spec this task only; continue
+   - CEO can skip any → proceed to step 2
+
+2. If only `draft` tasks exist AND no task was given → show drafts and prompt:
+   `"[N] draft tasks from exec — run /oms <task title> to discuss each one, or /oms exec to plan another milestone"`
+   - List each draft: `TASK-NNN — [title] | Why: [exec rationale]`
+   - Stop. Do not auto-proceed.
+
+3. If no `queued` or `draft` tasks remain AND no task was given → auto-trigger exec session:
+   - Print: `No queued tasks and no task given — triggering exec session`
+   - Read `.claude/agents/product-direction.ctx.md`
+   - Print: `Reading product-direction.ctx.md — building milestone gap report`
+   - Build milestone gap report: for each milestone, classify as `complete` (all tasks done) / `in-progress` (tasks queued or running) / `no coverage` (0 tasks in queue)
+   - Print gap report: `Milestones: [name] complete | [name] in-progress | [name] no coverage`
+   - Set `task_mode: exec` — activate CPO (lead), CTO, CFO, CLO, CRO
+   - Inject gap report into CPO's briefing: milestone status + "select ONE milestone to advance next and plan its action_items"
+   - Run exec discussion → Synthesis → Step 8.5 queues tasks for chosen milestone
+   - Do NOT ask CEO "what's the task?" — exec fires automatically
+
+4. Otherwise → proceed normally to Step 1:
+   - If CEO gave a task (with or without queued/draft tasks): route the CEO's task to Step 1. Print `Task given — routing to Step 1`.
+   - If a CEO gives a draft task title (e.g. `/oms TASK-001 extraction pipeline`): load the draft from cleared-queue.md as context, inject `Why` and `Exec-decision` into agent briefings, run full engineering discussion, Step 8.5 promotes draft → queued with full OpenSpec.
+   - If queue has queued tasks but no task given: print `[N] queued tasks ready — run /oms-work to execute, or give me a task to discuss`. Stop.
 
 ---
 
@@ -142,67 +236,68 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 ## Agent Registry
 
 ### Engine Roles
-| Role | File | Lessons | Memory | Model | When |
-|---|---|---|---|---|---|
-| router | `~/.claude/agents/router/persona.md` | `router/lessons.md` | `router/MEMORY.md` | Haiku | Step 1 |
-| path-diversity | `~/.claude/agents/path-diversity/persona.md` | `path-diversity/lessons.md` | `path-diversity/MEMORY.md` | Haiku | Step 1.5 (Tier 2+) |
-| pre-facilitator | *(inline — no persona file)* | — | — | Haiku | Before full Facilitator each round (Tier 2+) |
-| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | `facilitator/MEMORY.md` | Sonnet | After each round (Tier 2+, when pre-facilitator requires it) |
-| verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | `verification/MEMORY.md` | Sonnet | On-demand |
-| ceo-gate | `~/.claude/agents/ceo-gate/persona.md` | — | `ceo-gate/MEMORY.md` | Haiku | Step 3.5 (Tier 1+) — always a quick pass, escalates on match |
-| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | `synthesizer/MEMORY.md` | Sonnet (Opus: 5+ or livelock) | Step 4 (Tier 2+) |
-| trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | `trainer/MEMORY.md` | Sonnet | Step 6 — always |
+| Role | File | Lessons | Model | When |
+|---|---|---|---|---|
+| router | `~/.claude/agents/router/persona.md` | `router/lessons.md` | Haiku | Step 1 |
+| path-diversity | `~/.claude/agents/path-diversity/persona.md` | `path-diversity/lessons.md` | Haiku | Step 1.5 (Tier 2+) |
+| pre-facilitator | *(inline — no persona file)* | — | Haiku | Before full Facilitator each round (Tier 2+) |
+| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | Sonnet | After each round (Tier 2+, when pre-facilitator requires it) |
+| verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | Sonnet | On-demand |
+| ceo-gate | `~/.claude/agents/ceo-gate/persona.md` | — | Haiku | Step 3.5 (Tier 1+) — always a quick pass, escalates on match |
+| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | Sonnet (Opus: 5+ or livelock) | Step 4 (Tier 2+) |
+| trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | Sonnet | Step 6 — always |
+| executive-briefing-agent | `~/.claude/agents/executive-briefing-agent/persona.md` | `executive-briefing-agent/lessons.md` | Sonnet | Terminal — fires once after every workflow completes. Reads `.claude/oms-briefing.md`. Never participates in discussion rounds. |
 
 ### Discussion Roster (V1)
 
 **Engineering agents** — activated for `build`, `architecture`, `debug`, `plan`, `refactor`, `security`, `test`, `performance`, `ui-ux` tasks:
 
-| Role | File | Lessons | ctx | Memory |
-|---|---|---|---|---|
-| cto | `~/.claude/agents/cto/persona.md` | `cto/lessons.md` | `cto.ctx.md` | `cto/MEMORY.md` |
-| product-manager | `~/.claude/agents/product-manager/persona.md` | `product-manager/lessons.md` | `product-manager.ctx.md` | `product-manager/MEMORY.md` |
-| engineering-manager | `~/.claude/agents/engineering-manager/persona.md` | `engineering-manager/lessons.md` | `engineering-manager.ctx.md` | `engineering-manager/MEMORY.md` |
-| frontend-developer | `~/.claude/agents/frontend-developer/persona.md` | `frontend-developer/lessons.md` | `frontend-developer.ctx.md` | `frontend-developer/MEMORY.md` |
-| backend-developer | `~/.claude/agents/backend-developer/persona.md` | `backend-developer/lessons.md` | `backend-developer.ctx.md` | `backend-developer/MEMORY.md` |
-| qa-engineer | `~/.claude/agents/qa-engineer/persona.md` | `qa-engineer/lessons.md` | `qa-engineer.ctx.md` | `qa-engineer/MEMORY.md` |
+| Role | File | Lessons | ctx |
+|---|---|---|---|
+| cto | `~/.claude/agents/cto/persona.md` | `cto/lessons.md` | `cto.ctx.md` |
+| product-manager | `~/.claude/agents/product-manager/persona.md` | `product-manager/lessons.md` | `product-manager.ctx.md` |
+| engineering-manager | `~/.claude/agents/engineering-manager/persona.md` | `engineering-manager/lessons.md` | `engineering-manager.ctx.md` |
+| frontend-developer | `~/.claude/agents/frontend-developer/persona.md` | `frontend-developer/lessons.md` | `frontend-developer.ctx.md` |
+| backend-developer | `~/.claude/agents/backend-developer/persona.md` | `backend-developer/lessons.md` | `backend-developer.ctx.md` |
+| qa-engineer | `~/.claude/agents/qa-engineer/persona.md` | `qa-engineer/lessons.md` | `qa-engineer.ctx.md` |
 
 **Research C-Suite** — activated for all `research` tasks and `exec` tasks as domain lead:
 
-| Role | File | Lessons | Memory | Domain |
-|---|---|---|---|---|
-| chief-research-officer | `~/.claude/agents/chief-research-officer/persona.md` | `chief-research-officer/lessons.md` | `chief-research-officer/MEMORY.md` | Research direction, cross-disciplinary synthesis, research-to-product translation |
+| Role | File | Lessons | Domain |
+|---|---|---|---|
+| chief-research-officer | `~/.claude/agents/chief-research-officer/persona.md` | `chief-research-officer/lessons.md` | Research direction, cross-disciplinary synthesis, research-to-product translation |
 
 **New C-Suite** — activated for `exec` tasks and tasks within their domain scope:
 
-| Role | File | Lessons | Memory | Domain |
-|---|---|---|---|---|
-| cpo | `~/.claude/agents/cpo/persona.md` | `cpo/lessons.md` | `cpo/MEMORY.md` | Product direction, research-to-product translation, roadmap ownership |
-| clo | `~/.claude/agents/clo/persona.md` | `clo/lessons.md` | `clo/MEMORY.md` | All legal — compliance, contracts, IP, privacy, platform ToS |
-| cfo | `~/.claude/agents/cfo/persona.md` | `cfo/lessons.md` | `cfo/MEMORY.md` | All finance — cost tracking, revenue, P&L, unit economics |
+| Role | File | Lessons | Domain |
+|---|---|---|---|
+| cpo | `~/.claude/agents/cpo/persona.md` | `cpo/lessons.md` | Product direction, research-to-product translation, roadmap ownership |
+| clo | `~/.claude/agents/clo/persona.md` | `clo/lessons.md` | All legal — compliance, contracts, IP, privacy, platform ToS |
+| cfo | `~/.claude/agents/cfo/persona.md` | `cfo/lessons.md` | All finance — cost tracking, revenue, P&L, unit economics |
 
 **Domain Research Agents** — project-scoped; only available if declared in `.claude/agents/company-hierarchy.md`. PhD-equivalent, 40+ years expertise standard.
 
 Core research agents (likely in most research projects):
-| Role | File | Lessons | Memory | Research Question |
-|---|---|---|---|---|
-| human-behavior-researcher | `~/.claude/agents/human-behavior-researcher/persona.md` | `human-behavior-researcher/lessons.md` | `human-behavior-researcher/MEMORY.md` | How and why do people behave, decide, and change? |
-| data-intelligence-analyst | `~/.claude/agents/data-intelligence-analyst/persona.md` | `data-intelligence-analyst/lessons.md` | `data-intelligence-analyst/MEMORY.md` | What do our metrics and patterns actually tell us? |
+| Role | File | Lessons | Research Question |
+|---|---|---|---|
+| human-behavior-researcher | `~/.claude/agents/human-behavior-researcher/persona.md` | `human-behavior-researcher/lessons.md` | How and why do people behave, decide, and change? |
+| data-intelligence-analyst | `~/.claude/agents/data-intelligence-analyst/persona.md` | `data-intelligence-analyst/lessons.md` | What do our metrics and patterns actually tell us? |
 
 Domain specialist agents (project-scoped per company-hierarchy):
-| Role | File | Lessons | Memory | Research Question |
-|---|---|---|---|---|
-| content-platform-researcher | `~/.claude/agents/content-platform-researcher/persona.md` | `content-platform-researcher/lessons.md` | `content-platform-researcher/MEMORY.md` | How does content perform on this platform and why? |
-| clinical-safety-researcher | `~/.claude/agents/clinical-safety-researcher/persona.md` | `clinical-safety-researcher/lessons.md` | `clinical-safety-researcher/MEMORY.md` | What psychological risks exist and how do we protect users? |
-| language-communication-researcher | `~/.claude/agents/language-communication-researcher/persona.md` | `language-communication-researcher/lessons.md` | `language-communication-researcher/MEMORY.md` | How should this be phrased, structured, and conveyed? |
-| philosophy-ethics-researcher | `~/.claude/agents/philosophy-ethics-researcher/persona.md` | `philosophy-ethics-researcher/lessons.md` | `philosophy-ethics-researcher/MEMORY.md` | What are the ethical implications and what does this mean? |
-| cultural-historical-researcher | `~/.claude/agents/cultural-historical-researcher/persona.md` | `cultural-historical-researcher/lessons.md` | `cultural-historical-researcher/MEMORY.md` | What do culture, history, and social structures tell us? |
-| biological-evolutionary-researcher | `~/.claude/agents/biological-evolutionary-researcher/persona.md` | `biological-evolutionary-researcher/lessons.md` | `biological-evolutionary-researcher/MEMORY.md` | What biological and evolutionary forces shape this? |
+| Role | File | Lessons | Research Question |
+|---|---|---|---|
+| content-platform-researcher | `~/.claude/agents/content-platform-researcher/persona.md` | `content-platform-researcher/lessons.md` | How does content perform on this platform and why? |
+| clinical-safety-researcher | `~/.claude/agents/clinical-safety-researcher/persona.md` | `clinical-safety-researcher/lessons.md` | What psychological risks exist and how do we protect users? |
+| language-communication-researcher | `~/.claude/agents/language-communication-researcher/persona.md` | `language-communication-researcher/lessons.md` | How should this be phrased, structured, and conveyed? |
+| philosophy-ethics-researcher | `~/.claude/agents/philosophy-ethics-researcher/persona.md` | `philosophy-ethics-researcher/lessons.md` | What are the ethical implications and what does this mean? |
+| cultural-historical-researcher | `~/.claude/agents/cultural-historical-researcher/persona.md` | `cultural-historical-researcher/lessons.md` | What do culture, history, and social structures tell us? |
+| biological-evolutionary-researcher | `~/.claude/agents/biological-evolutionary-researcher/persona.md` | `biological-evolutionary-researcher/lessons.md` | What biological and evolutionary forces shape this? |
 
 Domain research agents carry universal domain knowledge — no ctx.md. Project-specific context is injected via `.claude/agents/research.ctx.md` on research tasks. Domain researchers do not replace engineering agents on implementation tasks but may join them when the task has a human-understanding dimension.
 
-Each agent's effective prompt = persona.md + lessons.md + ctx.md (if exists) + MEMORY.md + `agent_briefings.[role]` from Router.
+Each agent's effective prompt = persona.md + lessons.md + ctx.md (if exists) + `agent_briefings.[role]` from Router.
 
-**Load order**: persona.md (identity) → lessons.md (learned behaviors) → ctx.md + MEMORY.md (task context) → agent_briefing (task distillation).
+**Load order**: persona.md (identity) → lessons.md (learned behaviors) → ctx.md (task context) → agent_briefing (task distillation).
 
 ---
 
@@ -219,29 +314,86 @@ A. Load material (read file, folder, or fetch URL)
 B. Run all agents in parallel — each produces: domain summary (3–5 bullets) + domain-specific blocking/clarifying questions
 C. Router deduplicates and groups questions by urgency: **blocking** vs **clarifying**. Presents to CEO.
 D. CEO answers questions. Router distributes answers to relevant agents.
-E. Each agent writes what they learned to their `MEMORY.md` under `## Onboarding: [project] | [date]`
+E. Each agent writes what they learned to the project-layer `[project]/.claude/agents/[agent]/lessons.md` under a `## Onboarding: [project] | [date]` header
 
 Trainer does not evaluate onboarding sessions.
+
+## Elaborate All Mode — `/oms all`
+
+Reads `cleared-queue.md` and runs a full engineering OMS discussion for every FEATURE block with `Status: draft`, sequentially in order. Each FEATURE becomes a set of `Status: queued` TASK blocks with full OpenSpec fields (Spec, Scenarios, Artifacts, Produces, Verify, Depends).
+
+**Execution**:
+1. Read `cleared-queue.md` — collect all `Status: draft` FEATURE blocks
+2. If none: output "No draft features found. Run /oms-exec to generate features first." and stop.
+3. For each FEATURE (in order, one at a time):
+   - Run full OMS discussion using the FEATURE's `Departments` as the agent roster and `Exec-decision` as a hard constraint injected into all briefings
+   - Before finalising any TASK spec: apply scaffold artifact rules — if the task `Spec:` contains "initialize", "scaffold", "create project", "pnpm install", or "npm install", `.gitignore` MUST appear in `Artifacts:`. Missing it is a spec defect; the elaborating agent must add it before writing the task block.
+   - Replace the FEATURE block in `cleared-queue.md` with elaborated TASK-NNN blocks (`Status: queued`)
+   - Output: "FEATURE-NNN → [N] tasks queued" and continue
+4. After all features elaborated: output the queue summary (format below), then the CEO Product Summary roll-up (see Output Discipline section), then "**Next: run /oms-work to begin execution.**"
+
+   **CEO Product Summary roll-up for `/oms all`** — after queue summary, output one consolidated block:
+   ```
+   ━━━ CEO Summary ━━━━━━━━━━━━━━━━━━━━━━━━
+   What happened:   [N features elaborated into X tasks — what the milestone now covers in plain English]
+   Product impact:  [what this milestone delivers for users when executed]
+   Milestone:       [milestone name — X tasks ready, Y with ceo-gate, Z large tasks flagged]
+   Pros:            [why this plan is solid]
+   Cons/Risks:      [biggest risks in the task plan or scope gaps]
+   Blockers:        [ceo-gate tasks that need approval before running, or "None"]
+   Next action:     /oms-work
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ```
+
+Features with `Research-gate: true` are elaborated last.
+Never pause between features — run all sequentially without CEO input unless an actual escalation fires.
+
+**Queue summary format** (Phase 3 output):
+```
+[N] tasks queued across [M] features:
+
+[milestone name]:
+  [STATUS] TASK-NNN  [dept]  [title]  [SIZE]  [GATE]  depends: [none | TASK-NNN]
+
+Status icons: · queued  ✓ done  → in-progress  ⚑ cto-stop
+SIZE: small (1 Spec + ≤3 Scenarios + ≤3 Artifacts) | medium | large (flag — consider splitting)
+GATE: no-gate (Tier 0-1) | ceo-gate (Tier 2-3, cross-dept or irreversible)
+
+Can start immediately (no deps): TASK-NNN, TASK-NNN, ...
+```
+
+**SIZE classification**:
+- `small` — 1 SHALL Spec, ≤3 Scenarios, ≤3 Artifact paths, single department
+- `medium` — 1 SHALL Spec, 4-6 Scenarios, ≤5 Artifacts, 1-2 departments
+- `large` — flag with ⚠ — recommend splitting before execution
+
+**GATE classification**:
+- `no-gate` — single department, reversible, Tier 0-1
+- `ceo-gate` — cross-department, irreversible change, architectural decision, or legal/financial impact (Tier 2-3)
+
+---
 
 ## Exec Mode — `/oms exec` or auto-triggered at milestone
 
 The executive discussion. C-suite meets to evaluate product direction, translate research insights into product bets, and surface strategic decisions. CEO is NOT in the room — exec produces a recommendation that goes TO the CEO.
 
-**Roster**: CPO (domain lead), CTO, CRO, CLO, CFO — all always active in exec discussions.
-**Facilitator**: always runs. Same open-discussion format as engineering tasks.
-**Synthesizer**: always runs. Output is a recommendation brief, not an implementation plan.
-**Trainer**: evaluates after every exec session.
+**Exec follows the same full step pipeline as any other task — Steps 1 through 8.5, no exceptions.** The only differences from a regular task are the roster, context, and synthesis output format. Do not skip or abbreviate any step.
 
-**Auto-trigger conditions** (Router detects and fires oms exec automatically):
-- A milestone defined in `product-direction.ctx.md` has been reached
-- Research has produced a synthesis that requires a product direction decision
-- Any C-suite agent raises a cross-department concern during a task discussion
-- CLO raises a `high` or `critical` legal risk in any discussion
+**Step-by-step for exec:**
+1. **Step 1 — Router**: classify as exec, set tier (exec is always Tier 2 minimum), output `task_id`, `activated_agents` = CPO+CTO+CRO+CLO+CFO, `agent_briefings` with milestone gap report injected into CPO's briefing
+2. **Step 1.5 — Path Diversity**: run (exec is Tier 2+) — each C-suite agent gets a distinct strategic frame
+3. **Step 2 — Round 1**: all 5 agents post positions in parallel, blind NGT. Display each position to CEO.
+4. **Step 3 — Rounds 2+**: Facilitator runs between rounds. Continue until convergence or round cap.
+5. **Step 4 — Synthesizer**: output is a recommendation brief (milestone selected, action_items[], rationale). Update `product-direction.ctx.md`.
+6. **Step 5 — Log**: write task log to `.claude/logs/tasks/[task-id].md`
+7. **Step 6 — Trainer**: evaluates exec session
+8. **Step 7 — Context Optimizer**: lightweight check
+9. **Step 8 — CEO feedback**: present brief, wait for response
+10. **Step 8.5 — Queue Commit**: elaborate action_items[] → OpenSpec tasks → write to `cleared-queue.md`
 
-**Exec output to CEO** (3–5 bullets max):
-- What was decided and why (one sentence each)
-- Any tough decisions requiring CEO approval (escalated only if C-suite cannot resolve)
-- `product-direction.ctx.md` updated by CPO post-exec
+The exec session is not complete until `cleared-queue.md` is written with OpenSpec tasks.
+
+**Exec output to CEO** — executive summary only (see Output Discipline at top of this file). Round transcripts go to task log only. No narration of agent positions during the discussion.
 
 **Exec context** — Router loads for exec tasks:
 - `company-belief.ctx.md` (all C-suite read this)
@@ -252,7 +404,7 @@ The executive discussion. C-suite meets to evaluate product direction, translate
 
 ## Task ID
 Every task: `YYYY-MM-DD-short-slug` (kebab-case, max 6 words, from Router output)
-Log path: `logs/tasks/[task-id].md`
+Log path: `.claude/logs/tasks/[task-id].md`
 
 ---
 
@@ -260,7 +412,7 @@ Log path: `logs/tasks/[task-id].md`
 **OMS is for decisions, not execution.** It answers: "What should we build and why?" — not "How do we build it right now?"
 
 - `/oms <task>` → produces a synthesis with `action_items[]`
-- Implementation follows separately: direct coding, or `/oms-implement` (runs post-synthesis only)
+- Implementation follows separately: direct coding, or `/oms-work` (runs post-synthesis only)
 - Never invoke `/oms implement ...` — implementation inputs are wasted ceremony after architecture is settled
 - If the task is already decided and you have `action_items`: skip OMS entirely, go implement
 
@@ -270,6 +422,16 @@ Log path: `logs/tasks/[task-id].md`
 Run Router (Haiku):
 - Input: CEO intent + all shared context + codemap + project memory + ctx files
 - Output must include: `task_id`, `tier`, `activated_agents`, `domain_lead`, `primary_recommender`, `complexity`, `round_cap`, `triz_contradiction`, `premortem_failure_modes`, `agent_briefings`, `briefing_mode`, `why_chain` (if company context is real), `stage_gate`, `locked: true`
+
+**Feature discussion routing (when CEO runs `/oms FEATURE-NNN`):**
+- Read the feature draft from `cleared-queue.md` — load `Departments[]`, `Research-gate`, `Exec-decision`, `Why`, `Context-hints`
+- Inject `Exec-decision` as a hard constraint into ALL agent briefings — it cannot be overturned
+- Treat `Departments[]` as a **starting recommendation only** — Router applies its own judgment:
+  - Add agents the feature needs but exec didn't list (e.g. CTO if infra-critical signals present)
+  - Swap agents if the actual feature scope differs from what exec assumed
+  - Add CRO if Router detects high uncertainty not flagged by exec
+  - Always justify any deviation from `Departments[]` in `why_chain`
+- If `Research-gate: true`: activate research agents as domain lead; engineering agents present but do not own the interface-contract until research findings are known
 
 If `clarifying_questions`: present to CEO, collect answers, re-run Router.
 If `stage_gate: "failed"`: fix noted gap, re-run Router.
@@ -290,13 +452,7 @@ Run activated agents **in parallel**. Each receives: persona + MEMORY + scoped s
 
 Instruction: "Post your Round 1 position. You have not seen other agents' positions yet."
 
-**Checkpoint**: append Round 1 outputs to `logs/tasks/[task-id].md` immediately.
-
-Display to CEO:
-```
-Round 1
-[Agent]: [position]
-```
+**Checkpoint**: append Round 1 outputs to `logs/tasks/[task-id].md` immediately. Full agent positions go to the log only — not displayed to CEO.
 
 **After Round 1 — branch by tier:**
 
@@ -323,9 +479,22 @@ For each round:
    - `compatibility_check` → one targeted round on the interface conflict
    - `synthesis` → proceed to Step 4
 6. Apply `capitulation_flags` per-agent injections
-7. Display: one line per agent — position + changed flag
+7. Append round outputs to task log. No CEO display during rounds — full transcript is log-only.
 
 Continue until `proceed_to: "synthesis"` or hard cap (5 rounds).
+
+## Step 3.5 — CEO Gate *(Tier 1+ only)*
+Run CEO Gate per `ceo-gate/persona.md` — fires after all rounds complete, before Synthesizer. Tier 0 skips.
+
+- Input: all round outputs + `ceo-mandate.ctx.md` (project) or global default
+- Phase 1 (Haiku): classify against CEO-mandatory categories (1,2,4,9) and bufferable categories (3,5,6,7,8,10)
+- Phase 2: if triggered, 1-round C-suite blind NGT on the flagged decision
+- Phase 3: surface Ratification Brief (mandatory + C-suite resolved) or Strategic Brief (C-suite split/hard_block)
+
+**Routes:**
+- `route: "synthesize"` → Decision Log covered it (auto-pilot) or no threshold crossed → proceed to Step 4
+- `route: "absorb"` → C-suite resolved a bufferable category → inject `ceo_decision` constraint into Synthesizer, proceed to Step 4
+- `route: "ceo_brief"` → present brief to CEO inline; wait for response before Step 4. Log CEO response in task log under `## CEO Feedback` before proceeding.
 
 ## Step 4 — Synthesizer *(Tier 2+ only)*
 Run Synthesizer (Sonnet; Opus if 5+ agents or livelock):
@@ -336,10 +505,10 @@ Run Synthesizer (Sonnet; Opus if 5+ agents or livelock):
 
 If `reversibility_gate: "escalated"` → present decision brief to CEO (both options, evidence, confidence note). Do not override.
 If `escalation_required: true` → package per `escalation-format.md`.
-Otherwise: present `decision`, `rationale`, `action_items`, `dissent[]`, `reopen_conditions[]` to CEO.
+Otherwise: proceed to Step 5 (log), then invoke the Executive Briefing Agent (see Executive Briefing section at top). Full agent transcripts, JSON blobs, rationale citations, and internal engine output go to the task log only.
 
 ## Step 5 — Log
-Append final synthesis to `logs/tasks/[task-id].md`. Delete `[task-id].checkpoint`.
+Append final synthesis to `.claude/logs/tasks/[task-id].md`. Delete `[task-id].checkpoint`.
 
 Log header:
 ```
@@ -356,35 +525,8 @@ echo "OMS [$task_id] | tier:$tier | agents:$agents | decision:$one_line" >> "$SE
 Project memory (`topics/oms-history.md`):
 ```
 ## [task-id] | [date] | importance:medium
-Decision: [one sentence]  Agents: [list]  Tier: N  Log: logs/tasks/[task-id].md
+Decision: [one sentence]  Agents: [list]  Tier: N  Log: .claude/logs/tasks/[task-id].md
 ```
-
-## Step 5.5 — CPO Backlog Pass *(autonomous mode only — OMS_BOT=1)*
-
-After the task log is written and synthesis is confirmed, CPO updates the backlog:
-
-1. Read `synthesis.action_items[]` from the completed task log
-2. Read `.claude/agents/backlog/priority-queue.md` (create if missing)
-3. Mark the current task `status:done`
-4. Add the next 1–3 highest-priority tasks derived from:
-   - Remaining synthesis `action_items[]` not yet in backlog
-   - `product-direction.ctx.md` current priorities
-   - Any `reopen_conditions[]` from synthesis that became real
-5. Write updated `priority-queue.md`
-
-**Entry format**: follow `~/.claude/agents/engine/cpo-backlog.md` exactly.
-
-**CPO approval rule**: tasks generated from a completed engineering synthesis are CPO-approved by default. Tasks requiring C-suite sign-off (new initiatives, external services, architectural pivots) are added with `pending: cto|cpo`.
-
-**Non-blocking update after write**:
-```
-## OMS Update
-CPO backlog updated — next task queued: [slug]
-```
-
-Skip entirely in manual mode (no `OMS_BOT=1`).
-
----
 
 ## Step 6 — Trainer
 Trainer always runs. Scope scales by tier:
@@ -410,29 +552,30 @@ Trainer call:
    - If not present: append `[date] | [task-id]: [lesson]` to that agent's `lessons.md`
    - If already present: upgrade to `channel: "scenario"` — flag for Step 8
 
-2. **Inject memory facts** — for each evaluated agent:
-   ```bash
-   python3 ~/.claude/agents/memory/agent-mem-extract.py inject [agent] "fact"
-   ```
-
-3. **Write cross-agent patterns** — if `cross_agent_patterns` non-empty: append to `shared-context/engineering/cross-agent-patterns.md`
+2. **Write cross-agent patterns** — if `cross_agent_patterns` non-empty: append to `shared-context/engineering/cross-agent-patterns.md`
 
 4. **Flag scenario candidates** — collect all `lesson_candidates` with `channel: "scenario"` → pass to Step 8
 
 If `complexity_assessment_accurate: false`: inject correction to Router memory.
 If `meta_retrospective_due: true`: notify CEO — "Run `/compact-agent-memory [agent]`."
 
+After all trainer outputs are written, proceed to Step 7.
+
 ## Step 7 — Context Optimizer
 
 Load `~/.claude/agents/context-optimizer/persona.md` and `~/.claude/agents/context-optimizer/metrics.md`.
 
-**Mode 1 (every task — always):** Run post-task lightweight check against `logs/tasks/[task-id].md`. Also read Trainer output from the task log — correlate lesson quality signals with efficiency findings (e.g. Trainer flagged over-discussion → wasted rounds confirmed). Execute safe auto-fixes immediately (facts.json consolidation, archive markers on >300-line logs). Update `metrics.md`.
+**Mode 1 (every task — always):** Run post-task lightweight check against `.claude/logs/tasks/[task-id].md`. Also read Trainer output from the task log — correlate lesson quality signals with efficiency findings (e.g. Trainer flagged over-discussion → wasted rounds confirmed). Execute safe auto-fixes immediately (facts.json consolidation, archive markers on >300-line logs). Update `metrics.md`.
 
 **Mode 2 (full audit — when triggered):** Check `task_count_since_last_audit` in `metrics.md`. If ≥10, OR Router flagged `milestone_reached: true` this task → run full audit across all OMS living documents (all `.ctx.md` files including `ceo-decisions.ctx.md`, persona dedup/upgrade pipeline, engine health, efficiency patterns). Post non-blocking Discord summary (3-5 bullets). Reset audit counter. Any engine changes or persona trims require CEO approval before executing.
 
 Output: JSON per schema in persona.md. Append `## Efficiency Check` to task log only if `status != "clean"`. Never surface clean results to CEO.
 
+After Context Optimizer completes, proceed to Step 8.
+
 ## Step 8 — CEO Feedback + Scenario Capture
+
+**Blocking step (manual mode):** Present the synthesis to CEO and wait for their response before proceeding to Step 8.5. Do not continue until CEO has confirmed or given feedback.
 
 **Memory routing** (always):
 - Routing/complexity correction → Router memory
@@ -455,143 +598,83 @@ Run /oms-capture to extract as a training scenario? (y/n)
 If CEO declines: log the skip in the task log under `## Capture Decision` with reason.
 If CEO approves: run `/oms-capture [task-id]`.
 
+After CEO feedback is collected and scenario decisions are logged, proceed to Step 8.5.
+
+## Next Step Signposting
+
+Every step output must end with a **Next:** line telling CEO what happens next. Format:
+
+```
+Next: [Step N+1 name] — [one-line description of what it does]
+```
+
+Examples:
+- After Router: `Next: Round 1 — 3 agents post positions in parallel (NGT blind)`
+- After Round 1: `Next: Facilitator — checks convergence, decides proceed/escalate`
+- After Synthesis: `Next: Step 6 Trainer — evaluates discussion quality, writes lessons`
+- After Trainer: `Next: Step 7 Context Optimizer — lightweight efficiency check`
+- After Context Optimizer: `Next: Step 8 — CEO feedback + queue write`
+- After `/oms all` feature: `Next: FEATURE-002 elaboration — [dept] agents`
+- After `/oms all` complete: `Next: /oms-work — executes [N] tasks in dependency order`
+
+Skip the Next line only when the pipeline is complete and there is genuinely nothing left to do.
+
 ---
 
+## Auto-Proceed Rules
+
+**Never ask for confirmation before Step 8.5** — if synthesis is complete and there is no CEO escalation flag, write to `cleared-queue.md` immediately. Do not output "Confirm to proceed" or any equivalent prompt. The only gates that stop the pipeline are:
+- An actual CEO escalation (`escalation_required: true` from Synthesizer)
+- A `hard_block` from CEO Gate
+- A `cto-stop` written to the queue
+
+Everything else proceeds automatically.
+
 ---
 
-## Autonomous Pipeline Protocol
+## Session Budget Estimates
 
-These rules apply when `OMS_BOT=1` env var is set (bot-driven sessions). Ignored in manual sessions.
+Calibrated against real task cost data from the autonomous pipeline ($20/5h session window as reference). Percentages are % of one full session.
 
-### Step Isolation — one step per invocation
+| Command | Tier | Typical % | Range | Notes |
+|---|---|---|---|---|
+| `/oms-exec` | — | ~5% | 3–8% | C-suite only, 1-2 rounds, FEATURE drafts — no direct bot data; estimated from exec log size vs engineering tasks |
+| `/oms FEATURE-NNN` | Tier 2 | ~8% | 5–12% | 2 rounds + synthesis + trainer. Real: qbank-os-docs $1.61 = 8% |
+| `/oms FEATURE-NNN` | Tier 3 | ~16% | 12–22% | 3-4 rounds + synthesis + trainer. Real: qbank-os-design $3.12 = 16%, telos-schema-spec $3.25 = 16% |
+| `/oms all` (N features) | — | N × 12% | — | Sequential; 3 Tier 2-3 features ≈ 36–50% |
+| `/oms think [fw]` | — | ~1% | 0.5–2% | Single-agent lens, no discussion engine |
+| `/oms-work` task | — | ~3% | 2–5% | Implement only — no discussion; estimate |
+| `/oms-audit --quick` | — | ~2% | 1–3% | Inline scan, no subagents |
+| `/oms-audit` full | — | ~10% | 8–15% | 6 parallel subagents |
 
-**Each `claude --print` invocation runs exactly ONE step, then exits.**
+**Warning signals from real data**: tasks that looped (repeated round_1 28×) consumed 21%; runaway tasks can exceed 100% of one session. If a task is still running after 20%, check for repetition.
 
-This is the most important rule in autonomous mode. After completing the assigned step:
-1. Write the checkpoint with the correct `next` value
-2. Output `## OMS Update\n[one-line summary]`
-3. **Exit immediately** — do not proceed to the next step
+**Planning rule**: queue high-cost tasks (Tier 3, `/oms all` with 4+ features) at the start of a session when full budget is available.
 
-The dispatcher reads the checkpoint and sends a new invocation for the next step. The bot chains them via `maybe_continue()`.
+---
 
-**Why this matters:** if a step times out or crashes mid-way, only that step is lost. The checkpoint still points to the same step, so the retry reruns only that step from a clean state — not the entire task from scratch.
+## CEO Display Format
 
-Step sequence and their `next` values:
+**CEO sees executive summary only.** Full agent positions go to the log file — not displayed.
+
+**After each step, display:**
 ```
-router → round_1 → round_2 → ... → (ceo_gate if triggered) → synthesis → log → cpo_backlog → trainer → compact_check → done
-                                                              ↓
-                                                        waiting_ceo (blocking)
-```
-
-### Checkpoint — write before exiting each step
-
-Write `.claude/oms-checkpoint.json` immediately after the step completes, before outputting the update:
-
-```json
-{
-  "task_id": "2026-03-22-auth-flow",
-  "step": "synthesis",
-  "status": "complete",
-  "next": "log",
-  "updated": "2026-03-22T14:32:01Z"
-}
+[Step name] complete
+Decision: [one sentence]
+Rationale: [2-3 bullets max — agent + one-line position]
+Action items: [numbered list]
+Dissent: [agent: one sentence — only if present]
+Next: [step name] — [what it does]
 ```
 
-`next` values: `router` | `round_N` | `ceo_gate` | `synthesis` | `log` | `cpo_backlog` | `trainer` | `compact_check` | `implement` | `milestone_gate` | `waiting_ceo` | `done`
+**Never display:**
+- Full agent transcripts
+- JSON blobs
+- Internal pre-facilitator or stage-gate output
+- Trainer evaluation detail (lesson written = silent; lesson injected to file = silent)
+- Context Optimizer clean status (silent by definition)
 
-**Write checkpoint first, output update second, then stop.** If the process dies after writing the checkpoint but before outputting the update, the next invocation will correctly resume from the written `next` value — nothing is lost.
-
-### Step Progress Journal — micro-checkpoints within a step
-
-For steps with meaningful sub-work (multi-round discussions, synthesis, trainer eval), write incremental progress to `.claude/oms-step-progress.md` as you go. This file is:
-- **Never surfaced to Discord** — internal only
-- **Read at the start of a step retry** — if the step is re-run after a crash, OMS reads this file first to understand what was already completed
-- **Cleared when the step writes its final checkpoint** — once the step is done, delete it
-
-Format — append one line per meaningful milestone reached:
-```
-[HH:MM] router: complexity=tier2, agents=[cto, backend-dev, pm], rounds=2
-[HH:MM] round_1: cto position logged, backend-dev position logged
-[HH:MM] round_1: facilitator says proceed to round_2
-[HH:MM] round_2: convergence reached on API design
-```
-
-**When to write a progress entry** (within a step):
-- After Router completes its analysis and selects agents
-- After each agent completes their round position
-- After Facilitator issues a proceed/escalate/inject decision
-- After CEO Gate evaluates (pass or trigger)
-- After Synthesizer completes each major section
-
-**On retry** — read `oms-step-progress.md` at start of step. If it shows work already done (e.g. Round 1 complete), skip that sub-work and resume from the last logged milestone.
-
-### Blocking questions — write to pending file, then poll
-
-When CEO input is required (CEO Gate, clarifying question, CTO escalation, milestone gate):
-
-**Do NOT ask in the terminal.** Instead:
-
-1. Write the question to `~/.claude/oms-pending/[project-slug].question`:
-```json
-{
-  "question": "[exact question text for CEO]",
-  "context": "[one-line reason why this is blocking]",
-  "task_id": "[current task-id]",
-  "step": "[current step name]",
-  "asked_at": "[ISO timestamp]"
-}
-```
-
-2. Write checkpoint with `"next": "waiting_ceo"`
-
-3. Poll for answer (30s intervals, up to 24h):
-```bash
-ANSWER_FILE=~/.claude/oms-pending/[project-slug].answer
-while [ ! -f "$ANSWER_FILE" ]; do sleep 30; done
-ANSWER=$(cat "$ANSWER_FILE")
-rm "$ANSWER_FILE" ~/.claude/oms-pending/[project-slug].question
-```
-
-4. Continue with `$ANSWER` injected as CEO response.
-
-**Project slug** = basename of current working directory, or read from `.claude/oms-config-slug` if set.
-
-### Non-blocking updates — print clearly for bot parsing
-
-End every completed step with a summary line the bot can extract:
-
-```
-## OMS Update
-[one-line summary of what was completed or decided]
-```
-
-The Discord bot extracts this line and posts it to the project channel.
-
-### Milestone gate — always blocking
-
-When a milestone completes (all tasks in a milestone group are done + Evidence QA passed):
-
-1. Write blocking question with full milestone summary:
-```
-Milestone complete: [milestone name]
-Tasks: [N] ✅  QA: [N criteria verified]  Staging: [URL if available]
-
-Reply "continue" to start next milestone, or give feedback.
-```
-2. Do NOT start the next milestone until answer file contains "continue" or equivalent approval.
-
-### Auto-capture — write then continue
-
-When capture conditions are met (Step 8), do NOT ask CEO. Instead:
-1. Run `/oms-capture [task-id]` automatically
-2. Write non-blocking update: `## OMS Update\nScenario [NNN] captured: [one-line description]`
-3. Continue to next task
-
-### Auto-implement — trigger after synthesis
-
-After Step 5 (log written) and Step 6 (trainer done):
-- If `action_items[]` non-empty in synthesis AND task mode is not `exec`: write checkpoint `"next": "implement"` and exit
-- Dispatcher reads checkpoint → sends "implement" prompt → oms-implement runs as next step
+Full discussion transcript, trainer output, and efficiency check results are written to the task log. CEO can `Read logs/tasks/[task-id].md` to inspect any step in full.
 
 ---
 
@@ -604,7 +687,6 @@ After Step 5 (log written) and Step 6 (trainer done):
 | Round N | Only `## Round 1` through `## Round N-1` sections |
 | Synthesis | All round sections (not headers/preamble) |
 | Doc/summary | `oms-history.md` first; specific task log only if needed |
-| Status check | `.checkpoint` file only |
 
 **Always reference logs for docs** — never write from memory alone. `oms-history.md` is the index; task logs are the detail.
 

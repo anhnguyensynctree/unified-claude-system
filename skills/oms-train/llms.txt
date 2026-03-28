@@ -1,0 +1,41 @@
+# oms-train — LLM Reference
+
+Training scenario runner. Validates agent personas against structured scenarios and iterates until all pass. Feeds lessons back to agent lessons.md files on each run.
+
+## Triggers — use /oms-train when
+
+- New scenarios exist in agents/training/scenarios/ that haven't been run
+- An agent persona was edited and needs re-validation
+- Nightly training run (via oms-train-nightly.sh) when failing scenarios exist
+- A real OMS failure was captured via /oms-capture and needs a guard scenario written
+
+Skip /oms-train when:
+- All scenarios already passing (check agents/training/results.tsv)
+- No changes to personas or scenarios since last run
+
+## Invocation
+
+```
+/oms-train                        # run all scenarios, loop until all green
+/oms-train 001 002 003            # run specific scenarios by number
+/oms-train --failing              # re-run only last-run failures
+/oms-train --difficulty basic     # filter by difficulty (basic / medium / advanced)
+```
+
+## What it does
+
+1. Reads scenario files from agents/training/scenarios/
+2. Runs each scenario: injects the prompt, evaluates agent output against validation-criteria.md
+3. On failure: rewrites the failing persona section to fix the gap, re-runs
+4. Writes lessons to the relevant agent's lessons.md
+5. Appends results to agents/training/results.tsv
+
+## Key files
+
+Read: agents/training/scenarios/*.md, agents/training/validation-criteria.md, agent personas
+Write: agent lessons.md files, agents/training/results.tsv
+
+## Related
+
+- /oms-capture — turns a real OMS failure into a training scenario
+- Nightly runner: ~/.claude/bin/oms-train-nightly.sh (runs --failing when new scenarios exist)

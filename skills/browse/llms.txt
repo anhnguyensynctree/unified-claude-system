@@ -75,6 +75,7 @@ curl -s -X POST http://127.0.0.1:$PORT/command \
 | `screenshot:full` | full-page PNG |
 | `text` | all visible text |
 | `html [selector]` | HTML (capped 5000 chars) |
+| `fetch <url>` | load URL in ephemeral isolated context → `{ url, title, text }` — strips nav/header/footer, handles JS, never pollutes active session |
 | `console-errors` | flush buffered console errors/warnings |
 | `network-errors` | flush buffered 4xx/5xx + failed requests |
 

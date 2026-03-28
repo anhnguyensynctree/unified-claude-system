@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-OMS Discord Bot — always-on bridge between Discord and claude --print
-Runs as launchd daemon. Monitors project channels, routes messages to dispatcher.
+OMS Discord Bot — always-on bridge between Discord and oms-work.py
+Runs as launchd daemon. Monitors project channels, routes messages to oms-work.
 
 UX: one thread per task. Main channel = task feed (started / done).
 Thread = all step updates + blocking questions + observer Q&A.
@@ -26,12 +26,9 @@ CONFIG_FILE = HOME / ".claude/oms-config.json"
 TOKEN_FILE = HOME / ".config/discord/token"
 LOG_DIR = HOME / ".claude/logs"
 PENDING_DIR = HOME / ".claude/oms-pending"
-LOCKS_DIR = HOME / ".claude/oms-locks"
-DISPATCHER = HOME / ".claude/bin/oms-dispatcher.sh"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 PENDING_DIR.mkdir(parents=True, exist_ok=True)
-LOCKS_DIR.mkdir(parents=True, exist_ok=True)
 
 _root = logging.getLogger()
 if not _root.handlers:
@@ -46,11 +43,8 @@ if not _root.handlers:
 log = logging.getLogger("oms-bot")
 
 # --- Thread registry: "slug:task_id" → discord.Thread ---
-# Persisted across maybe_continue loops. Lost on restart (thread recreated by name lookup).
 task_threads: dict[str, discord.Thread] = {}
-_project_running: set[str] = set()  # slugs with maybe_continue in-flight — prevents double execution
 _first_ready = True  # suppress repeated "bot online" on Discord gateway reconnects
-_step_repeat: dict[str, int] = {}  # "slug:task_id:step" → consecutive run count
 _config_cache: dict = {}           # cached config — reloaded only when file changes
 _config_mtime: float = 0.0
 
@@ -153,51 +147,6 @@ async def get_or_create_task_thread(
     return thread
 
 
-_RATE_LIMIT_SIGNALS = ("rate limit", "rate_limit", "too many requests", "usage limit reached")
-_RATE_LIMIT_RETRY_SECS = 900  # 15 min between retries; Claude Max resets at 4pm PT
-
-
-def _is_rate_limited(text: str) -> bool:
-    low = text.lower()
-    return any(s in low for s in _RATE_LIMIT_SIGNALS)
-
-
-async def run_dispatcher(project_slug: str, prompt: str) -> str:
-    """Run oms-dispatcher.sh and return output. Auto-retries on rate limit."""
-    log.info(f"Dispatching step for {project_slug}")
-    while True:
-        proc = None
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "bash", str(DISPATCHER), project_slug, prompt,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=1800)
-            out = stdout.decode().strip()
-            err = stderr.decode().strip()
-            if _is_rate_limited(out) or _is_rate_limited(err):
-                log.warning(f"[{project_slug}] Rate limited — sleeping {_RATE_LIMIT_RETRY_SECS}s then retrying")
-                await asyncio.sleep(_RATE_LIMIT_RETRY_SECS)
-                continue  # retry same step — checkpoint unchanged
-            if proc.returncode != 0:
-                log.error(f"Dispatcher failed for {project_slug}: {err}")
-                return f"⚠️ Step failed: {(out or err)[-300:]}"
-            return out
-        except asyncio.TimeoutError:
-            log.error(f"Dispatcher timed out for {project_slug} (30min step limit)")
-            if proc is not None:
-                try:
-                    proc.kill()
-                    await proc.wait()
-                except Exception:
-                    pass
-            lock_file = LOCKS_DIR / f"{project_slug}.lock"
-            lock_file.unlink(missing_ok=True)
-            return "⏱️ Step timed out (30min). Lock cleared — checkpoint unchanged, will retry same step."
-        except Exception as e:
-            log.error(f"Dispatcher error for {project_slug}: {e}")
-            return f"❌ Dispatcher error: {e}"
 
 
 def _get_text_channel(channel_id: str | int | None) -> discord.TextChannel | None:
@@ -339,35 +288,10 @@ def _unblock_ceo_gate(proj: dict, slug: str = "") -> None:
             tmp = str(cp_path) + ".tmp"
             Path(tmp).write_text(json.dumps(cp))
             Path(tmp).replace(cp_path)
-            # Clear stale stuck counters so resumed step starts fresh
-            if slug:
-                _step_repeat.pop(f"{slug}:{task_id}:ceo_gate", None)
-                _step_repeat.pop(f"{slug}:{task_id}:synthesis", None)
     except Exception:
         pass
 
 
-def _freeze_pipeline(proj: dict, task_id: str, stuck_step: str) -> None:
-    """
-    Freeze pipeline at pipeline_frozen so heartbeat stops retrying.
-    Stores the stuck step so skip/reset can resume correctly.
-    Distinct from waiting_ceo (CEO blocking question) — never unblocked by _unblock_ceo_gate.
-    """
-    proj_path = proj.get("path", "")
-    if not proj_path:
-        return
-    cp_path = Path(proj_path) / ".claude/oms-checkpoint.json"
-    try:
-        cp = json.loads(cp_path.read_text()) if cp_path.exists() else {}
-        cp["next"] = "pipeline_frozen"
-        cp["frozen_step"] = stuck_step
-        if task_id:
-            cp["task_id"] = task_id
-        tmp = str(cp_path) + ".tmp"
-        Path(tmp).write_text(json.dumps(cp))
-        Path(tmp).replace(cp_path)
-    except Exception:
-        pass
 
 
 async def _generate_completion_report(proj_path: str, task_id: str) -> str:
@@ -387,7 +311,7 @@ async def _generate_completion_report(proj_path: str, task_id: str) -> str:
     try:
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--dangerously-skip-permissions", "-p", prompt,
+            "--print", "--permission-mode", "auto", "-p", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
@@ -399,103 +323,6 @@ async def _generate_completion_report(proj_path: str, task_id: str) -> str:
         return ""
 
 
-async def maybe_continue(slug: str, proj: dict, channel: discord.TextChannel):
-    """
-    After a step completes, read checkpoint and auto-trigger next step.
-    Posts step updates to the task thread, not the main channel.
-    Recurses until waiting_ceo or complete.
-    Guard: _project_running prevents heartbeat and startup from double-executing the same project.
-    """
-    if slug in _project_running:
-        log.info(f"[{slug}] maybe_continue already in-flight — skipping duplicate call")
-        return
-    _project_running.add(slug)
-    try:
-        cp = read_checkpoint(proj)
-        nxt = cp.get("next", "")
-        task_id = cp.get("task_id", "")
-
-        # Terminal/blocking states — nothing to dispatch
-        if nxt in ("complete", "waiting_ceo", "pipeline_frozen", ""):
-            return
-
-        if not task_id:
-            return
-
-        # Repetition guard — same step running too many times without checkpoint advancing
-        step_key = f"{slug}:{task_id}:{nxt}"
-        _step_repeat[step_key] = _step_repeat.get(step_key, 0) + 1
-        count = _step_repeat[step_key]
-        if count > 3:
-            # Do NOT pop — keep counter high so subsequent calls also block without running
-            thread = await get_or_create_task_thread(slug, task_id, channel)
-            await thread.send(
-                f"⚠️ **OMS stuck**: `{nxt}` ran {count}× without checkpoint advancing.\n"
-                f"Reply `skip` to force-advance to next step, or `reset` to restart from router."
-            )
-            q_data = {
-                "task_id": task_id,
-                "question": f"Step `{nxt}` stuck ({count}×). Reply `skip` or `reset`.",
-                "asked_at": datetime.now(timezone.utc).isoformat(),
-                "type": "stuck",
-            }
-            (PENDING_DIR / f"{slug}.question").write_text(json.dumps(q_data))
-            # Freeze pipeline — separate state from waiting_ceo (CEO question)
-            _freeze_pipeline(proj, task_id, nxt)
-            return
-
-        thread = await get_or_create_task_thread(slug, task_id, channel)
-        await asyncio.sleep(3)
-        output = await run_dispatcher(slug, "_auto")
-
-        # Check if checkpoint actually advanced — reset stuck counter if it did
-        cp_after = read_checkpoint(proj)
-        if cp_after.get("next") != nxt or cp_after.get("task_id") != task_id:
-            _step_repeat.pop(step_key, None)
-
-        # Watcher notifications → dedicated watcher channel (cross-project pipeline health)
-        if "## WATCHER" in output:
-            watcher_lines = []
-            capture = False
-            for line in output.strip().split("\n"):
-                if line.strip() == "## WATCHER":
-                    capture = True
-                    continue
-                if capture:
-                    watcher_lines.append(line)
-            watcher_text = "\n".join(watcher_lines).strip()
-            watcher_ch_id = load_config().get("watcher_channel_id")
-            watcher_ch = _get_sendable(watcher_ch_id) if watcher_ch_id else None
-            if watcher_ch:
-                await watcher_ch.send(f"**[{slug}]** {watcher_text}")
-            else:
-                # Fallback: post to project thread if watcher channel not configured
-                await thread.send(f"🔧 **Watcher** — {watcher_text}")
-
-        # Tiered posting — CEO only sees milestones, not every internal step
-        step_summary = format_step_update(output)
-        if nxt == "synthesis":
-            await thread.send(f"**Discussion complete**\n{step_summary}")
-        elif nxt == "implement":
-            await thread.send(f"**Implementation complete**\n{step_summary}")
-        elif nxt == "ceo_gate" and "blocking" in output.lower():
-            await thread.send(f"→ {step_summary}")
-        elif nxt == "mark_done":
-            # Task fully complete — send CEO summary to thread before transitioning
-            proj_path = proj.get("path", "")
-            cost_summary = _read_cost_summary(slug, task_id)
-            report = await _generate_completion_report(proj_path, task_id)
-            if report:
-                for chunk in split_for_discord(report):
-                    await thread.send(chunk)
-            await thread.send(f"✅ Task complete.{cost_summary['thread_suffix']}")
-            await channel.send(f"✅ **{task_id}** done{cost_summary['main_suffix']}")
-        # router, round_*, log, cpo_backlog, trainer, compact_check, done, transition: post nothing
-
-        await maybe_continue(slug, proj, channel)
-
-    finally:
-        _project_running.discard(slug)
 
 
 # --- Bot setup ---
@@ -643,91 +470,10 @@ async def on_ready():
         if updates_id:
             ch = bot.get_channel(int(updates_id))
             if isinstance(ch, discord.TextChannel):
-                await ch.send("🤖 OMS bot online — autonomous pipeline active")
-        # Auto-resume any in-progress tasks from before the restart
-        asyncio.create_task(_resume_in_progress_tasks())
-        asyncio.create_task(_auto_step_loop())
+                await ch.send("🤖 OMS bot online")
         asyncio.create_task(send_daily_brief())
 
 
-async def _resume_in_progress_tasks():
-    """On startup, find any checkpoints mid-task and resume them."""
-    await asyncio.sleep(5)  # let Discord gateway fully settle
-    cfg = load_config()
-    for slug, proj in cfg.get("projects", {}).items():
-        cp = read_checkpoint(proj)
-        nxt = cp.get("next", "")
-        task_id = cp.get("task_id", "")
-        if not task_id or nxt in ("", "complete", "waiting_ceo", "pipeline_frozen"):
-            continue
-        if cp.get("completion_reported") and nxt != "done":
-            continue  # Already finished — don't re-run
-        channel_id = proj.get("channel_id")
-        if not channel_id:
-            continue
-        channel = bot.get_channel(int(channel_id))
-        if not isinstance(channel, discord.TextChannel):
-            continue
-        log.info(f"[{slug}] Resuming {task_id} from step: {nxt}")
-        thread = await get_or_create_task_thread(slug, task_id, channel)
-        await thread.send(f"♻️ Bot restarted — resuming from `{nxt}`")
-        await maybe_continue(slug, proj, channel)
-
-
-async def _auto_step_loop():
-    """
-    Background loop — every 60s check all active projects.
-    If a checkpoint is mid-task and no lock is held, fire the next step.
-    This is the heartbeat that keeps the pipeline running without any Discord trigger.
-    """
-    await asyncio.sleep(15)  # let startup resume run first
-    while True:
-        await asyncio.sleep(60)
-        try:
-            cfg = load_config()
-            for slug, proj in cfg.get("projects", {}).items():
-                if not proj.get("active") or not proj.get("path"):
-                    continue
-                cp = read_checkpoint(proj)
-                nxt = cp.get("next", "")
-                task_id = cp.get("task_id", "")
-                # Auto-start: if no checkpoint at all and project has auto_start flag, kick off _auto
-                no_checkpoint = not task_id and not nxt
-                is_auto_start = no_checkpoint and proj.get("auto_start", False)
-                if not is_auto_start:
-                    if not task_id or nxt in ("", "complete", "waiting_ceo"):
-                        continue
-                # Skip if a lock file already exists (step in progress)
-                lock_file = LOCKS_DIR / f"{slug}.lock"
-                if lock_file.exists():
-                    try:
-                        lock_pid = json.loads(lock_file.read_text()).get("pid")
-                        if lock_pid and __import__("os").kill(int(lock_pid), 0) is None:
-                            continue  # step actively running
-                    except (json.JSONDecodeError, ValueError):
-                        lock_file.unlink(missing_ok=True)  # corrupted lock — clear it
-                    except (ProcessLookupError, PermissionError):
-                        pass  # stale lock — dispatcher will clear it
-                channel_id = proj.get("channel_id")
-                if not channel_id:
-                    continue
-                channel = _get_text_channel(channel_id)
-                if not channel:
-                    continue
-                if is_auto_start:
-                    log.info(f"[{slug}] Auto-step heartbeat: auto-starting (no checkpoint)")
-                    output = await run_dispatcher(slug, "_auto")
-                    cp_new = read_checkpoint(proj)
-                    new_task_id = cp_new.get("task_id", "")
-                    if new_task_id:
-                        thread = await get_or_create_task_thread(slug, new_task_id, channel, "auto-started")
-                        await thread.send(f"→ {format_step_update(output)}")
-                        await maybe_continue(slug, proj, channel)
-                    continue
-                log.info(f"[{slug}] Auto-step heartbeat: firing {nxt}")
-                await maybe_continue(slug, proj, channel)
-        except Exception as e:
-            log.error(f"Auto-step loop error: {e}")
 
 
 def _budget_summary() -> str:
@@ -831,8 +577,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
                 await _write_idea_to_disk(slug, project_path, conversation)
 
             prompt = (
-                "AUTONOMOUS BOT MODE — OMS_BOT=1. --dangerously-skip-permissions is active.\n"
-                "All writes pre-approved. Never ask for permission. Never output approval text.\n\n"
+                "AUTONOMOUS BOT MODE — OMS_BOT=1. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
                 f"/oms-start\n\n"
                 f"ARGUMENTS:\n"
                 f"Project: {slug}\n"
@@ -843,7 +588,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
             )
             proc = await asyncio.create_subprocess_exec(
                 str(HOME / ".local/bin/claude"),
-                "--print", "--dangerously-skip-permissions",
+                "--print", "--permission-mode", "auto",
                 "--output-format", "json",
                 "--model", "claude-sonnet-4-6",
                 "-p", prompt,
@@ -872,7 +617,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
             )
             proc = await asyncio.create_subprocess_exec(
                 str(HOME / ".local/bin/claude"),
-                "--print", "--dangerously-skip-permissions",
+                "--print", "--permission-mode", "auto",
                 "--model", "claude-haiku-4-5-20251001",
                 "-p", prompt,
                 stdout=asyncio.subprocess.PIPE,
@@ -921,7 +666,7 @@ async def handle_claude_thread_reply(content: str, thread: discord.Thread):
     await thread.send("⏳")
     try:
         proc = await asyncio.create_subprocess_exec(
-            HOME / ".local/bin/claude", "--print", "--dangerously-skip-permissions", "-p", prompt,
+            HOME / ".local/bin/claude", "--print", "--permission-mode", "auto", "-p", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(HOME),
@@ -950,7 +695,7 @@ async def handle_claude_message(message: discord.Message, content: str):
     await thread.send("⏳")
     try:
         proc = await asyncio.create_subprocess_exec(
-            HOME / ".local/bin/claude", "--print", "--dangerously-skip-permissions", "-p", content,
+            HOME / ".local/bin/claude", "--print", "--permission-mode", "auto", "-p", content,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(HOME),
@@ -970,6 +715,7 @@ async def handle_claude_message(message: discord.Message, content: str):
 async def budget_cmd(ctx):
     """Show weekly OMS budget usage in any channel."""
     await ctx.reply(_budget_summary(), mention_author=False)
+
 
 
 @bot.command(name="next")
@@ -992,9 +738,7 @@ async def next_cmd(ctx):
             mention_author=False,
         )
         return
-    await ctx.message.add_reaction("⏳")
-    await maybe_continue(slug, proj, channel)
-    await ctx.message.remove_reaction("⏳", bot.user)
+    await ctx.reply("Use `/work` in Discord to trigger oms-work for this project.", mention_author=False)
 
 
 @bot.event
@@ -1064,60 +808,13 @@ async def handle_thread_message(
     raw_parent = thread.parent
     channel = raw_parent if isinstance(raw_parent, discord.TextChannel) else None
 
-    # Stuck-step recovery
-    if content.lower() == "skip":
-        cp = read_checkpoint(proj)
-        cur = cp.get("next", "")
-        # If pipeline is frozen, resume from the step that was stuck
-        if cur == "pipeline_frozen":
-            cur = cp.get("frozen_step", "router")
-        step_order = [
-            "router", "round_1", "round_2", "round_3",
-            "ceo_gate", "synthesis", "implement",
-            "log", "cpo_backlog", "trainer", "compact_check", "mark_done", "transition",
-        ]
-        try:
-            nxt = step_order[min(step_order.index(cur) + 1, len(step_order) - 1)]
-        except ValueError:
-            nxt = "cpo_backlog"  # safe fallback — skip to post-synthesis housekeeping
-        cp["next"] = nxt
-        cp.pop("session_id", None)  # Break session chain — fresh context after skip
-        cp.pop("frozen_step", None)
-        (Path(proj["path"]) / ".claude/oms-checkpoint.json").write_text(json.dumps(cp, indent=2))
-        clear_question(slug)
-        # Clear stuck counter for the skipped step
-        _step_repeat.pop(f"{slug}:{cp.get('task_id', '')}:{cur}", None)
-        await thread.send(f"⏩ Skipped `{cur}` → `{nxt}`")
-        if channel:
-            await maybe_continue(slug, proj, channel)
-        return
-
-    if content.lower() == "reset":
-        cp = read_checkpoint(proj)
-        task_id = cp.get("task_id", "")
-        cp["next"] = "router"
-        cp.pop("session_id", None)
-        cp.pop("frozen_step", None)
-        (Path(proj["path"]) / ".claude/oms-checkpoint.json").write_text(json.dumps(cp, indent=2))
-        clear_question(slug)
-        # Clear stuck counters for this task
-        keys_to_del = [k for k in _step_repeat if k.startswith(f"{slug}:{task_id}:")]
-        for k in keys_to_del:
-            _step_repeat.pop(k, None)
-        await thread.send("↩️ Reset to router — restarting from Step 1")
-        if channel:
-            await maybe_continue(slug, proj, channel)
-        return
-
     # Blocking question answer
     if is_blocking_question_pending(slug):
         write_answer(slug, content)
         clear_question(slug)
-        _unblock_ceo_gate(proj, slug)  # advance waiting_ceo → synthesis
+        _unblock_ceo_gate(proj, slug)
         await message.add_reaction("✅")
-        await thread.send("Got it — resuming OMS.")
-        if channel:
-            await maybe_continue(slug, proj, channel)
+        await thread.send("Got it — re-run `/work` to resume OMS.")
         return
 
     # Undo command
@@ -1131,26 +828,8 @@ async def handle_thread_message(
             await handle_project_message(message, slug, proj, content)
         return
 
-    # Observer Q&A — direct claude call, no lock/dispatcher needed
+    # Observer Q&A — direct claude call, read-only
     await handle_thread_qa(message, proj, content)
-
-
-def _is_step_in_flight(slug: str) -> bool:
-    """Return True if the dispatcher lock is currently held by a live process."""
-    lock_file = LOCKS_DIR / f"{slug}.lock"
-    if not lock_file.exists():
-        return False
-    try:
-        data = json.loads(lock_file.read_text())
-        pid = data.get("pid")
-        if pid:
-            os.kill(int(pid), 0)  # raises if process is dead
-            return True
-    except (json.JSONDecodeError, ValueError):
-        lock_file.unlink(missing_ok=True)
-    except (ProcessLookupError, PermissionError):
-        pass  # stale lock — not in flight
-    return False
 
 
 async def handle_project_message(
@@ -1165,10 +844,9 @@ async def handle_project_message(
     if is_blocking_question_pending(slug):
         write_answer(slug, content)
         clear_question(slug)
-        _unblock_ceo_gate(proj, slug)  # advance waiting_ceo → synthesis
+        _unblock_ceo_gate(proj, slug)
         await message.add_reaction("✅")
-        await message.reply("Got it — resuming OMS.", mention_author=False)
-        await maybe_continue(slug, proj, channel)
+        await message.reply("Got it — run `/work` to resume.", mention_author=False)
         return
 
     # Undo command
@@ -1176,7 +854,7 @@ async def handle_project_message(
         await handle_undo(message, slug, content, reply_target=message)
         return
 
-    # !work — run cleared-queue tasks for this project (background-safe)
+    # !work — run cleared-queue tasks for this project via skill
     if content.strip().lower() in ("!work", "/work", "!oms-work", "/oms-work"):
         queue_path = Path(proj.get("path", "")) / ".claude" / "cleared-queue.md"
         if not queue_path.exists():
@@ -1187,77 +865,29 @@ async def handle_project_message(
             return
         await message.add_reaction("⚙️")
         proc = await asyncio.create_subprocess_exec(
-            "python3", str(Path.home() / ".claude" / "bin" / "oms-work.py"), slug, "--all",
+            str(HOME / ".local/bin/claude"),
+            "--print", "--permission-mode", "auto",
+            "--model", "claude-sonnet-4-6",
+            "-p", f"/oms-work {slug}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=str(HOME),
+            env={**__import__("os").environ, "OMS_BOT": "1"},
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=7200)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
         output = stdout.decode().strip()
+        err = stderr.decode().strip()
         if bot.user:
             await message.remove_reaction("⚙️", bot.user)
+        if proc.returncode != 0 and err:
+            await channel.send(f"[{slug}] oms-work error: {err[:500]}")
+            return
         await channel.send(output or f"[{slug}] oms-work: no tasks ran")
         return
 
     # /oms with no task → auto-pick from backlog
-    bare_oms = content.strip().lower() in ("/oms", "!oms", "/oms ", "!oms ")
-    if bare_oms or content.lower() in ("continue", "yes", "y", "approved", "approve"):
-        # If step is in-flight, acknowledge rather than try to dispatch
-        if _is_step_in_flight(slug):
-            cp = read_checkpoint(proj)
-            nxt = cp.get("next", "?")
-            task_id = cp.get("task_id", "")
-            await message.add_reaction("⏳")
-            await message.reply(
-                f"⏳ `{task_id}` is running (`{nxt}`) — will auto-continue when done.",
-                mention_author=False,
-            )
-            if bot.user:
-                await message.remove_reaction("⏳", bot.user)
-            return
-        await message.add_reaction("⏳")
-        output = await run_dispatcher(slug, "_auto")
-        cp = read_checkpoint(proj)
-        task_id = cp.get("task_id", "")
-        step_summary = format_step_update(output)
-        if task_id:
-            thread = await get_or_create_task_thread(slug, task_id, channel, content[:60])
-            await thread.send(f"→ {step_summary}")
-        else:
-            await channel.send(f"[{slug}] {step_summary or 'No tasks in backlog — run /oms <task description> to start one.'}")
-        if bot.user:
-            await message.remove_reaction("⏳", bot.user)
-        await maybe_continue(slug, proj, channel)
-        return
-
-    # If a step is actively running, route Q&A directly to handle_thread_qa (no lock needed)
-    if _is_step_in_flight(slug):
-        await handle_thread_qa(message, proj, content)
-        return
-
-    prompt = (
-        f"CEO message in project channel: {content}\n\n"
-        "If this is a new task, run it through OMS starting with the Router step. "
-        "Write checkpoint with next:round_1 after Router completes. "
-        "Output '## OMS Update' with one-line summary then exit."
-    )
-
-    await message.add_reaction("⏳")
-    output = await run_dispatcher(slug, prompt)
-
-    # Read checkpoint to get task_id for thread creation
-    cp = read_checkpoint(proj)
-    task_id = cp.get("task_id", "")
-    step_summary = format_step_update(output)
-
-    if task_id:
-        thread = await get_or_create_task_thread(slug, task_id, channel, content[:60])
-        await thread.send(f"→ {step_summary}")
-    else:
-        await channel.send(f"[{slug}] {step_summary}")
-
-    if bot.user:
-        await message.remove_reaction("⏳", bot.user)
-    await maybe_continue(slug, proj, channel)
+    # All other messages → observer Q&A (read-only)
+    await handle_thread_qa(message, proj, content)
 
 
 async def handle_thread_qa(
@@ -1273,7 +903,7 @@ async def handle_thread_qa(
     try:
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--dangerously-skip-permissions", "-p", prompt,
+            "--print", "--permission-mode", "auto", "-p", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
@@ -1315,15 +945,7 @@ async def handle_undo(
         "Read the agent's lessons.md, find the most recent matching entry, "
         "remove only that entry, and confirm what was removed."
     )
-    await message.add_reaction("↩️")
-    output = await run_dispatcher(slug, prompt)
-    for chunk in split_for_discord(output):
-        if isinstance(reply_target, discord.Thread):
-            await reply_target.send(chunk)
-        else:
-            await reply_target.reply(chunk, mention_author=False)
-    if bot.user:
-        await message.remove_reaction("↩️", bot.user)
+    await message.reply("Undo not supported — dispatcher removed. Edit lessons.md manually.", mention_author=False)
 
 
 async def _extract_slug(idea: str) -> str:
@@ -1441,8 +1063,7 @@ async def handle_idea(message: discord.Message, content: str):
     # Short prefix tells the model it's in autonomous mode BEFORE it loads the skill.
     # The skill does all the real work (ctx files, departments, hierarchy, etc.)
     prompt = (
-        "AUTONOMOUS BOT MODE — OMS_BOT=1. --dangerously-skip-permissions is active.\n"
-        "All writes pre-approved. Never ask for permission. Never output approval text.\n\n"
+        "AUTONOMOUS BOT MODE — OMS_BOT=1. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
         f"/oms-start\n\n"
         f"ARGUMENTS:\n"
         f"Project: {slug}\n"
@@ -1454,7 +1075,7 @@ async def handle_idea(message: discord.Message, content: str):
     try:
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--dangerously-skip-permissions",
+            "--print", "--permission-mode", "auto",
             "--output-format", "json",
             "--model", "claude-sonnet-4-6",
             "-p", prompt,

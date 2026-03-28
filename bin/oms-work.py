@@ -377,7 +377,7 @@ def execute_task(task: dict, project_path: Path,
         commit_worktree(wt, task['id'], task['title'])
         remove_worktree(project_path, task['id'])
 
-        _merged, merge_notes = merge_to_main(project_path, branch, task['id'], task['title'])
+        _, merge_notes = merge_to_main(project_path, branch, task['id'], task['title'])
         notes = f'{summary[:180]} | {merge_notes}'
         discord.notify_task(channel_id, threads_file, task['milestone'],
                             task['id'], task['title'], True, notes)

@@ -6,14 +6,19 @@ TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path // empty' 2>/dev/
 PROJECT_CWD=$(echo "$HOOK_INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 PROJECT=$(basename "${PROJECT_CWD:-$(pwd)}")
 
-# Load API key from secure file — not from shell environment (so Claude Code uses subscription billing)
-if [ -f "$HOME/.config/anthropic/key" ]; then
-  export ANTHROPIC_API_KEY=$(cat "$HOME/.config/anthropic/key")
-fi
+# mem0.py uses claude -p subprocess (subscription billing) — no API key needed
 
 # Skip all extraction for autonomous OMS bot steps — OMS task logs are the memory
 if [ "${OMS_BOT:-0}" = "1" ]; then
   echo "[mem0] OMS_BOT session — skipping extraction" >&2
+  exit 0
+fi
+
+# Skip handoff for oms-work execution sessions — no decisions made, task logs are the record
+SKIP_MARKER="$HOME/.claude/.skip-handoff"
+if [ -f "$SKIP_MARKER" ]; then
+  rm -f "$SKIP_MARKER"
+  echo "[mem0] oms-work session — skipping handoff" >&2
   exit 0
 fi
 
@@ -31,20 +36,22 @@ RETRY_FILE="$HOME/.claude/logs/mem0-retry.json"
 FAILED_STEPS=""
 
 run_step() {
-  local step="$1"; shift
-  local limit="${MEM0_TIMEOUT:-25}"
+  local step="$1"; local limit="$2"; shift 2
   echo "[mem0] $step..." >&2
   timeout "$limit" python3 "$HOME/.claude/hooks/memory-persistence/mem0.py" "$@" 2>&1 >&2
   local code=$?
   if [ $code -ne 0 ]; then
     FAILED_STEPS="${FAILED_STEPS}${FAILED_STEPS:+,}\"$step\""
-    [ $code -eq 124 ] && echo "[mem0] $step timed out" >&2 || echo "[mem0] $step failed (exit $code)" >&2
+    [ $code -eq 124 ] && echo "[mem0] $step timed out (${limit}s)" >&2 || echo "[mem0] $step failed (exit $code)" >&2
   fi
 }
 
-run_step "session-end" session-end "$TRANSCRIPT_PATH" "$DATE" "$PROJECT"
-run_step "handoff"     handoff     "$TRANSCRIPT_PATH" "$DATE" "$PROJECT"
-run_step "check-memory" check-memory
+# session-end makes up to 2 Haiku calls (combined extract + dedup) — needs more headroom
+# handoff/check-memory: no LLM calls, 25s is generous
+SESSION_TIMEOUT="${MEM0_TIMEOUT:-55}"
+run_step "session-end"  "$SESSION_TIMEOUT" session-end "$TRANSCRIPT_PATH" "$DATE" "$PROJECT"
+run_step "handoff"      25                 handoff     "$TRANSCRIPT_PATH" "$DATE" "$PROJECT"
+run_step "check-memory" 25                 check-memory
 
 if [ -n "$FAILED_STEPS" ]; then
   python3 -c "

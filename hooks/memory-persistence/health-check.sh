@@ -18,10 +18,6 @@ if [ -f "$RETRY_FILE" ]; then
   FAILED_STEPS_LIST=$(python3 -c "import json; d=json.load(open('$RETRY_FILE')); print(', '.join(d.get('failed_steps', [])))" 2>/dev/null)
   warn "mem0 steps failed last session: ${FAILED_STEPS_LIST:-unknown} — retrying now"
 
-  if [ -f "$HOME/.config/anthropic/key" ]; then
-    export ANTHROPIC_API_KEY=$(cat "$HOME/.config/anthropic/key")
-  fi
-
   RETRY_RESULT=$(python3 - "$RETRY_FILE" "$HOOKS_DIR/mem0.py" 2>&1 <<'PYEOF'
 import json, subprocess, sys, os
 
@@ -161,25 +157,12 @@ else
   ok
 fi
 
-# ── 6. API key — exists, non-empty, and loadable by mem0.py ─────────────────
+# ── 6. Auth mode — subscription (keychain) or API key ───────────────────────
 KEY_FILE="$HOME/.config/anthropic/key"
-if [ ! -f "$KEY_FILE" ]; then
-  warn "Anthropic API key not found at $KEY_FILE — mem0 extraction will be skipped"
-elif [ ! -s "$KEY_FILE" ]; then
-  warn "Anthropic API key file is empty at $KEY_FILE"
+if [ -f "$KEY_FILE" ] && [ -s "$KEY_FILE" ]; then
+  ok  # API key user — mem0 will load from ~/.config/anthropic/key
 else
-  # Verify mem0.py can load the key (catches env-only loading bugs)
-  KEY_LOADED=$(python3 -c "
-import os, sys
-sys.path.insert(0, '$(dirname "$MEM0")')
-import mem0
-print('ok' if mem0.ANTHROPIC_API_KEY else 'missing')
-" 2>/dev/null)
-  if [ "$KEY_LOADED" != "ok" ]; then
-    warn "mem0.py could not load ANTHROPIC_API_KEY — check _load_api_key() in mem0.py"
-  else
-    ok
-  fi
+  ok  # Subscription user — mem0 uses claude keychain OAuth (no key file needed)
 fi
 
 # ── 7. facts.json — valid JSON + consolidation check (current project + global only) ──

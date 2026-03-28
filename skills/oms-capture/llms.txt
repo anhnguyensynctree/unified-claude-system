@@ -1,0 +1,36 @@
+# oms-capture — LLM Reference
+
+Captures a real OMS failure as a structured training scenario. Turns live incidents into permanent guards that run on every /oms-train pass.
+
+## Triggers — use /oms-capture when
+
+- CEO stops a task mid-way to correct routing or tier classification
+- Trainer produces lesson_candidates with channel: "scenario"
+- CEO overrides the synthesis decision post-delivery
+- An agent produced a structurally wrong output (wrong format, wrong tier behavior, wrong scope)
+
+## Invocation
+
+```
+/oms-capture                   # analyze current/recent task log, draft scenario
+/oms-capture <task-id>         # capture from a specific task log
+```
+
+## What it does
+
+1. Reads the task log for the failing task
+2. Identifies the failure point: which agent, which step, what went wrong
+3. Drafts a training scenario (YAML format matching agents/training/scenarios/ schema)
+4. CEO reviews the scenario and acceptance criteria
+5. Writes to agents/training/scenarios/NNN-<slug>.md
+6. /oms-train picks it up on next run
+
+## Output format
+
+Scenario file at: ~/.claude/agents/training/scenarios/NNN-<slug>.md
+Schema: ~/.claude/agents/training/index.md
+
+## What it doesn't do
+
+- Never modifies the failing agent persona directly — that's /oms-train's job
+- Never auto-runs the training — CEO confirms scenario before it enters rotation

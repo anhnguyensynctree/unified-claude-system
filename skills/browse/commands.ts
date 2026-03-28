@@ -370,10 +370,63 @@ export async function executeCommand(
         return buildResponse({ result }, ctx);
       }
 
+      // ── Content extraction ────────────────────────────────────────────────
+      case "fetch": {
+        // fetch <url> — load URL in ephemeral isolated context, return clean text
+        // Does NOT affect the active browse session or any existing context.
+        const fetchUrl = args[0];
+        if (!fetchUrl) return { ok: false, error: "fetch requires a URL" };
+        const target = fetchUrl.startsWith("http")
+          ? fetchUrl
+          : `https://${fetchUrl}`;
+        const fetchCtx = await browse.browser.newContext();
+        const fetchPage = await fetchCtx.newPage();
+        try {
+          const resp = await fetchPage
+            .goto(target, { waitUntil: "networkidle", timeout: 20000 })
+            .catch(() => null);
+          if (!resp) return { ok: false, error: `Failed to load ${target}` };
+
+          const extracted = await fetchPage.evaluate(() => {
+            const noise = [
+              "script",
+              "style",
+              "nav",
+              "header",
+              "footer",
+              "aside",
+              "[role=navigation]",
+              "[role=banner]",
+              "[role=contentinfo]",
+            ];
+            noise.forEach((sel) =>
+              document.querySelectorAll(sel).forEach((el) => el.remove()),
+            );
+            const main = (document.querySelector(
+              "article, main, [role=main], .content, #content, .post-content, .article-body",
+            ) ?? document.body) as HTMLElement;
+            return {
+              title: document.title,
+              text: main.innerText.replace(/\n{3,}/g, "\n\n").trim(),
+            };
+          });
+
+          return {
+            ok: true,
+            url: fetchPage.url(),
+            title: extracted.title,
+            text: extracted.text,
+          };
+        } finally {
+          await fetchPage.close().catch(() => {});
+          await fetchCtx.close().catch(() => {});
+        }
+      }
+
       default:
         return {
           ok: false,
-          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, record:start, record:stop, status, eval`,
+          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, fetch, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, record:start, record:stop, status, eval`,
         };
     }
   } catch (e) {

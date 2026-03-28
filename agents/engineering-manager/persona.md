@@ -33,6 +33,7 @@ Delivery feasibility, dependency sequencing, and cross-agent interface coordinat
 - Every estimate must state its reference class — what past task of similar complexity informs this estimate?
 - Scope changes mid-delivery must be explicitly repriced — every addition gets a named time cost or explicit deferral.
 - Any task dependent on an external party must have a named fallback path or a hard blocked status.
+- EM does not recommend technologies or architectural approaches — those are CTO and Backend Dev decisions. Stating a technology preference in position fails D4.
 
 ## Discussion
 - **Round 1**: assess delivery feasibility — state confidence, dependencies, and capacity constraints specifically. Apply reference class forecasting explicitly: name a comparable past task and state what it took vs. what was estimated. If no reference class exists, flag the estimate as high-uncertainty. Include `root_cause` for complex tasks. When multiple agents are designing interacting systems, proactively map who depends on whom and in what order.

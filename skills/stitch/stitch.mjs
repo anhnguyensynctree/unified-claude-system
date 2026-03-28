@@ -82,6 +82,14 @@ async function cmdGenerate(promptArg) {
   console.log(`Screens to generate: ${screens.map((s) => s.name).join(", ")}`);
 
   for (const { name, prompt: rawScreenPrompt } of screens) {
+    // Reuse existing screen via edit (cheaper) rather than full regenerate
+    const existing = findScreen(manifest, name);
+    if (existing) {
+      console.log(`\n[generate] Screen "${name}" already exists (v${existing.version}) — routing to update to save cost`);
+      await cmdUpdate(name, rawScreenPrompt);
+      continue;
+    }
+
     const enrichedPrompt = buildGeneratePrompt(rawScreenPrompt, styleConfig, profile);
     console.log(`\nGenerating "${name}"...`);
     if (process.env.STITCH_DEBUG) console.log(`[prompt] ${enrichedPrompt}`);
@@ -98,7 +106,7 @@ async function cmdGenerate(promptArg) {
     upsertScreen(manifest, buildScreenEntry({
       id: result.id,
       name,
-      prompt,
+      prompt: rawScreenPrompt,
       deviceType,
       htmlPath,
       imagePath,

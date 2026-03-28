@@ -63,9 +63,7 @@ Fires when: (a) `task_count_since_last_audit` reaches 10, OR (b) Router flags `m
 - All agent persona files for agents activated in the last 10 tasks
 - `metrics.md` (task history)
 - facts.json for current project
-- MEMORY.md for current project
-- `~/.claude/skills/oms/SKILL.md` and `~/.claude/skills/oms-implement/SKILL.md`
-- `~/.claude/bin/oms-dispatcher.sh`
+- `~/.claude/skills/oms/SKILL.md` and `~/.claude/skills/oms-work/SKILL.md`
 
 ---
 
@@ -103,10 +101,11 @@ Every persona has two conceptual sections:
 4. **Trim last resort**: if still over target after steps 1-3 → post to `#oms-updates` with specific proposed removals. CEO must reply "yes" before any trim executes.
 
 **Line targets** (checked only after dedup/upgrade/archive pipeline):
-- Engineering agents: 70 lines
-- Researcher agents: 65 lines
-- C-suite singletons: 60 lines
-- Engine agents (router, synthesizer, facilitator, trainer, context-optimizer): 80 lines — loaded every task
+- Engineering discussion agents (cto, pm, em, frontend, backend, qa): 120 lines
+- Researcher agents: 80 lines
+- C-suite singletons (cpo, clo, cfo, cro): 120 lines
+- Engine agents (router, synthesizer, facilitator, trainer, context-optimizer): 280 lines — loaded every task; complex by necessity
+- Complex engine agents (ceo-gate, task-elaboration): no line target — size justified by phase count
 
 ---
 
@@ -115,40 +114,36 @@ Every persona has two conceptual sections:
 Engine files are loaded on every step — every excess line costs tokens per invocation. All changes require explicit CEO approval.
 
 **Monitor**:
-- `~/.claude/skills/oms/SKILL.md` target: 500 lines
-- `~/.claude/skills/oms-implement/SKILL.md` target: 350 lines
-- `~/.claude/bin/oms-dispatcher.sh` step prompts: total chars across all `_auto` cases, target: 3000 chars
+- `~/.claude/skills/oms/SKILL.md` target: 600 lines
+- `~/.claude/skills/oms-work/SKILL.md` target: 350 lines
 - `~/.claude/agents/engine/discussion-rules.md` target: 80 lines
 
 **On threshold breach** → post to `#oms-updates`:
 - For SKILL.md: identify reference-only sections (schemas, examples, non-normative prose) as candidates to extract to a companion `oms-reference.md` not loaded per-step. List specific sections.
-- For dispatcher: identify verbose step prompts, attach proposed tighter versions.
 - All engine changes: CEO must reply "yes" before anything is touched.
 
 ---
 
-### Audit Check 5 — Pipeline Token Leak Detection
+### Audit Check 4b — Manual Mode Efficiency
 
-Read `~/.claude/bin/oms-dispatcher.sh` and `~/.claude/bin/oms-post-step.py`. Check for structural token leaks:
+OMS now runs in Claude Code (manual mode). Token leaks look different — no dispatcher, no force-advance, no repetition guard. Leaks are structural: context loaded but unused, agents briefed but not referenced, lessons duplicating Non-Negotiables.
 
-1. **Steps with no idempotency guard**: any `round_*` or `synthesis` step missing a "FIRST CHECK: if already written" instruction in its prompt — agents will re-run completed work. List missing guards.
-2. **Steps without force-advance**: any mechanical step (fixed next-state) that still depends on the agent to write the checkpoint — agent failure means infinite loop. Check `log`, `cpo_backlog`, `trainer`, `compact_check` all have force-advance in place.
-3. **Session-aware prompt gaps**: any step prompt that says "Read logs/tasks/..." unconditionally — should be conditional on `PRIOR_SESSION` being empty. Cold reads on resumed sessions waste tokens.
-4. **Ghost step candidates**: any step whose prompt only advances the checkpoint without producing new content (like the old `log` step was) — propose removal to CEO.
-5. **Model selection audit**: verify Haiku is assigned to `log|cpo_backlog|trainer|compact_check` in the model selection block. Any mechanical step using Sonnet is a cost leak.
-6. **Repetition guard threshold**: verify the bot's repetition guard fires at 3 (not higher) — each extra repeat before firing wastes one full step invocation.
+1. **Lessons redundant with Non-Negotiables**: scan activated agents' `lessons.md` — any lesson whose imperative matches a Non-Negotiable already in `persona.md` (4-word fingerprint match) → remove from lessons.md (duplicate load). Auto-fix: no CEO needed.
+2. **Agent briefing verbosity**: any `agent_briefings.[role]` in a task log longer than 200 words → flag. Router is distilling, not compressing. Inject lesson to router: "briefing for [role] was N words — target 50-100 words max."
+3. **SKILL.md loaded sections**: check if SKILL.md `## Discover Mode`, `## Onboard Mode`, `## Exec Mode` sections are being loaded for standard engineering tasks. These are mode-specific — flag if a standard task log shows evidence of full SKILL.md load when only Steps 1-8 were needed.
+4. **Shared context over-loading**: check the per-agent context table in SKILL.md — is any agent receiving context files not in their column? Cross-check against task log's agent_briefings scope.
 
-**Output**: list each leak found with estimated token waste per task and proposed fix. All proposed fixes require CEO approval — never auto-modify dispatcher or bot.
+**Output**: flag each leak with: file affected, estimated waste, proposed fix. All auto-fixes (lessons dedup) execute immediately. All other proposed fixes go to CEO.
 
 ---
 
-### Audit Check 4 — Efficiency Patterns
+### Audit Check 5 — Efficiency Patterns
 
 - **Unused ctx files**: any OMS living doc unreferenced in last 10 task briefings → inform only (Discord post, no action)
 - **Over-activation patterns**: agent activated but uncited in synthesis 3+ of last 10 tasks → inject lesson to `router/lessons.md` (safe auto-fix), post summary
 - **Round efficiency**: average rounds used vs. cap across last 10 tasks — if <50% of cap consistently, Router is over-estimating complexity → inject correction to Router lessons
 - **facts.json bloat**: >40 entries → auto-consolidate
-- **MEMORY.md bloat**: >80 lines → post "Run `/consolidate-memory`" (inform only)
+- **lessons.md bloat (project layer)**: any `[project]/.claude/agents/[agent]/lessons.md` >40 lines → post "Run `/consolidate-memory [agent]`" (inform only)
 - **Task log accumulation**: >300 lines unarchived → append archive marker; >30 days old → move to `logs/archive/`
 
 ---

@@ -1,0 +1,46 @@
+# oms-exec — LLM Reference
+
+C-suite strategic session. Selects the next milestone, plans its FEATURE blocks, queues them for elaboration. Output is product direction — never implementation.
+
+## Triggers — use /oms-exec when
+
+- Queue is empty and no milestone has active coverage
+- A milestone completes and the next one needs to be selected
+- CEO explicitly wants to review product direction
+- Auto-triggered by Router when queue empties and no task is provided
+
+Skip /oms-exec when:
+- Tasks are already queued and active
+- CEO has a specific task to run through /oms discussion
+
+## Invocation
+
+```
+/oms-exec                        # CPO auto-selects highest-priority uncovered milestone
+/oms-exec [milestone name]       # force a specific milestone
+/oms exec                        # alias via /oms skill
+```
+
+## What it does
+
+1. Reads product-direction.ctx.md + cleared-queue.md — builds milestone gap report
+2. C-suite (CPO + CTO + CFO + CLO + CRO) discusses: which milestone next, plan, risks
+3. Selects ONE milestone per session
+4. CPO drafts FEATURE blocks → appended to cleared-queue.md as Status: draft
+5. Features await /oms FEATURE-NNN for task elaboration
+
+## Always-active agents
+
+CPO (lead), CTO, CFO, CLO, CRO — always all five, no exceptions.
+PM not in exec — PM gap report injected into CPO briefing as context only.
+
+## Key files
+
+Read: product-direction.ctx.md, cleared-queue.md
+Write: cleared-queue.md (FEATURE drafts, Status: draft), ceo-decisions.ctx.md (strategic holds)
+
+## What it doesn't do
+
+- Never writes tasks — FEATUREs only (tasks come from /oms FEATURE-NNN)
+- Never implements — that's /oms-work
+- Never selects more than one milestone per session

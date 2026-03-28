@@ -12,24 +12,24 @@ Single source of truth for all required output fields across the OMS pipeline. E
 
 ## Stage 1 — Router Output
 
-**Written to**: `oms-checkpoint.json` + passed directly to discussion agents
-**Consumed by**: `oms-dispatcher.sh` (round dispatch), each activated discussion agent (briefings)
+**Written to**: task log + passed directly to discussion agents
+**Consumed by**: OMS skill (round dispatch), each activated discussion agent (briefings)
 
 | Field | Type | Null OK | Blocking | Consumer reads | Validated |
 |---|---|---|---|---|---|
-| `task_id` | string | no | yes | dispatcher: checkpoint key, log filename | Stage-Gate 1 |
-| `tier` | 0\|1\|2\|3 | no | yes | dispatcher: Facilitator/Path-Diversity skip rules | R6 |
+| `task_id` | string | no | yes | OMS:checkpoint key, log filename | Stage-Gate 1 |
+| `tier` | 0\|1\|2\|3 | no | yes | OMS:Facilitator/Path-Diversity skip rules | R6 |
 | `complexity` | simple\|compound\|complex | no | no | trainer: complexity_assessment_accurate | R2 |
-| `rounds_required` | integer 1–4 | no | **yes** | dispatcher: when to advance round_N → synthesis | **R8** (blocking) |
-| `activated_agents` | string[] | no | yes | dispatcher: builds round prompts for each | R1, R7 |
+| `rounds_required` | integer 1–4 | no | **yes** | OMS:when to advance round_N → synthesis | **R8** (blocking) |
+| `activated_agents` | string[] | no | yes | OMS:builds round prompts for each | R1, R7 |
 | `agent_briefings` | object | no | yes | each agent: receives their briefing | R5 |
 | `locked` | true | no | yes | signals roster is final; dispatcher rejects unlocked output | Stage-Gate 1 |
-| `stage_gate` | passed\|failed | no | yes | dispatcher: aborts task on "failed" | Stage-Gate 1 |
-| `briefing_mode` | thin\|fat | no | yes | dispatcher: determines context injection depth | Stage-Gate 1 |
+| `stage_gate` | passed\|failed | no | yes | OMS:aborts task on "failed" | Stage-Gate 1 |
+| `briefing_mode` | thin\|fat | no | yes | OMS:determines context injection depth | Stage-Gate 1 |
 | `premortem_failure_modes` | string[2–3] | no | no | trainer: pre-mortem quality | R5 |
 | `overlap_flags` | array | no | no | trainer: boundary discipline | Stage-Gate 1 |
 | `why_chain` | object\|omitted | yes | no | discussion agents (fat mode only) | Stage-Gate 1 |
-| `context_files` | string[] | yes | no | dispatcher: loads matching ~/.claude/contexts/ files | CM1, CM2 |
+| `context_files` | string[] | yes | no | OMS:loads matching ~/.claude/contexts/ files | CM1, CM2 |
 
 **Stage-Gate 1 required**: `task_id`, `tier`, `rounds_required`, `activated_agents`, `agent_briefings`, `locked: true`, `stage_gate: "passed"`, `briefing_mode`
 
@@ -62,42 +62,42 @@ Base schema from `shared-context/discussion-schema.md`. All fields below are **p
 - CTO: `frame_challenge` (when PF1/PF2 triggered — optional otherwise)
 - Backend Dev: `proposed_api` (when API surface is in scope)
 - QA: `risk_level`
-- PM: `user_need_served`
-- EM: `delivery_feasibility`
+- PM: `jtbd` (jobs-to-be-done framing — the user need this serves)
+- EM: `delivery_confidence` (high | medium | low — delivery feasibility assessment)
 
 ---
 
 ## Stage 3 — Facilitator Output
 
 **Written by**: `facilitator/persona.md`
-**Consumed by**: `oms-dispatcher.sh` (proceed_to → next step), discussion agents (injections broadcast back)
+**Consumed by**: OMS skill (proceed_to → next step), discussion agents (injections broadcast back)
 
 | Field | Type | Null OK | Blocking | Consumer reads | Validated |
 |---|---|---|---|---|---|
-| `proceed_to` | next_round\|synthesis\|ceo_gate | no | yes | dispatcher: decides round_N+1 vs synthesis | F3 |
-| `consensus_reached` | boolean | no | yes | dispatcher: gates synthesis trigger | F3 |
+| `proceed_to` | next_round\|synthesis\|ceo_gate | no | yes | OMS:decides round_N+1 vs synthesis | F3 |
+| `consensus_reached` | boolean | no | yes | OMS:gates synthesis trigger | F3 |
 | `position_distribution` | object | no | no | Trainer: convergence assessment | — |
-| `injections` | array | yes | no | dispatcher: broadcasts to discussion agents | F4 |
+| `injections` | array | yes | no | OMS:broadcasts to discussion agents | F4 |
 | `convergence_note` | string\|null | yes | no | Trainer: premature convergence check | C1 |
-| `round_count` | integer | no | yes | dispatcher: validates against rounds_required | F3 |
+| `round_count` | integer | no | yes | OMS:validates against rounds_required | F3 |
 
 ---
 
 ## Stage 4 — Synthesizer Output
 
 **Written by**: `synthesizer/persona.md` → `logs/tasks/[task-id].md`
-**Consumed by**: `oms-dispatcher.sh` (task log write, advance to implement), `oms-implement/SKILL.md` (reads decision + action_items)
+**Consumed by**: OMS skill (task log write), `oms-work/SKILL.md` (reads decision + action_items)
 
 | Field | Type | Null OK | Blocking | Consumer reads | Validated |
 |---|---|---|---|---|---|
-| `task_id` | string | no | yes | log filename; oms-implement: load context | Stage-Gate 4 |
-| `decision` | string (1 sentence) | no | yes | oms-implement: Step 1 plan summary | C2, Stage-Gate 4 |
-| `action_items` | string[] | no | yes | oms-implement: Step 1.5 dependency analysis, Step 2 | C4, Stage-Gate 4 |
+| `task_id` | string | no | yes | log filename; oms-work: load context | Stage-Gate 4 |
+| `decision` | string (1 sentence) | no | yes | oms-work: Step 1 plan summary | C2, Stage-Gate 4 |
+| `action_items` | string[] | no | yes | oms-work: Step 1.5 dependency analysis, Step 2 | C4, Stage-Gate 4 |
 | `rationale` | string[] | no | no | Trainer: claim traceability | Stage-Gate 4 |
-| `dissent` | array | yes | no | oms-implement: Step 2 agent context | C3 |
-| `reopen_conditions` | array | yes | no | oms-implement: Step 2 scope guard | — |
+| `dissent` | array | yes | no | oms-work: Step 2 agent context | C3 |
+| `reopen_conditions` | array | yes | no | oms-work: Step 2 scope guard | — |
 | `activated_agents` | string[] | no | no | Trainer: tier scope | — |
-| `acceptance_criteria` | array | yes | no | oms-implement: Step 2.5 Evidence QA | — |
+| `acceptance_criteria` | array | yes | no | oms-work: Step 2.5 Evidence QA | — |
 | `owner_map` | object | no | no | action_items owner assignment | C4 |
 
 **Stage-Gate 4 required**: `task_id`, `decision`, `action_items[]` (non-empty), `rationale[]` (≥1 entry), `stage_gate: "passed"`
@@ -127,47 +127,55 @@ Base schema from `shared-context/discussion-schema.md`. All fields below are **p
 ## Stage 6 — Context Optimizer Output
 
 **Written by**: `context-optimizer/persona.md`
-**Consumed by**: `oms-dispatcher.sh` (checkpoint write), CEO approval gate (dangerous trims)
+**Consumed by**: OMS skill, CEO approval gate (dangerous trims)
 
 | Field | Type | Null OK | Blocking | Consumer reads | Validated |
 |---|---|---|---|---|---|
-| `status` | clean\|trimmed\|flagged | no | yes | dispatcher: continue vs pause | — |
+| `status` | clean\|trimmed\|flagged | no | yes | OMS:continue vs pause | — |
 | `over_activated_agents` | array | yes | no | Trainer: R7 calibration | — |
 | `pipeline_integrity_signals` | array | yes | no | CEO: escalation context | — |
 | `actions_taken` | array | yes | no | CEO: trim audit | — |
-| `ceo_approval_required` | boolean | no | yes | dispatcher: pause if true | — |
+| `ceo_approval_required` | boolean | no | yes | OMS:pause if true | — |
 
 ---
 
-## Checkpoint Fields (`oms-checkpoint.json`)
+## Stage 8.5 — Queue Commit Output
 
-**Written by**: `oms-dispatcher.sh` + `oms-post-step.py`
-**Consumed by**: `oms-dispatcher.sh` on every invocation (resume, skip, force-advance)
+**Written by**: OMS (exec mode: CPO authors FEATURE drafts; feature discussion mode: Elaboration Agent authors Tasks)
+**Consumed by**: `/oms-work` (reads `queued` tasks), `/oms FEATURE-NNN` (reads `draft` FEATURE blocks)
 
-| Field | Type | Null OK | Blocking | Written by | Notes |
-|---|---|---|---|---|---|
-| `next` | string | no | yes | dispatcher force-advance | validated against allowlist after every write — invalid value → `pipeline_frozen` immediately |
-| `task_id` | string | no | yes | dispatcher at router step | checkpoint filename key |
-| `session_id` | string | yes | no | oms-post-step.py | used for --resume; cleared on fallback |
-| `rounds_required` | integer | no | yes | oms-post-step.py from Router output | R8 — dispatcher defaults to 3 if missing (masked failure) |
-| `steps_written` | string[] | yes | no | oms-post-step.py | idempotency guard for cpo_backlog, trainer |
-| `frozen_step` | string | yes | no | _freeze_pipeline() | set on pipeline_frozen; consumed by skip handler |
-| `slug` | string | no | yes | dispatcher | project identifier |
-
----
-
-## Watcher — Pipeline Integrity Agent
-
-**Fires when**: `pipeline_frozen` written to checkpoint (both trigger points)
-**Consumed by**: dispatcher (calls `oms-watcher.py` at each freeze point)
-**Source of truth for bugs**: `~/.claude/agents/watcher/bug-list.md`
+### Exec mode — FEATURE-NNN block required fields
 
 | Field | Type | Null OK | Blocking | Notes |
 |---|---|---|---|---|
-| `fix_attempts` | object | yes | no | keyed by `{bug_id}:{frozen_step}:{task_id}` — max 2 auto-fixes per key |
-| `frozen_step` | string | yes | no | set on freeze, cleared on successful fix |
+| `Status` | draft | no | yes | Always `draft` on creation |
+| `Milestone` | string | no | yes | Must match a milestone name in product-direction.ctx.md exactly |
+| `Type` | product\|engineering\|research\|cross-functional | no | yes | Drives validation chain |
+| `Departments` | string[] | no | yes | CPO's agent roster recommendation |
+| `Research-gate` | true\|false | no | yes | Controls elaboration sequencing |
+| `Why` | string (1 sentence) | no | yes | Exec rationale |
+| `Exec-decision` | string | no | yes | Hard constraint injected into all agent briefings |
+| `Acceptance` | string | no | yes | CPO-readable done criteria |
+| `Validation` | string | no | yes | Must match feature type: product→cpo, engineering→cpo+cto, research→cpo+cro, cross-functional→cpo+cto |
+| `Tasks` | none | no | yes | Always `none` on creation — populated after /oms FEATURE-NNN |
 
-**Loop mitigation**: `fix_attempts[key] >= 2` → escalate to CEO, do not retry.
+**Forbidden fields** (EP2 — exec must NOT write these): `Spec:`, `Scenarios:`, `Artifacts:`, `Produces:`, `Verify:` — these are task-level OpenSpec fields.
+
+### Feature discussion mode — TASK-NNN block required fields (queued)
+
+| Field | Type | Null OK | Blocking | Notes |
+|---|---|---|---|---|
+| `Status` | queued | no | yes | Promoted from draft by Elaboration Agent |
+| `Feature` | FEATURE-NNN | no | yes | Must reference a real FEATURE in cleared-queue.md |
+| `Milestone` | string | no | yes | Copied from feature |
+| `Department` | string | no | yes | One value — never multi-department |
+| `Type` | impl\|research | no | yes | Drives validation chain |
+| `Spec` | string (SHALL) | no | yes | One sentence, one correct interpretation |
+| `Scenarios` | string (GIVEN/WHEN/THEN pipe-separated) | no | yes | ≥2 scenarios |
+| `Artifacts` | string (pipe-separated paths) | no | yes | Every file to produce |
+| `Produces` | string\|none | no | yes | Downstream contract or explicit `none` |
+| `Validation` | string | no | yes | research→researcher→cro→cpo; engineering→dev→qa→em; infra→dev→cto |
+| `Depends` | none\|TASK-NNN | no | yes | Explicit, never implied |
 
 ---
 
@@ -189,14 +197,10 @@ When a field changes, these are the minimum files that must also be updated:
 | What changed | Files to update |
 |---|---|
 | New field on any stage boundary | This file (add row) → agent Stage-Gate checklist → Trainer blocking criteria if blocking |
-| Field removed or renamed | This file → agent Stage-Gate → all downstream consumers (dispatcher prompts, agent personas that read it) → training scenarios that assert the field |
-| `next` allowlist entry added/removed | This file → dispatcher allowlist in `oms-dispatcher.sh` |
-| Dispatcher force-advance table entry added | This file (checkpoint section) → dispatcher pre-step validation (add required input field check) |
-| New OMS step added to pipeline | This file (new stage or checkpoint row) → dispatcher: case statement + force-advance table + pre-step validation + allowlist + model selection |
+| Field removed or renamed | This file → agent Stage-Gate → all downstream consumers (agent personas that read it) → training scenarios that assert the field |
+| New OMS step added to pipeline | This file (new stage row) → OMS SKILL.md: step sequence + model selection |
 | Agent output schema field added | This file → agent's Stage-Gate checklist → `discussion-schema.md` (if shared field) → training scenario that tests the agent |
 | Training scenario references a field | This file → scenario's `Criteria tested` list must include FC1 if testing contract compliance |
-
-**Rule**: a dispatcher fallback that defaults a missing field is evidence of a contract gap — add the field to this file and the upstream Stage-Gate before adding the fallback.
 
 ## Update Protocol
 
@@ -204,7 +208,6 @@ When any of the following changes, update this file **before** merging:
 - New field added to any agent JSON schema
 - Existing field removed or renamed
 - A downstream consumer starts reading a new field
-- A fallback is added in the dispatcher (signals a contract gap — add the field here)
 - A new OMS skill (oms-implement, oms-train, etc.) reads agent output
 
 **Who updates**: the person/agent making the OMS change.

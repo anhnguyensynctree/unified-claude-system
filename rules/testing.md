@@ -34,13 +34,31 @@ Never mark a task complete if tests are missing or skipped.
 - Every error path needs a test
 - Never consider a task done without running tests
 
-## E2E Tests — When to Write
-Write E2E tests when implementing or changing:
-- Auth flows (login, logout, signup, session expiry)
-- Checkout / payment flows
-- Multi-step forms or wizards
-- Any flow a user would notice if broken
-Run E2E after unit/integration pass, not instead of them.
+## E2E Tests — Mandatory for All OMS Projects
+Every user-facing flow must have an E2E test. Not optional. Applies to all OMS projects.
+
+**One file per flow** — never one monolithic test file:
+```
+e2e/
+  home-to-questionnaire.spec.ts   # entry → adaptive flow
+  questionnaire-to-confirm.spec.ts
+  confirm-to-output.spec.ts
+  auth-login.spec.ts
+  checkout.spec.ts
+```
+
+**Write an E2E test when:**
+- A new page, route, or screen is added
+- A navigation path between pages is introduced or changed
+- A form submission or multi-step flow is implemented
+- Any URL param contract exists between two pages
+- Auth, checkout, or session-sensitive flows
+
+**File naming:** `e2e/<feature-or-flow>.spec.ts` — one flow per file, never combine unrelated flows.
+
+**Run order:** unit + integration pass first → then E2E. Never substitute one for the other.
+
+**Setup:** Use Playwright. `playwright.config.ts` at project root. Each spec uses `test.describe('<flow name>')`. Happy path + at least one failure path per flow.
 
 ## Running Tests — Required Steps
 After any implementation:

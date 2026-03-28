@@ -41,8 +41,36 @@ OMS passes each evaluated agent's task count in context as `agent_task_counts: {
 
 ## Task Spec Review (Step 8.5 output)
 
-After evaluating the discussion, evaluate the task specs drafted in Step 8.5.
-Load the session's newly added entries from `cleared-queue.md` (tasks written this session only).
+After evaluating the discussion, evaluate the queue entries written in Step 8.5.
+Load the session's newly added entries from `cleared-queue.md` (entries written this session only).
+
+**Exec sessions — pipeline completeness check (run first, before FEATURE validation):**
+
+Before evaluating FEATURE blocks, verify the exec session ran all required steps. Check the task log:
+- **Step 6 present** — task log contains a Trainer evaluation section (heading `## Trainer` or `## Step 6`). Missing = EP1 fail.
+- **Step 7 present** — task log contains a Context Optimizer section (heading `## Efficiency Check` or `## Step 7`). Missing = EP1 fail.
+- **CEO response recorded** — task log contains CEO's response to synthesis before Step 8.5 fired (heading `## CEO Feedback` or `## Step 8`). Missing = EP3 fail.
+- **FEATURE drafts exist** — at least one FEATURE-NNN block was written to `cleared-queue.md` this session. None written = EP2 fail (exec must produce features, not tasks or nothing).
+
+EP1/EP3 are blocking — if the pipeline skipped steps, flag in `lesson_candidates` for channel: `scenario` (engine gap, not persona gap).
+
+**Exec sessions — FEATURE block validation (run after pipeline check):**
+
+Check every FEATURE-NNN block written this session. These are blocking checks (EP2/MF1 failures halt further evaluation of the affected entry):
+
+1. **Type → Validation alignment** — match against this table exactly; any mismatch = EP2 fail:
+   - `Type: product` → `Validation: cpo`
+   - `Type: engineering` → `Validation: cpo + cto`
+   - `Type: research` → `Validation: cpo + cro`
+   - `Type: cross-functional` → `Validation: cpo + cto` (minimum; `cpo + cro + cto` if research dept involved)
+
+2. **Forbidden OpenSpec fields** — if any FEATURE block contains `Spec:`, `Scenarios:`, `Artifacts:`, `Produces:`, or `Verify:` → EP2 fail. These are task-level fields; exec writes features, not tasks.
+
+3. **Feature Status lifecycle** — if all tasks listed under a feature are `done` and the sign-off chain is satisfied, the feature `Status:` must be `done`. A feature with `Status: in-progress` (or `draft`) when all its tasks are done = MF1 fail.
+
+4. **Milestone completion update (MF2)** — after checking Feature Status, check: did any milestone have ALL its features transition to `done` this session? If yes, verify `product-direction.ctx.md` was updated to mark that milestone complete with a date. No update = MF2 fail. Lesson candidate: `channel: lesson`, target `cpo`, importance: `critical`.
+
+**Feature discussion sessions — task spec scoring (run after FEATURE validation):**
 
 Score each task on 4 dimensions (1–5):
 - **SHALL clarity** — is there exactly one correct interpretation? 5 = no ambiguity; 1 = multiple valid readings

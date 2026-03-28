@@ -9,25 +9,15 @@ Usage:
 """
 
 import json
+import re as _re
+import subprocess
 import sys
 import os
 import uuid
 from datetime import datetime, timezone
-from urllib import request as urllib_request
 from pathlib import Path
 
-def _load_api_key() -> str:
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if key:
-        return key
-    key_file = Path.home() / ".config" / "anthropic" / "key"
-    if key_file.exists():
-        return key_file.read_text().strip()
-    return ""
-
-ANTHROPIC_API_KEY = _load_api_key()
 MODEL = "claude-haiku-4-5-20251001"
-API_URL = "https://api.anthropic.com/v1/messages"
 
 EXTRACT_SYSTEM = """You are a memory extraction tool. Your only job is to read a conversation transcript and output a JSON array of facts worth remembering.
 
@@ -122,29 +112,39 @@ Topic must be one of: hooks|scaffold|agents|debugging|patterns|projects|insights
 Each pattern max 40 words. [] if nothing worth extracting."""
 
 
+def _build_env() -> dict:
+    """Return env for claude -p.
+
+    Subscription users: clear ANTHROPIC_API_KEY so claude uses keychain OAuth.
+    API key users: load key from ~/.config/anthropic/key so claude can authenticate.
+    """
+    key_file = Path.home() / ".config" / "anthropic" / "key"
+    if key_file.exists() and key_file.stat().st_size > 0:
+        return {**os.environ, "ANTHROPIC_API_KEY": key_file.read_text().strip()}
+    return {**os.environ, "ANTHROPIC_API_KEY": ""}  # subscription — force keychain
+
+
 def api_call(system: str, user: str, prefill: str = "[", max_tokens: int = 1024) -> str:
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-    messages = [{"role": "user", "content": user}]
-    if prefill:
-        messages.append({"role": "assistant", "content": prefill})
-    payload = json.dumps({
-        "model": MODEL,
-        "max_tokens": max_tokens,
-        "system": system,
-        "messages": messages,
-    }).encode()
-    req = urllib_request.Request(
-        API_URL, data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01"
-        }
+    """Route through claude -p subprocess. Supports both subscription and API key auth."""
+    if prefill == "[":
+        json_hint = "\n\nOutput ONLY a valid JSON array. No prose, no markdown fences."
+    elif prefill == "{":
+        json_hint = "\n\nOutput ONLY a valid JSON object. No prose, no markdown fences."
+    else:
+        json_hint = ""
+    prompt = f"{system}\n\n{user}{json_hint}"
+    env = _build_env()
+    result = subprocess.run(
+        ["claude", "--model", MODEL, "-p", prompt],
+        capture_output=True, text=True, timeout=90, env=env,
     )
-    with urllib_request.urlopen(req, timeout=30) as resp:
-        text = json.loads(resp.read())["content"][0]["text"]
-        return prefill + text
+    if result.returncode != 0:
+        raise RuntimeError(f"claude -p failed: {result.stderr[-300:]}")
+    output = result.stdout.strip()
+    # Strip markdown code fences if Claude wrapped the output
+    output = _re.sub(r"^```[a-z]*\n?", "", output)
+    output = _re.sub(r"\n?```\s*$", "", output)
+    return output.strip()
 
 
 def load_facts(path: Path) -> list:
@@ -246,10 +246,6 @@ def read_transcript(transcript_path: str, max_messages: int = 120, max_chars: in
 
 
 def extract(transcript_path: str):
-    if not ANTHROPIC_API_KEY:
-        print("[mem0] Set ANTHROPIC_API_KEY in ~/.zshrc to enable extraction", file=sys.stderr)
-        return
-
     meta = get_transcript_meta(transcript_path)
     cwd = meta.get("cwd")
     if not cwd:
@@ -499,9 +495,6 @@ Rules:
 
 def summary(transcript_path: str, date: str, project: str = "unknown"):
     """Write a full-session narrative summary to the handoff file using Haiku."""
-    if not ANTHROPIC_API_KEY:
-        return
-
     try:
         conversation = read_transcript(transcript_path, max_messages=120, max_chars=600)
     except RuntimeError as e:
@@ -556,11 +549,7 @@ def summary(transcript_path: str, date: str, project: str = "unknown"):
 
 
 def session_end(transcript_path: str, date: str, project: str = "unknown"):
-    """Single Haiku call: summary + facts + patterns. Replaces summary+extract+learn."""
-    if not ANTHROPIC_API_KEY:
-        print("[mem0-session-end] No API key — skipping", file=sys.stderr)
-        return
-
+    """Single claude -p call: summary + facts + patterns (subscription billing)."""
     meta = get_transcript_meta(transcript_path)
     cwd = meta.get("cwd")
     if not cwd:
@@ -621,28 +610,37 @@ def session_end(transcript_path: str, date: str, project: str = "unknown"):
             f.write(f"\n---\n## Session Summary\n{narrative}\n")
         print(f"[mem0-session-end] Summary written to {session_file}", file=sys.stderr)
 
-    # --- 2. Save facts via UPDATE dedup ---
+    # --- 2. Save facts via dedup ---
     new_facts = data.get("facts", [])
     if isinstance(new_facts, list) and new_facts:
         encoded = cwd.replace("/", "-").replace(".", "-")
         facts_path = Path.home() / ".claude" / "projects" / encoded / "memory" / "facts.json"
         existing = load_facts(facts_path)
-        existing_summary = (
-            "\n".join(f"[{m['id']}] {m['content']}" for m in existing) or "(none)"
-        )
-        try:
-            ops_raw = api_call(
-                UPDATE_SYSTEM,
-                f"Existing memories:\n{existing_summary}\n\nNew facts:\n{json.dumps(new_facts)}"
-            )
-            ops = json.loads(ops_raw)
-            if not isinstance(ops, list):
-                raise ValueError("Expected list")
-        except Exception as e:
-            print(f"[mem0-session-end] Dedup failed: {e} — adding all as new", file=sys.stderr)
-            ops = [{"op": "ADD", "fact": f} for f in new_facts]
 
         now = datetime.now(timezone.utc).isoformat()
+
+        if len(existing) >= 20:
+            # LLM dedup only when fact set is large enough to justify a second API call
+            existing_summary = "\n".join(f"[{m['id']}] {m['content']}" for m in existing)
+            try:
+                ops_raw = api_call(
+                    UPDATE_SYSTEM,
+                    f"Existing memories:\n{existing_summary}\n\nNew facts:\n{json.dumps(new_facts)}"
+                )
+                ops = json.loads(ops_raw)
+                if not isinstance(ops, list):
+                    raise ValueError("Expected list")
+            except Exception as e:
+                print(f"[mem0-session-end] Dedup failed: {e} — adding all as new", file=sys.stderr)
+                ops = [{"op": "ADD", "fact": f} for f in new_facts]
+        else:
+            # Fingerprint dedup — no extra API call
+            existing_fps = {" ".join(m["content"].lower().split()[:5]) for m in existing}
+            ops = []
+            for f in new_facts:
+                fp = " ".join(f.lower().split()[:5])
+                ops.append({"op": "NOOP"} if fp in existing_fps else {"op": "ADD", "fact": f})
+
         added = updated = skipped = 0
         for op in ops:
             action = op.get("op", "NOOP")
@@ -748,9 +746,6 @@ def check_memory():
 
 
 def learn(transcript_path: str):
-    if not ANTHROPIC_API_KEY:
-        return
-
     try:
         conversation = read_transcript(transcript_path)
     except RuntimeError as e:

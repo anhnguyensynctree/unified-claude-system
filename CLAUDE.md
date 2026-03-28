@@ -67,6 +67,26 @@ Memory is split across files. MEMORY.md is always loaded — it is the index, no
 ## Core Principles
 - **No Laziness** — find root causes, no temporary fixes, senior developer standards
 
+## ⛔ ANTHROPIC API KEY — HARD BLOCK — Always Active
+**Never write code that uses the Anthropic API key unless Lewis has explicitly approved it for that specific project.**
+
+The Max subscription only covers this interactive REPL window. Everything else bills the API key:
+- `claude --print` / `claude -p` as a subprocess → API key
+- Direct SDK (`anthropic.Anthropic()`, `new Anthropic()`) → API key
+- Any daemon, script, or cron spawning claude → API key
+
+All of the above = **STOP and ask first.**
+
+Full rules → `rules/security.md` § ANTHROPIC API KEY
+
+## Schema-First — Always Active
+Every data interface must have a schema definition before implementation, regardless of language or project:
+- **TypeScript**: define in Zod first → derive types with `z.infer<>` → never write a raw `interface` for external data
+- **Python**: define in Pydantic first → use `.model_validate()` at all boundaries — API responses, file reads, agent outputs
+- **JSON configs / YAML**: validate against JSON Schema (`oms-config.json`, task schemas, ctx files)
+- **API responses**: always `{ data, error, meta? }` shape, validated at the boundary
+- One schema = one source of truth. If a field changes, change the schema first, types/validation derive from it.
+
 ## Default Operating Mode
 Unless told otherwise:
 - Prioritize working, tested code over speed
@@ -110,6 +130,8 @@ When asked to work on data pipelines, ETL, ML, analytics, transforms, or data en
 When asked to write, update, or generate documentation, runbooks, ADRs, changelogs, or API reference → read ~/.claude/contexts/docs.md and apply it
 When asked to test, verify, explore, or QA a live URL, staging environment, localhost app, or web interface → use /browse skill (persistent browser daemon — do NOT cold-start Playwright)
 When asked to check web design, UI layout, visual correctness, or how something looks in the browser → use /browse skill: screenshot first, then inspect, then report findings
+When asked to read, fetch, or extract content from any external URL (docs, API reference, blog post) → use browse `fetch <url>` command — isolated context, handles JS, strips noise. Never use the built-in WebFetch tool for content extraction.
+When making 3+ independent HTTP/API calls before reasoning → write a TS file and run via `~/.claude/bin/bun-exec.sh` — batches all calls into one tool invocation, eliminates per-call context overhead.
 
 ## Available Tools & Skills
 Never guess a tool or skill's API — read its llms.txt first before using.
@@ -118,8 +140,13 @@ Never guess a tool or skill's API — read its llms.txt first before using.
 |---|---|---|
 | /stitch | ~/.claude/skills/stitch/llms.txt | Any UI generation, screen design, component implementation |
 | /browse | ~/.claude/skills/browse/llms.txt | Test or verify live URLs, localhost apps, authenticated flows, UI screenshots |
+| browse fetch | ~/.claude/skills/browse/llms.txt | Read any external URL as clean text — docs, APIs, blog posts. Handles JS, isolated context. |
+| bun-exec | ~/.claude/bin/bun-exec.sh | Batch 3+ parallel HTTP/API calls into one tool call — write TS, pipe to bun-exec, get JSON back. |
+| ctx-exec | ~/.claude/bin/ctx-exec | Filter large bash output (>5KB) by intent — pipe test runs, build logs, gh issue lists through it. Never let raw large output hit context. |
 | /oms | ~/.claude/skills/oms/llms.txt | Architecture decisions, multi-domain tasks, high-stakes changes, research synthesis |
 | rv (remotion) | ~/code/tools/remotion/llms.txt | Render any video — ShortVideo (9:16), LandscapeVideo (16:9), Audiogram (1:1) |
+| ambient-music | ~/code/tools/ambient-music/llms.txt | Royalty-free music library — pick/search CC0 tracks by mood/BPM for any project |
+| cadence | ~/code/tools/cadence/llms.txt | LLM-powered music composer — generate owned WAV tracks by mood/style, suggest tracks for any scene |
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation

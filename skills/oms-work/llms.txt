@@ -1,0 +1,54 @@
+# oms-work — LLM Reference
+
+Execution engine for cleared tasks. Runs queued tasks in isolated git worktrees, validates via chain, commits on pass, leaves branch open on stop.
+
+## Triggers — use /oms-work when
+
+- cleared-queue.md has tasks with Status: queued
+- Discord `/work` received in a project channel
+- After /oms session generates queued tasks
+
+Skip /oms-work when:
+- Queue is empty or all tasks are done/cto-stop
+- cto-stop tasks need re-spec — resolve at next /oms session first
+- Task scope is unclear — run /oms to elaborate first
+
+## Invocation
+
+```
+/oms-work              # auto-detect project from cwd
+/oms-work <slug>       # explicit project slug (from oms-config.json)
+```
+
+## What it does
+
+1. Reads cleared-queue.md — identifies ready vs blocked tasks
+2. Launches one subagent per ready task (parallel for independent, serial for chains)
+3. Each subagent: completes the task → runs validation chain → writes quality record
+4. Commits done tasks to `oms-work/task-nnn` branch; leaves cto-stop branches open
+5. Posts task status to Discord milestone thread
+6. After all tasks: invokes Executive Briefing Agent
+
+## Validation chains
+
+| Task type | Chain |
+|---|---|
+| Engineering | dev → qa → em |
+| Research | researcher → cro → cpo |
+| Infra-critical | dev → cto |
+
+## Quality record
+
+Each completed task writes to `~/.claude/oms-costs/<slug>-<task-id>.json`:
+passed, fail_at, validators dict, notes. Also appends to `[project]/.claude/oms-metrics.json`.
+
+## Key files
+
+Read: cleared-queue.md, oms-config.json, task Context: files
+Write: cleared-queue.md (status), oms-briefing.md, oms-daily-log.md, oms-metrics.json, oms-costs/
+
+## What it doesn't do
+
+- Never re-discusses or replans — that's /oms
+- Never merges to main — branches stay open for CEO to merge
+- Never runs cto-stop tasks — those need re-spec first

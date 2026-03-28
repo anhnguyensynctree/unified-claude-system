@@ -1,0 +1,50 @@
+# continuous-learning — LLM Reference
+
+Extracts reusable patterns from sessions and routes them to the correct memory topic file. Fires automatically at session end via Stop hook. Also available manually mid-session.
+
+## Triggers — use /learn when
+
+- Just solved something non-trivial — error resolution, debugging technique, workaround
+- Discovered a project-specific pattern Claude didn't know about
+- Made a correction to Claude's default approach that should be remembered
+- Any Stop hook firing (automatic — runs evaluate-session.sh)
+
+## Invocation
+
+```
+/learn                         # extract patterns from current session immediately
+```
+
+Automatic trigger: Stop hook runs evaluate-session.sh on every session end.
+
+## What it does
+
+1. Evaluates the session for patterns worth extracting
+2. Routes each pattern to the correct topic file (see routing table below)
+3. Deduplicates — updates existing entries rather than appending duplicates
+
+## Routing table
+
+| Content type | Target file |
+|---|---|
+| Hook fix, hook config change | `<global-memory>/topics/hooks.md` |
+| Project scaffold, stack decision | `<global-memory>/topics/scaffold.md` |
+| Agent delegation, model selection | `<global-memory>/topics/agents.md` |
+| Bug fix insight, debugging technique | `<global-memory>/topics/debugging.md` |
+| API design, architecture, code pattern | `<global-memory>/topics/patterns.md` |
+| Project history, per-project decision | `<global-memory>/topics/projects.md` |
+| Cross-project, multi-topic insight | `<global-memory>/insights.md` |
+| User preference, workflow change | `<global-memory>/MEMORY.md` |
+
+Global memory path: `~/.claude/projects/<encoded-home>/memory/` where `<encoded-home>` = `$HOME` with `/` → `-`.
+
+## Key files
+
+Write: `~/.claude/skills/learned/[pattern-name].md` (novel patterns as standalone skills)
+Write: topic files under global memory (routed by content type above)
+Read: session transcript (current conversation)
+
+## What it doesn't do
+
+- Never writes domain-specific content to MEMORY.md — that is the index only
+- Never appends duplicate entries — always updates existing before adding new

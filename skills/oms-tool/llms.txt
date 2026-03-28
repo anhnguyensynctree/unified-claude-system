@@ -1,0 +1,38 @@
+# oms-tool — LLM Reference
+
+External research tool. Scans GitHub/Reddit/HN for trending AI tools or evaluates a specific URL, compares against the full OMS+Claude system, identifies gaps, and proposes concrete improvements.
+
+## Triggers — use /oms-tool when
+
+- Checking what's new in the AI tooling ecosystem (weekly radar)
+- Evaluating a specific repo, article, or paper for system improvement
+- CEO shares a link to something that might be worth adopting
+- Monday 09:00 UTC radar scan via Discord #radar channel
+
+## Invocation
+
+```
+/oms-tool                      # scan GitHub + Reddit + HN this week
+/oms-tool <url>                # evaluate a specific source
+/oms-tool <url1> <url2>        # evaluate multiple sources together
+/oms-tool [image]              # evaluate a screenshot/article image
+```
+
+## What it does
+
+1. Maps the full current system (CLAUDE.md + rules + oms-overview + router)
+2. Fetches source content via browse fetch
+3. Extracts genuinely novel mechanisms — discards marketing
+4. Gap analysis: what they do vs what we do vs gap level
+5. Proposes concrete improvements with effort/impact estimates
+6. Waits for CEO confirmation before implementing anything
+
+## Output
+
+Gap analysis table + proposed improvements + Summary with Implement/Pick/Skip decision.
+Never writes code before CEO confirms.
+
+## Key reads
+
+~/.claude/CLAUDE.md, ~/.claude/oms-overview.md, ~/.claude/agents/router/persona.md
+~/.claude/rules/patterns.md, ~/.claude/rules/agents.md, ~/.claude/rules/performance.md

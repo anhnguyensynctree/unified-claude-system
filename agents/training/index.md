@@ -118,6 +118,7 @@ Each scenario tests a primary agent (or engine component) against specific valid
 | 001 | simple-routing | Basic | D1, O1 | Scoped to frontend, actionable position |
 | 016 | implementation-handoff-failure | Advanced | HD1, HD2, SI1 | Cross-agent interface spec — frontend drives API shape |
 | 044 | frontend-reverse-conway | Advanced | HD1, SI1, D1 | `api_requirements` field drives backend contract |
+| 067 | git-hygiene-universal | Basic | IQ1, IQ2, IQ3 | Universal pre-commit gate: no dep dirs, no coverage, no .env, no large files — every task |
 
 ---
 
@@ -158,6 +159,32 @@ Each scenario tests a primary agent (or engine component) against specific valid
 | 047 | tier1-escalation-e1 | Medium | E1, R2, R6, D1, O1 | Tier 1 disagreement → escalation → Round 2 fires → E1 tested |
 
 ---
+
+---
+
+## Exec Pipeline + Queue Package
+*Goal: exec runs Steps 1-8.5 completely, FEATURE drafts written (not tasks), Step 8 blocks, queue state checked on every invocation*
+
+| # | Scenario | Difficulty | Criteria | What it tests |
+|---|---|---|---|---|
+| 057 | exec-golden-path | Advanced | EP1, EP2, EP3, EX1, EX2, EX3, ES1, ES2 | Full exec session: all 5 C-suite post positions, Steps 6–8.5 run, FEATURE drafts in queue |
+| 058 | feature-discussion-routing | Medium | FD1, FD2, R1, R5, R7 | Router expands Departments[] via Cynefin; Exec-decision injected into all briefings |
+| 063 | queue-state-check-paths | Basic | EP1, R1 | Three queue gate paths: draft listing, cto-stop brief, exec auto-trigger |
+| 064 | feature-validation-chain | Basic | MF1, EP2 | Correct sign-off chain by feature type; feature status updates to done on completion |
+| 065 | milestone-completion | Medium | MF1, MF2, EX2 | All features done → product-direction.ctx.md updated; exec skips completed milestone |
+
+---
+
+## Elaboration Agent Package
+*Goal: research gate enforced, task sizing split correctly, interface-contract in all cross-functional task contexts*
+
+| # | Scenario | Difficulty | Criteria | What it tests |
+|---|---|---|---|---|
+| 059 | research-gate-true-path | Medium | RG1, TS1, TS2 | Engineering tasks held as draft when research_gate true; no forward-reference Spec |
+| 060 | research-gate-false-parallel | Medium | RG2, FD3, SI1 | Interface-contract in both task Contexts; departments parallel, not sequential |
+| 061 | task-sizing-split-enforcement | Medium | TS1, TS2 | Oversized task (research+impl mixed) split into two tasks with correct Depends |
+| 062 | cross-functional-cro-engineering | Advanced | FD1, FD2, FD3, RG2, SI1, RM2, D1 | CRO+engineering cross-functional discussion; interface-contract; one task per dept |
+| 066 | impl-task-oversized-at-elaboration | Medium | TS1, TS2, TS3 | Impl task spanning >3 distinct user interactions must be split at elaboration time — flag-and-defer is a TS3 fail |
 
 ---
 
@@ -210,12 +237,21 @@ Each scenario tests a primary agent (or engine component) against specific valid
 ## Difficulty Distribution
 | Difficulty | Count |
 |---|---|
-| Basic | 4 |
-| Medium | 23 |
-| Advanced | 20 |
+| Basic | 6 |
+| Medium | 28 |
+| Advanced | 22 |
 
 ## Criteria Coverage
-Engineering criteria from `validation-criteria.md` (Concerns 1–26) are covered by at least one scenario. Concerns with multi-scenario coverage: R2/R6 (10 scenarios), D1 (8), B1/B2 (4), AP1/AP2 (3), HD1/HD2 (3), E1 (5 scenarios covering 4 variants: parallel monologue, implicit disagreement, missing claim, Tier 1 escalation path).
+Engineering criteria from `validation-criteria.md` (Concerns 1–36) are covered by at least one scenario. Concerns with multi-scenario coverage: R2/R6 (10 scenarios), D1 (8), B1/B2 (4), AP1/AP2 (3), HD1/HD2 (3), E1 (5 scenarios covering 4 variants).
+
+**New criteria (Concerns 37–41) — Exec + Elaboration agent behaviors:**
+- Concern 37 (Exec Pipeline — EP1, EP2, EP3): covered by 057, 063
+- Concern 38 (Feature Routing — FD1, FD2, FD3): covered by 058, 060, 062
+- Concern 39 (Research Gate — RG1, RG2): covered by 059, 060
+- Concern 40 (Task Sizing — TS1, TS2, TS3): covered by 061, 066
+- Concern 41 (Milestone Tracking — MF1, MF2): covered by 064, 065
+
+**Concern 42 — CEO Gate Behavior (CG1–CG8):** pending — scenarios CG01–CG05 will cover them once seeded from first real CEO Gate trigger in a live OMS session via `/oms-capture`. CG1–CG8 are currently untested.
 
 Research criteria (Concerns 27–32) are pending — scenarios R01–R03 will cover them once seeded from real research sessions. RM1–RM4, RF1–RF4, DE1–DE3, RC1–RC4, CT1–CT3, RS1–RS4 are currently untested.
 

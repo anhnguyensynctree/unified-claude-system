@@ -29,3 +29,16 @@ Haiku vs Sonnet ≈ 20x cheaper. Haiku vs Opus ≈ 60x cheaper. Default to Haiku
 Prefer parallel subagents whenever a task can be split, even small ones — never ask the user to specify this.
 Dispatch concurrent Agent calls in a single message when workstreams are independent. Serial only when order is required.
 
+## Skill Contracts — llms.txt
+Every skill must have a `llms.txt` in its directory. This is the machine-readable contract agents use to understand when and how to invoke it.
+
+**Before cross-referencing a skill in an agent briefing:** read its `llms.txt` — never assume invocation syntax or trigger conditions from the skill name alone.
+
+**When creating a new skill:** write `llms.txt` before or alongside `SKILL.md`. Minimum content:
+- Trigger conditions (when to use this skill)
+- Invocation syntax (exact command forms)
+- What it reads and writes (key files)
+- What it does NOT do
+
+`llms.txt` path: `~/.claude/skills/<skill-name>/llms.txt` (global) or `.claude/skills/<skill-name>/llms.txt` (project-scoped).
+

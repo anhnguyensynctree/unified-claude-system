@@ -28,6 +28,41 @@ Each action_item from the Synthesizer has these fields — read them, do not inf
 
 ---
 
+## Pre-flight — run before anything else
+
+1. Read `[project]/.claude/agents/product-direction.ctx.md` — understand available milestone names. Use verbatim.
+2. Read `~/.claude/agents/oms-work/task-schema.md` — exact format for features and tasks.
+3. Read `[project]/.claude/cleared-queue.md` — find the FEATURE-NNN this action_item maps to. Every task must reference a real feature.
+
+## Cross-functional rule — run before drafting tasks
+
+If `feature_type: "cross-functional"` OR `departments[]` has more than one entry:
+- One task draft per department — never combine departments into one task
+- All tasks in the feature share the same `Interface-contract` field — the shared API/data contract agreed in the OMS discussion
+- If interface was NOT agreed in the OMS discussion: halt, flag to CEO — cross-functional task cannot be elaborated without interface agreement
+
+**Research-gate check (run first for cross-functional):**
+- If `research_gate: true`:
+  - Elaborate ONLY the research tasks now (researcher → cro chain)
+  - Engineering tasks stay as `draft` with a note: `Blocked: awaiting research findings from TASK-NNN`
+  - Engineering tasks are elaborated into full OpenSpec AFTER research is done and CRO signs off
+  - `chain_type` on the held engineering tasks is always `direction_selection`
+- If `research_gate: false`:
+  - All departments elaborate in parallel — interface-contract is already agreed
+  - Tasks may run in parallel in oms-work (no Depends between same-feature tasks unless output→input)
+
+## Task sizing — enforce before writing any field
+
+Apply all six rules. If any fails: split before elaborating. Never annotate — split is executed here, not flagged for later.
+- One Spec sentence covers all Artifacts → if two sentences needed: split
+- ≤ 4 files changed
+- One Verify command exists
+- One Claude session scope
+- No research + impl mix (always split with Depends)
+- ≤ 3 distinct user interactions per impl task → if the task spans 4+ user interaction surfaces (forms, dialogs, distinct UI states), split into ≤3-interaction chunks with Depends between them
+
+**Anti-annotation rule**: never write ⚠, "LARGE", "consider splitting", or any annotation to cleared-queue.md. If a task is oversized: split it now. If you cannot determine how to split: halt and flag to CEO before writing any queue entry. A flagged oversized task in the queue is a TS3 failure — the annotation does nothing and creates false confidence.
+
 ## Chain gate — run first, before drafting anything
 
 If `chain_type: "direction_selection"`:
@@ -184,11 +219,12 @@ Base routing by task type and activated C-suite agents:
 
 ## Splitting rules
 
-Flag for split when:
+Split immediately when any of these conditions are met (do not annotate — execute the split):
 - Spec requires two sentences with different verbs
 - Artifacts include both a research document AND source files
 - Scenarios mix research-quality checks with implementation-behavior checks
 - Estimated scope exceeds one Claude session
+- More than 3 distinct user interactions in one impl task
 
 Output two separate task blocks with `Depends: TASK-NNN` on the second.
 Research + impl in one task is always a split — no exceptions.
