@@ -311,12 +311,12 @@ for event, expected_path in required.items():
 PYEOF
 fi
 
-# ── 13. Stitch API key — exists and non-empty ────────────────────────────────
+# ── 13. Google Stitch API key — exists and non-empty ─────────────────────────
 STITCH_KEY_FILE="$HOME/.config/stitch/key"
 if [ ! -f "$STITCH_KEY_FILE" ]; then
-  warn "Stitch API key not found at $STITCH_KEY_FILE — /stitch skill will not work. Create it: mkdir -p ~/.config/stitch && echo 'your-key' > ~/.config/stitch/key && chmod 600 ~/.config/stitch/key"
+  warn "Google Stitch API key not found at $STITCH_KEY_FILE — /stitch skill will not work. Get your key at stitch.withgoogle.com → Settings → API Keys, then: mkdir -p ~/.config/stitch && echo 'your-key' > ~/.config/stitch/key && chmod 600 ~/.config/stitch/key"
 elif [ ! -s "$STITCH_KEY_FILE" ]; then
-  warn "Stitch API key file is empty at $STITCH_KEY_FILE"
+  warn "Google Stitch API key file is empty at $STITCH_KEY_FILE — get your key at stitch.withgoogle.com → Settings → API Keys"
 else
   ok
 fi

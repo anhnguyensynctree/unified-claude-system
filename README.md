@@ -39,7 +39,7 @@ Every Claude Code session starts cold. You re-explain your stack, your conventio
 - **Automated quality gates** — catches `console.log`, runs TypeScript checks, enforces test coverage in real time
 - **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — never overpay
 - **Continuous learning** — patterns discovered during work are extracted and reused in future sessions
-- **[OMS](#oms--one-man-show)** — multi-agent discussion engine that convenes a virtual product team for high-stakes decisions, then validates delivery
+- **[OMS v0.6](#oms--one-man-show)** — multi-agent discussion engine that convenes a virtual product team, plans milestones, executes tasks, and validates delivery autonomously
 
 ```
 Without this:   "Use pnpm. TDD. Conventional commits. No console.log. 80% coverage minimum."
@@ -66,90 +66,78 @@ With this:      Claude already knows. Every session, from the first message.
 ├── keybindings.json             ← Custom keyboard shortcuts
 ├── policy-limits.json           ← Safety constraints
 ├── statusline-command.sh        ← Custom status line (dir + git branch + ctx%)
+├── oms-config.json              ← OMS project registry
+├── oms-overview.md              ← OMS system architecture reference
 │
 ├── rules/                       ← Domain-specific rules (loaded on demand)
-│   ├── coding-style.md          ← File size, naming, quality standards
-│   ├── testing.md               ← TDD, 80% coverage, consistency-critical
-│   ├── git-workflow.md          ← Conventional commits, branch naming
-│   ├── security.md              ← Secrets, injection, immune system pattern
-│   ├── performance.md           ← Model selection, token minimization
-│   ├── patterns.md              ← API shapes, async, error handling
-│   ├── agents.md                ← Delegation, model tiers, dispatch protocol
-│   └── hooks.md                 ← Hook reference and documentation
+│   ├── coding-style.md
+│   ├── testing.md
+│   ├── git-workflow.md
+│   ├── security.md
+│   ├── performance.md
+│   ├── patterns.md
+│   ├── agents.md
+│   ├── hooks.md
+│   ├── design-system.md
+│   └── vercel.md
 │
 ├── contexts/                    ← Mode-specific prompts (loaded on demand)
-│   ├── dev.md                   ← Implementation mode
-│   ├── review.md                ← Code review mode
-│   ├── research.md              ← Exploration / investigation mode
-│   ├── test.md                  ← QA / test authoring mode
-│   ├── ui-ux.md                 ← UI/UX design mode
-│   ├── architecture.md          ← System architecture mode
-│   ├── plan.md                  ← Sprint / project planning mode
-│   ├── security.md              ← Security audit mode
-│   ├── debug.md                 ← Debugging / root cause analysis mode
-│   ├── devops.md                ← CI/CD / infrastructure / deployment mode
-│   ├── refactor.md              ← Refactoring / tech debt reduction mode
-│   ├── performance.md           ← Profiling / optimization mode
-│   ├── data.md                  ← Data pipelines / ML / analytics mode
-│   └── docs.md                  ← Documentation / runbooks / ADR mode
+│   ├── dev.md, review.md, research.md, test.md
+│   ├── ui-ux.md, architecture.md, plan.md, security.md
+│   ├── debug.md, devops.md, refactor.md, performance.md
+│   ├── data.md, docs.md
 │
-├── commands/                    ← Slash command definitions (/command-name)
-│   ├── hey.md                   ← Session opener — recap or dev joke on fresh start
-│   ├── tdd.md                   ← RED → GREEN → IMPROVE workflow
-│   ├── commit.md                ← Conventional commit with safety checks
-│   ├── plan.md                  ← 5-phase implementation planning
-│   ├── scaffold-project.md      ← Full monorepo bootstrap
-│   ├── breakdown.md             ← Task decomposition with model tiers
-│   ├── fork.md                  ← Context initialization in new session
-│   ├── consolidate-memory.md    ← Haiku-powered memory compression
-│   ├── review-pr.md             ← Structured PR review
-│   ├── e2e.md                   ← E2E test generation
-│   ├── debug.md                 ← Systematic debugging workflow
-│   ├── learn.md                 ← Pattern extraction
-│   ├── standup.md               ← Git log standup report
-│   ├── refactor-clean.md        ← Codebase cleanup
-│   ├── test-coverage.md         ← Coverage analysis
-│   └── update-codemaps.md       ← Codemap regeneration
+├── commands/                    ← Slash command definitions
+│   ├── hey.md                   ← Session opener
+│   ├── tdd.md, commit.md, plan.md
+│   ├── scaffold-project.md, breakdown.md, fork.md
+│   ├── consolidate-memory.md, review-pr.md, e2e.md
+│   ├── debug.md, learn.md, standup.md
+│   ├── refactor-clean.md, test-coverage.md, update-codemaps.md
+│   └── oms-work.md              ← Execute OMS task queue
 │
 ├── hooks/
 │   └── memory-persistence/      ◄★ the memory engine lives here
 │       ├── session-start.sh     ← Injects context at session open
-│       ├── session-end.sh       ← Checks codemap staleness on every stop
+│       ├── session-end.sh       ← Codemap staleness check on every stop
 │       ├── pre-compact.sh       ← Emits priority-tiered XML snapshot before compaction
-│       ├── mem0-extract.sh      ← Runs handoff + extract + learn + check-memory at SessionEnd
+│       ├── mem0-extract.sh      ← Runs session-end extraction + handoff at SessionEnd
 │       └── health-check.sh      ← Validates system integrity on every session start
 │
-├── standards/
-│   └── testing-pipeline.md      ← 6-layer test standard for multi-stage pipelines
-│
 ├── bin/
-│   └── ctx-exec                 ← Filters large command output before it enters context
+│   ├── ctx-exec                 ← Filters large command output before it enters context
+│   ├── bun-exec.sh              ← Batch 3+ parallel HTTP/API calls into one tool invocation
+│   ├── discord-bot.py           ← OMS Discord integration
+│   └── oms-work.py              ← OMS autonomous task execution engine
+│
+├── agents/                      ← OMS agent personas
+│   ├── router/, synthesizer/, trainer/, task-elaboration/
+│   ├── cto/, cpo/, clo/, cro/
+│   ├── engineering-manager/, backend-developer/, qa-engineer/
+│   ├── product-manager/, content-strategist/, ux-researcher/
+│   ├── executive-briefing-agent/
+│   ├── context-optimizer/
+│   ├── shared-lessons/          ← Cross-agent learned patterns
+│   ├── oms-audit/
+│   ├── oms-work/                ← Task schema and execution contracts
+│   ├── oms-field-contract.md    ← Inter-agent field contracts
+│   └── training/                ← Scenario suite (067 scenarios)
 │
 ├── skills/
-│   ├── continuous-learning/
-│   │   └── SKILL.md             ← Skill definition — use /learn to extract patterns manually
 │   ├── browse/                  ← Persistent Playwright browser daemon (/browse)
-│   │   ├── SKILL.md             ← Command reference and QA workflows
-│   │   ├── server.ts            ← Bun HTTP server (idle timeout, auth token)
-│   │   ├── state.ts             ← Browser/context lifecycle management
-│   │   ├── commands.ts          ← Action handlers (click, fill, screenshot, navigate)
-│   │   └── shaper.ts            ← Structured response builder
 │   ├── stitch/                  ← AI UI generation — Google Stitch wrapper (/stitch)
-│   │   ├── SKILL.md             ← Trigger rules and autonomous workflow
-│   │   ├── stitch.mjs           ← CLI entrypoint
-│   │   ├── llms.txt             ← Machine-readable skill reference
-│   │   └── lib/                 ← Backends, prompt builder, manifest, diff, device detection
-│   ├── oms/SKILL.md             ← One-Man-Show multi-agent orchestration engine
-│   ├── oms-implement/SKILL.md   ← Execute OMS action_items[] with CTO/QA delivery validation
-│   ├── oms-train/SKILL.md       ← Agent persona training workflow
-│   ├── oms-capture/SKILL.md     ← Capture real OMS failures as training scenarios
-│   ├── oms-start/SKILL.md       ← Bootstrap OMS context for a new project
-│   ├── compact-agent-memory.md  ← Compress per-agent MEMORY.md files
-│   ├── strategic-compact.md
-│   └── codemap-updater.md
+│   ├── oms/                     ← Multi-agent discussion engine (/oms)
+│   ├── oms-start/               ← Initialize OMS for a project (/oms-start)
+│   ├── oms-exec/                ← Strategic milestone planning (/oms exec)
+│   ├── oms-work/                ← Execute cleared task queue (/oms-work)
+│   ├── oms-audit/               ← System health audit (/oms audit)
+│   ├── oms-capture/             ← Capture failures as training scenarios (/oms-capture)
+│   ├── oms-tool/                ← External research for system improvement (/oms-tool)
+│   ├── oms-train/               ← Run training scenarios (/oms-train)
+│   └── continuous-learning/     ← Pattern extraction at session end (/learn)
 │
-├── handoffs/                    ◄★ session handoff files (one per project per day)
-│   └── YYYY-MM-DD-project-session.tmp
+├── handoffs/                    ◄★ session handoff files (one per session)
+│   └── YYYY-MM-DD-sessionid-project-session.tmp
 │
 └── projects/[encoded-path]/memory/   ◄★ per-project persistent memory
     ├── MEMORY.md                ← Always loaded index (<80 lines)
@@ -158,7 +146,7 @@ With this:      Claude already knows. Every session, from the first message.
     └── topics/
         ├── agents.md, hooks.md, patterns.md
         ├── scaffold.md, debugging.md, projects.md
-        └── archived.md          ← Decayed/contradicted entries (never deleted)
+        └── archived.md
 ```
 
 ---
@@ -223,7 +211,7 @@ Key behaviors it enforces:
 
 ### Rules System
 
-Eight domain files, loaded on demand:
+Nine domain files, loaded on demand:
 
 | File | Covers |
 |---|---|
@@ -235,47 +223,29 @@ Eight domain files, loaded on demand:
 | `patterns.md` | `{ data, error, meta }` API shape, async/await, import ordering |
 | `agents.md` | Delegation protocol, model selection per task type |
 | `hooks.md` | Hook reference, event types, configuration |
+| `design-system.md` | Stitch as source of truth, design-before-code contract |
 
 ### Context Modes
 
 **Directory:** `~/.claude/contexts/`
-Loaded on demand by CLAUDE.md when the work type changes. Zero token cost until triggered. Each file sets Claude's persona, priorities, and output format for that mode.
+Loaded on demand by CLAUDE.md when the work type changes. Zero token cost until triggered.
 
-| Mode | File | Persona | Loaded when |
-|---|---|---|---|
-| Development | `dev.md` | Senior full-stack engineer, TDD-first | implementing or building |
-| Review | `review.md` | Principal engineer, correctness/security bias | reviewing code or a PR |
-| Research | `research.md` | Technical analyst, explicit about unknowns | exploring or investigating |
-| Testing | `test.md` | Senior QA engineer, adversarial mindset | writing tests or QA work |
-| UI/UX Design | `ui-ux.md` | Senior product designer with frontend fluency | designing interfaces or flows |
-| Architecture | `architecture.md` | Staff architect, trade-off obsessed | system design decisions |
-| Planning | `plan.md` | Engineering lead, scope-disciplined | sprint or project planning |
-| Security | `security.md` | AppSec engineer, OWASP-anchored | security audits or threat modeling |
-| Debugging | `debug.md` | Systematic debugger, hypothesis-driven | diagnosing failures |
-| DevOps | `devops.md` | Senior DevOps/SRE, automation-first | CI/CD, infra, deployment |
-| Refactor | `refactor.md` | Clean code engineer, DRY-obsessed | refactoring or reducing tech debt |
-| Performance | `performance.md` | Performance engineer, profiler-first | profiling, optimizing, benchmarking |
-| Data | `data.md` | Senior data engineer, pipeline-safety bias | data pipelines, ML, analytics |
-| Documentation | `docs.md` | Technical writer with developer empathy | writing docs, runbooks, ADRs — includes human writing pattern enforcement (strips filler, corporate word pairs, content inflation) |
-
-**review.md** enforces structured output:
-```
-🚨 Blockers  — [file:line] must fix before merge
-⚠️  Suggestions — [file:line] should fix
-✅  Looks Good  — call out what's done well
-```
-
-**test.md** enforces: test plan before code, coverage checklist (happy path / boundary / negative / auth / error), TDD cycle, 80% coverage gate.
-
-**architecture.md** enforces: constraints → 2-3 options → trade-offs → ADR. No single-option recommendations.
-
-**security.md** enforces: OWASP Top 10 checklist, input trace protocol, CRITICAL/HIGH/MEDIUM/LOW findings with file:line and specific fix — not category labels.
-
-**debug.md** enforces: reproduce → isolate → hypothesize → test → fix cycle. No code written before bug is reproduced.
-
-**devops.md** enforces: rollback plan required, secrets never in code or logs, all pipeline steps define failure behavior, idempotent scripts only.
-
----
+| Mode | Persona | Loaded when |
+|---|---|---|
+| Development | Senior full-stack engineer, TDD-first | implementing or building |
+| Review | Principal engineer, correctness/security bias | reviewing code or a PR |
+| Research | Technical analyst, explicit about unknowns | exploring or investigating |
+| Testing | Senior QA engineer, adversarial mindset | writing tests or QA work |
+| UI/UX Design | Senior product designer with frontend fluency | designing interfaces or flows |
+| Architecture | Staff architect, trade-off obsessed | system design decisions |
+| Planning | Engineering lead, scope-disciplined | sprint or project planning |
+| Security | AppSec engineer, OWASP-anchored | security audits or threat modeling |
+| Debugging | Systematic debugger, hypothesis-driven | diagnosing failures |
+| DevOps | Senior DevOps/SRE, automation-first | CI/CD, infra, deployment |
+| Refactor | Clean code engineer, DRY-obsessed | refactoring or reducing tech debt |
+| Performance | Performance engineer, profiler-first | profiling, optimizing, benchmarking |
+| Data | Senior data engineer, pipeline-safety bias | data pipelines, ML, analytics |
+| Documentation | Technical writer with developer empathy | writing docs, runbooks, ADRs |
 
 ### Hooks System
 
@@ -305,12 +275,13 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 - Runs system health check (zero context tokens, stderr only)
 
 **SessionEnd:**
-- Handoff summary written to `~/.claude/handoffs/YYYY-MM-DD-project-session.tmp`
-- mem0 fact extraction (Haiku) — deduplicates against existing facts, auto-consolidates if >40
+- Handoff summary written to `~/.claude/handoffs/YYYY-MM-DD-sessionid-project-session.tmp`
+- mem0 fact extraction (Haiku via `claude -p`) — deduplicates against existing facts, auto-consolidates if >40
 - Pattern extraction into topic files (`topics/*.md`, `insights.md`)
-- Memory check — consolidates any topic file over 100 lines via Haiku
-- Each step has a 12s hard timeout; exits immediately when all complete (60s ceiling total)
-- Failed/timed-out steps written to `~/.claude/logs/mem0-retry.json` for retry on next session start
+- Memory check — consolidates any topic file over 100 lines
+- `session-end` step: 55s timeout. `handoff`/`check-memory`: 25s each. Outer hook ceiling: 60s.
+- Runs after `/exit` completes — you never wait for it
+- Failed steps written to `~/.claude/logs/mem0-retry.json` for retry on next session start
 
 ### Memory System — Tiered
 
@@ -328,8 +299,6 @@ Automated behaviors wired to lifecycle events in `settings.json`:
     └── archived.md    ← Decayed or contradicted entries (never deleted)
 ```
 
-MEMORY.md is a lean index. Topic files load only when the domain matches the current task. Memory is compressed by `/consolidate-memory` using a Haiku agent (cost-efficient).
-
 **Entry schema** — every `##` header carries four tags:
 ```
 ## Section Name | importance:high | updated: 2026-03-07 | ctx: always
@@ -338,21 +307,14 @@ MEMORY.md is a lean index. Topic files load only when the domain matches the cur
 | Tag | Values | Purpose |
 |---|---|---|
 | `importance` | `high/medium/low` | Prune priority — low pruned first |
-| `updated` | `YYYY-MM-DD` | Decay tracking — entries not updated in 90+ days and tagged `low` are archived |
+| `updated` | `YYYY-MM-DD` | Decay tracking |
 | `ctx` | `always`, `agent`, `debug`, `scaffold`, `hook`, `pattern`, `project` | Projection scope |
-
-**Context projection** — entries tagged `ctx: always` are injected at session start without loading their full topic file. All other entries load only when the domain is active. This means critical preferences and patterns are always in context at near-zero token cost.
-
-**Decay and deduplication** — `/consolidate-memory` runs the Haiku agent with three additional passes:
-- **Decay prune**: archives entries that are `importance:low` and `updated:` older than 90 days
-- **Dedup merge**: finds semantically similar entries across files and merges them into the more recent one
-- **Contradiction archive**: when conflicting information is found, keeps the newer version and moves the old to `archived.md` with a timestamp — nothing is silently deleted
 
 ### Slash Commands
 
 | Command | What it does |
 |---|---|
-| `/hey` | Session opener — shows last session recap + next step, or a dev joke on a fresh start |
+| `/hey` | Session opener — shows last session recap + next step, or a dev joke on fresh start |
 | `/tdd <task>` | RED → GREEN → IMPROVE with 80% coverage check |
 | `/commit` | Conventional commit — stages specific files, shows message for approval |
 | `/plan <task>` | 5-phase: research → plan → implement → review → verify |
@@ -360,96 +322,61 @@ MEMORY.md is a lean index. Topic files load only when the domain matches the cur
 | `/breakdown <task>` | Decompose into subtasks with model tiers and parallelization flags |
 | `/fork` | Initialize context in a new session (loads memory, session, CLAUDE.md) |
 | `/review-pr` | Structured review: Blockers / Suggestions / Looks Good with file:line |
-| `/pr` | Generate PR description (Summary, Changes, Testing, Breaking Changes) — shows for approval before creating |
+| `/pr` | Generate PR description — shows for approval before creating |
 | `/consolidate-memory` | Haiku agent compresses all memory files |
 | `/learn` | Extract and save a reusable pattern immediately |
 | `/debug <issue>` | Systematic debugging workflow |
 | `/e2e <flow>` | Playwright E2E tests — data-testid selectors, waitFor patterns, no flakiness |
-| `/refactor-clean` | Find unused imports, duplicate logic, oversized files, dead code — proposes before applying |
-| `/standup` | `git log --since=yesterday` → Yesterday / Today / Blockers format, max 5 bullets |
+| `/refactor-clean` | Find unused imports, duplicate logic, oversized files, dead code |
+| `/standup` | `git log --since=yesterday` → Yesterday / Today / Blockers format |
 | `/test-coverage` | Run coverage report, list files below 80%, write tests for highest-priority gaps |
-| `/update-codemaps` | Scan project and write/update `.claude/codemap.md` (max 100 lines, navigation only) |
-| `/pipeline-init` | Set up the 6-layer test standard for a multi-stage pipeline or process component |
+| `/update-codemaps` | Scan project and write/update `.claude/codemap.md` |
+| `/pipeline-init` | Set up the 6-layer test standard for a multi-stage pipeline |
 
 ### mem0 — Structured Fact Extraction
 
 **File:** `hooks/memory-persistence/mem0.py`
-**Requires:** API key stored in `~/.config/anthropic/key` (preferred) or `ANTHROPIC_API_KEY` in your shell environment
+**Auth:** Uses `claude -p` subprocess — no API key required for Claude Max subscribers.
 
-mem0 is a lightweight memory extraction script that runs at session end. It reads the session transcript, uses the Anthropic API (Haiku model) to extract memorable facts, deduplicates them against existing memory, and writes them to `facts.json`. At next session start, those facts are injected into context automatically.
+mem0 is a lightweight memory extraction script that runs at session end via `SessionEnd` hook. It reads the session transcript, uses Haiku to extract memorable facts, deduplicates them against existing memory, and writes them to `facts.json`. At next session start, those facts are injected into context automatically.
+
+**Auth modes** — auto-detected, no configuration needed:
+- **Claude Max subscription** — `~/.config/anthropic/key` is empty or absent → `claude -p` uses keychain OAuth → subscription billing
+- **API key users** — store key in `~/.config/anthropic/key` (chmod 600) → mem0 loads it automatically for `claude -p`
+
+Never set `ANTHROPIC_API_KEY` in your shell environment — it will override keychain auth and bill unexpectedly.
 
 **What it extracts:**
 - User preferences and workflow decisions
 - Technical choices (tools, frameworks, patterns selected)
 - Project context (what you're building, constraints)
 - Problems solved or discovered
+- Session summary + next step (written to handoff file)
 
-**How facts are stored:**
-```json
-[
-  {
-    "id": "uuid",
-    "content": "Prefers pnpm over npm in all projects",
-    "created_at": "2026-03-07T...",
-    "updated_at": "2026-03-07T..."
-  }
-]
-```
-
-Facts live in `~/.claude/projects/[encoded-project-path]/memory/facts.json` — excluded from this repo by `.gitignore`.
-
-**Setup — required for mem0 to work:**
-
-Preferred — store the key in a secure file so it stays out of your shell environment:
-
-```bash
-mkdir -p ~/.config/anthropic
-echo "sk-ant-..." > ~/.config/anthropic/key
-chmod 600 ~/.config/anthropic/key
-```
-
-Alternative — export from your shell config (all processes will inherit it):
-
-```bash
-echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
-source ~/.zshrc
-```
-
-Without either, mem0 silently skips extraction (you'll see `[mem0] Set ANTHROPIC_API_KEY in ~/.zshrc to enable extraction` in stderr). The rest of the system works fine without it — only automated fact extraction is disabled.
-
-**Cost:** mem0 uses `claude-haiku-4-5` — the cheapest available model. Extraction runs on the last 80 messages, capped at 600 chars each. Typical cost per session: fractions of a cent.
-
-**Deduplication logic:**
-Each new fact is classified as `ADD` (genuinely new), `UPDATE` (refines existing), or `NOOP` (already captured). This prevents duplicate facts from accumulating across sessions.
-
----
+**Cost:** mem0 uses `claude-haiku-4-5-20251001` — cheapest available model. Extraction runs on the last 120 messages. Subscription users: zero API cost.
 
 ### System Health Check
 
 **File:** `hooks/memory-persistence/health-check.sh`
-**Runs:** automatically on every `SessionStart` — wired inside `session-start.sh`
-
-A self-maintaining integrity validator for the entire unified Claude system. Silent when healthy. Warns loudly to stderr the moment something breaks — so you catch it at the start of the session it breaks, not weeks later.
+**Runs:** automatically on every `SessionStart` — silent when healthy, warns to stderr on issues.
 
 | Check | What it catches |
 |---|---|
-| mem0 retry | Re-runs steps that failed/timed out last session; surfaces failures via `WARN` |
-| `settings.json` schema | Missing `matcher` fields, malformed hook objects, missing `type` or `command` |
+| mem0 retry | Re-runs steps that failed/timed out last session |
+| `settings.json` schema | Missing `matcher` fields, malformed hook objects |
 | Hook command paths | Scripts that have been moved, deleted, or lost execute permission |
 | Shell script syntax | `bash -n` on every `.sh` in the hooks directory |
 | `mem0.py` syntax | Python syntax errors that would silently break fact extraction |
-| API key presence | Missing or empty `~/.config/anthropic/key` |
-| `facts.json` integrity | Corrupted JSON that would break memory retrieval at session start |
-| Claude Code version | Installed vs latest (cached 24h, fetched from npm registry in background) |
-
-**Cost:** zero — all output is stderr. No context tokens consumed on a healthy run.
-
-**Version check:** once per day, fetches the latest Claude Code version from npm in the background (non-blocking). On the next session after a new version is available:
-```
-[HealthCheck] WARN: Claude Code update available: 2.1.75 → 2.1.76 (run: brew upgrade claude-code)
-```
-
-**Self-maintaining:** no hardcoded lists to update. New hooks added to `settings.json`, new `.sh` scripts, and new project `facts.json` files are all discovered and checked automatically.
+| Auth mode | Subscription (keychain) or API key — both valid, neither warns |
+| `bun` installed | Required for browse and stitch skills |
+| `jq` installed | Required by hooks and scripts |
+| `node` installed | Required by browse skill |
+| `node_modules` per skill | Warns with `bun install` command if missing |
+| Playwright browsers | Checks `ms-playwright` cache for skills that use Playwright |
+| `facts.json` integrity | Corrupted JSON that would break memory retrieval |
+| mem0 hooks wired | Verifies SessionStart/SessionEnd/Stop all point to correct scripts |
+| Stitch API key | Warns with setup instructions if missing |
+| Claude Code version | Installed vs latest (cached 24h, background fetch from npm) |
 
 Run manually at any time:
 ```bash
@@ -457,55 +384,7 @@ Run manually at any time:
 # No output = all healthy
 ```
 
----
-
 ### Skills
-
-**Directory:** `~/.claude/skills/`
-
-Skills are always-available internal behaviors — not slash commands, but loaded context that shapes how Claude operates during sessions.
-
-#### `skills/continuous-learning/`
-
-Pattern extraction runs automatically at SessionEnd via `mem0.py learn`. `SKILL.md` defines what patterns are worth capturing:
-- Error resolutions that were non-trivial
-- Debugging techniques discovered mid-session
-- Project-specific patterns Claude didn't know about
-- Corrections you had to make to Claude's default behavior
-
-Patterns are routed to topic files in the memory system and auto-consolidated when over 100 lines. Use `/learn` to extract a pattern immediately.
-
-#### `skills/strategic-compact.md`
-
-Documents **when and why** to manually compact context — rather than letting auto-compact fire at arbitrary points mid-task.
-
-When to compact:
-- After the exploration phase, before implementation begins
-- After a milestone completes, before starting the next
-- After 50+ tool calls in a session
-- When switching between major features
-
-**Critical:** before running `/compact`, write state to a session file — what was built, what failed, what's pending, key decisions. The session file provides re-entry context after compaction.
-
-#### `skills/codemap-updater.md`
-
-Defines the codemap format and update triggers. Codemaps (`~/.claude/codemap.md`) are project navigation files — max 100 lines, updated at session start, after major refactors, and before compaction.
-
-Format:
-```
-# Codemap — [Project] — [Date]
-## Entry Points   — key files and their purpose
-## Key Directories — what lives where
-## Architecture   — how pieces connect (5-10 lines)
-## Key Files      — files that matter most
-## Recently Changed — from git log
-```
-
-Why this matters: without a codemap, Claude re-explores the project on every session. A current codemap eliminates that overhead entirely.
-
-#### `skills/oms/` — Multi-Agent Orchestration
-
-See [OMS — One-Man-Show](#oms--one-man-show) for the full breakdown.
 
 #### `skills/browse/` — Persistent Browser Daemon
 
@@ -516,51 +395,34 @@ A Bun HTTP server that keeps a Playwright browser alive across multiple Claude t
 **Setup:**
 ```bash
 cd ~/.claude/skills/browse
-bun install && bun run install-browsers
-bun run server.ts &   # start daemon before using /browse
+bun install
+bunx playwright install chromium
+```
+
+Start before using `/browse`:
+```bash
+bun run server.ts &
 ```
 
 **Key features:**
 - Named browser contexts (`ctx:admin`, `ctx:guest`) — test multiple auth states simultaneously
-- Command batching — reduces HTTP round trips
-- `eval <js>` — evaluate JavaScript in page context and return the result
+- Video recording (`record:start` / `record:stop`) for multi-step QA flows
+- `eval <js>` — evaluate JavaScript in page context
 - Idle timeout — auto-shuts down when inactive
-- Auth token in `~/.claude/browse-state.json`
-
-**Use `/browse` when:** testing a live URL, verifying UI layout, navigating authenticated flows, or checking how something looks in the browser. Not a replacement for CI/CD E2E tests — this is for interactive Claude QA during development.
 
 #### `skills/stitch/` — AI UI Generation
 
-A Node.js skill that generates, iterates, and tracks UI screens using Google Stitch. Invoked via `/stitch`. Claude fires it autonomously before writing any component code — it is the source of truth for all front-end visual design.
-
-**Why:** Stitch generates pixel-accurate HTML screens from text prompts. Claude reads the output before implementing components, ensuring code matches the intended design rather than inventing UI patterns ad-hoc.
+A Node.js skill that generates, iterates, and tracks UI screens using Google Stitch. Invoked via `/stitch`. Claude fires it autonomously before writing any component code.
 
 **Setup:**
 ```bash
-# 1. Install dependencies
 cd ~/.claude/skills/stitch && npm install
 
-# 2. Store Stitch API key (get from stitch.withgoogle.com → Settings → API Keys)
-mkdir -p ~/.config/stitch && echo "your-key-here" > ~/.config/stitch/key && chmod 600 ~/.config/stitch/key
-
-# 3. Optional: available as a global CLI via symlink
-ln -sf ~/.claude/skills/stitch/stitch.mjs ~/code/tools/stitch
+# Store Google Stitch API key (get from stitch.withgoogle.com → Settings → API Keys)
+mkdir -p ~/.config/stitch
+echo "your-key-here" > ~/.config/stitch/key
+chmod 600 ~/.config/stitch/key
 ```
-
-**First use in a new project:**
-
-Claude runs `stitch init --auto` automatically. It reads `CLAUDE.md`, `README.md`, `PRD.md`, and `docs/**` to infer a style config, then presents a proposal:
-
-```
-DOCS_READ: .claude/CLAUDE.md, docs/PRD.md
-REASONING:
-  - profile: product — SaaS app context detected
-  - aesthetic: dark minimal — developer keywords detected
-  - brand reference: Linear — mentioned in CLAUDE.md
-PROPOSED_CONFIG: { "aestheticAnchor": "dark minimal", "brandReference": "similar to Linear", ... }
-```
-
-Claude presents this to you, you confirm or adjust, then it writes `design/stitch/manifest.json` with the locked config.
 
 **Autonomous workflow:**
 ```
@@ -568,49 +430,19 @@ You: "build the login page"
 Claude: checks design/stitch/manifest.json
         → no login screen → stitch auto "login page with email and password"
         → reads generated HTML → implements component matching the design
-
-You: "update the dashboard sidebar to be collapsible"
-Claude: finds dashboard screen in manifest
-        → stitch auto "make sidebar collapsible" --screen dashboard
-        → re-reads HTML → updates component
 ```
 
-**Manual commands (when you want control):**
+**Manual commands:**
 ```bash
 stitch init --auto                          # propose style config from project docs
-stitch init --aesthetic "Japandi" --brand "similar to Notion" --palette "warm neutrals"
-stitch auto "a checkout flow with order summary"   # Claude picks mode automatically
-stitch variants login --range REIMAGINE --count 3  # explore design directions
-stitch list                                         # show all tracked screens
-stitch status                                       # check which files exist on disk
+stitch auto "a checkout flow with order summary"
+stitch variants login --range REIMAGINE --count 3
+stitch list
 ```
-
-**Variants workflow** (from official stitch-skills best practice):
-```
-REIMAGINE → early ideation, dramatic exploration  (use first, before committing)
-EXPLORE   → moderate variation, finding direction  (default)
-REFINE    → conservative polish of near-final layout
-```
-
-**Output per project:**
-```
-design/stitch/
-├── manifest.json         # screen registry + style config (source of truth)
-├── login.html            # latest generated HTML
-├── login.png             # screenshot
-├── login.v1.html         # archived previous version
-└── dashboard.html
-```
-
-**Key rules:**
-- `design/stitch/` is append-only via the skill — never edit HTML files manually
-- Claude reads manifest before every UI implementation task
-- Device type auto-detected from `package.json` deps and `CLAUDE.md` keywords
-- See `rules/design-system.md` for the full contract
 
 #### `bin/ctx-exec` — Large Output Filter
 
-Filters command output before it enters the context window. Use when a command produces >5KB output (test runs, build logs, `gh issue list`, `kubectl logs`).
+Filters command output before it enters the context window. Use when a command produces >5KB output.
 
 ```bash
 ~/.claude/bin/ctx-exec "failing tests" pnpm test
@@ -618,72 +450,21 @@ Filters command output before it enters the context window. Use when a command p
 ~/.claude/bin/ctx-exec "open issues" gh issue list --limit 50
 ```
 
-Returns only lines matching the intent phrase (+ 2 lines context). Raw output never hits the context window. A PostToolUse hook warns automatically when a Bash command produces output over 5KB.
+#### `bin/bun-exec.sh` — Parallel HTTP Batching
 
----
+Batches 3+ independent HTTP/API calls into a single tool invocation, eliminating per-call context overhead.
 
-### Standards
-
-**Directory:** `~/.claude/standards/`
-
-Reusable engineering standards that apply across projects — referenced by context modes and slash commands when the relevant domain is active.
-
-| File | Applies to |
-|---|---|
-| `testing-pipeline.md` | Any multi-stage data or processing pipeline |
-
-#### `testing-pipeline.md` — 6-Layer Pipeline Test Standard
-
-Defines the required test layers for any architecture where data flows through a sequence of stages (ingest → transform → serve, validate → reserve → notify, etc.).
-
-| Layer | Location | Catches |
-|---|---|---|
-| Unit | `tests/<stage>/` | Component internals, branches, error paths |
-| Contract | `tests/contracts/` | Schema field names, types, list validators |
-| Seam | `tests/seams/` | Stage N output → stage N+1 real call, no full mocks |
-| Resilience | `tests/resilience/` | Empty inputs, service failures, partial batches |
-| Invariant | `tests/invariants/` | Score bounds, enum sets, output shape consistency |
-| Integration | `tests/integration/` | Full multi-stage chain, external I/O mocked at true boundary only |
-
-Use `/pipeline-init` to scaffold this structure automatically for any new pipeline.
-
----
-
-### Status Line
-
-**File:** `statusline-command.sh`
-**Config:** `settings.json` → `statusLine`
-
-Displays a live status bar inside Claude Code, styled after the robbyrussell oh-my-zsh theme:
-
+```bash
+cat > /tmp/task.ts << 'EOF'
+const [a, b, c] = await Promise.all([
+  fetch("https://api.example.com/a").then(r => r.json()),
+  fetch("https://api.example.com/b").then(r => r.json()),
+  fetch("https://api.example.com/c").then(r => r.json()),
+]);
+console.log(JSON.stringify({ data: { a, b, c }, error: null }));
+EOF
+~/.claude/bin/bun-exec.sh /tmp/task.ts
 ```
-my-project  git:(feat/auth) ✗  ctx:34%  claude-sonnet-4-6
-```
-
-- **Directory name** — current working directory basename
-- **Git branch** — current branch with dirty state indicator (`✗` if uncommitted changes)
-- **Context usage** — percentage of context window used (green < 50%, yellow < 80%, red ≥ 80%)
-- **Model name** — active model
-
-Color coding on context usage lets you know when to manually compact before auto-compact fires mid-task.
-
----
-
-### Policy Limits
-
-**File:** `policy-limits.json`
-
-```json
-{
-  "restrictions": {
-    "allow_remote_control": { "allowed": false }
-  }
-}
-```
-
-Disables remote control of Claude Code — prevents any external process or MCP server from programmatically driving Claude actions without your direct involvement. Security constraint, not a workflow setting.
-
----
 
 ### Plugins (Active)
 
@@ -700,11 +481,22 @@ TypeScript LSP, code-review, and security-guidance plugins are scoped **per pack
 
 ---
 
-## OMS — One-Man-Show
+## OMS — One-Man-Show (v0.6)
 
 > A multi-agent discussion engine that simulates a full product team inside a single Claude session. When the decision matters, don't ask one AI — convene a room.
 
-The core problem OMS solves: Claude giving you a single perspective. On complex or cross-domain questions, a single answer is a single blind spot. OMS activates a roster of specialized personas — each arguing from their own domain — runs structured rounds, then produces a traceable synthesis. Minority positions are steelmanned. Reopen conditions are defined. The output isn't an AI answer; it's a decision audit trail.
+OMS solves the single-perspective problem. On complex or cross-domain questions, a single AI answer is a single blind spot. OMS activates a roster of specialized personas — each arguing from their own domain — runs structured rounds, then produces a traceable synthesis with `action_items[]`. Minority positions are steelmanned. Reopen conditions are defined. The output isn't an AI answer; it's a decision audit trail.
+
+### What's new in v0.6
+
+- **Milestone hierarchy** — projects have milestones; milestones have tasks. Work is always scoped to one milestone at a time.
+- **Step 0 queue check** — before any execution, OMS checks if there are already cleared tasks in the queue and runs them first. No duplicate elaboration.
+- **One-milestone exec** — `/oms exec` now focuses on a single milestone per discussion. Cleaner scope, faster decisions.
+- **PM out of exec** — C-suite only in exec discussions. Product Manager participates in engineering rounds, not strategic direction.
+- **CRO always active in exec** — revenue impact is evaluated on every strategic discussion.
+- **Auto-confirm cross-milestone contracts** — dependency contracts between milestones confirm automatically on the happy path, no CEO gate required.
+- **New agents** — content-strategist, ux-researcher, executive-briefing-agent.
+- **oms-work replaces oms-implement** — unified execution engine with schema validation, cost tracking, and Discord integration.
 
 ### When to use it
 
@@ -721,25 +513,36 @@ For routine tasks — a bug fix, a simple feature — just ask Claude directly. 
 |---|---|---|
 | `/oms-start` | Setup | Initialize OMS for a project — run once before anything else |
 | `/oms <intent>` | Discussion | Run a multi-agent discussion, get a synthesis with `action_items[]` |
-| `/oms exec` | Strategic | C-suite discussion for product direction decisions |
-| `/oms-implement [task-id]` | Delivery | Execute `action_items[]` with CTO code review + QA requirement check |
+| `/oms exec` | Strategic | C-suite milestone planning — CTO, CRO, CLO, CPO, CTO (no PM) |
+| `/oms-work` | Execution | Execute cleared tasks in the queue with full validation |
 | `/oms-capture` | Learning | Capture a real failure as a training scenario |
-| `/oms-train [ids]` | Maintenance | Run scenarios against agent personas |
-| `/oms audit` | Maintenance | On-demand token and context audit across OMS |
+| `/oms-train [ids]` | Maintenance | Run training scenarios against agent personas |
+| `/oms audit` | Maintenance | Token and context audit across OMS system |
+| `/oms-tool` | Improvement | External research scan (GitHub/Reddit/HN) to identify system improvements |
+
+### Hierarchy
+
+```
+Project
+└── Milestone (one at a time)
+    └── Tasks (cleared → in progress → done)
+```
+
+`/oms exec` plans the current milestone. `/oms` discusses tasks within it. `/oms-work` executes the cleared queue.
 
 ### Modes
 
-**Engineering** (default) — technical tasks. The system classifies the task by complexity and activates only the personas the task warrants. A button label change gets one agent. A database migration gets five. Complexity drives cost, not the other way around.
+**Engineering** (default) — technical tasks. The system classifies complexity and activates only the personas the task warrants. A button label change gets one agent. A database migration gets five.
 
-**Research** — activated when the task requires domain expertise rather than engineering judgment. "How should we design our question bank?" routes to behavioral scientists, clinical safety researchers, philosophers, and others — not the engineering team. Research mode produces a framework map of where the field agrees, where it conflicts, and what remains unknown. It does not force a single answer when the domain doesn't have one.
+**Research** — activated when the task requires domain expertise rather than engineering judgment. Produces a framework map of where the field agrees, where it conflicts, and what remains unknown.
 
-**Exec** — strategic product direction. C-suite discussion producing a 3–5 bullet summary for the CEO and updating the project's product direction file.
+**Exec** — C-suite milestone planning. CTO, CRO, CLO, CPO discuss scope, dependencies, and delivery order. Produces milestone roadmap and updates project direction. PM is not in exec — they participate in engineering rounds only.
 
-### Discussion → Delivery
+### Discussion → Execution
 
-OMS produces a decision. `/oms-implement` executes it.
+OMS produces a decision. `/oms-work` executes it.
 
-`/oms` locks scope and outputs `action_items[]` with assignees, rationale, and reopen conditions. `/oms-implement` picks up that task log, dispatches independent items as parallel agents, merges results, runs the full test suite, and validates delivery — CTO checks code quality, QA checks requirement fidelity. Nothing closes until both sign off.
+`/oms` locks scope and outputs `action_items[]` with assignees, rationale, and reopen conditions. `/oms-work` picks up the cleared task queue, dispatches items as parallel agents, runs the full test suite, and validates delivery — CTO checks code quality, QA checks requirement fidelity. Nothing closes until both sign off.
 
 ### Workflow
 
@@ -747,27 +550,27 @@ OMS produces a decision. `/oms-implement` executes it.
 # Once per project
 /oms-start
 
-# Settle a technical decision
+# Plan the current milestone (C-suite, no PM)
+/oms exec Q2 milestone — payments and user onboarding
+
+# Settle a technical decision within the milestone
 /oms how should we handle optimistic locking for concurrent reservations
 
-# Implement what was decided
-/oms-implement 2026-03-19-optimistic-locking
+# Execute cleared tasks
+/oms-work
 
 # If an agent behaved badly, capture it
 /oms-capture
 
 # Research mode — domain knowledge questions
 /oms how should we design the question bank to maximize honest self-reflection
-
-# Strategic direction
-/oms exec Q2 roadmap priorities given current retention data
 ```
 
 ### Project setup
 
-`/oms-start` ingests any starting material — CLAUDE.md, README, PRD, raw notes — asks which departments are active (engineering only, or also research / legal / finance), runs a short intake questionnaire, and generates the context files OMS needs to route tasks correctly.
+`/oms-start` ingests any starting material — CLAUDE.md, README, PRD, raw notes — asks which departments are active, runs a short intake questionnaire, and generates the context files OMS needs to route tasks correctly.
 
-Without `/oms-start`, `/oms` will refuse to run.
+OMS registers projects in `~/.claude/oms-config.json`. Without `/oms-start`, `/oms` will refuse to run.
 
 ---
 
@@ -786,7 +589,7 @@ Long conversations drift. `/fork` treats context as a resource. When work branch
 Security incidents get appended to `rules/security.md`. Bug fixes go to `topics/debugging.md`. Non-trivial solutions are extracted with `/learn`. The configuration becomes an immune system.
 
 **5. Cost-tiered agents**
-- Haiku — repetitive tasks, worker agents, memory consolidation (5x cheaper than Opus)
+- Haiku — repetitive tasks, worker agents, memory consolidation (~20x cheaper than Sonnet)
 - Sonnet — default for 90% of coding tasks
 - Opus — first attempt failed, 5+ files, architectural decisions, security-critical
 
@@ -825,11 +628,14 @@ brew install jq          # JSON parsing used by all hooks
 brew install gh          # GitHub CLI (for /pr, /review-pr workflows)
 brew install node        # Node.js — for prettier + tsc
 brew install python3     # Python 3 — for mem0 fact extraction
+
+# Bun — for browse and stitch skills
+curl -fsSL https://bun.sh/install | bash
 ```
 
 Verify:
 ```bash
-jq --version && gh --version && node --version && python3 --version
+jq --version && gh --version && node --version && python3 --version && bun --version
 ```
 
 ### Step 3 — Back up your existing ~/.claude (if any)
@@ -837,8 +643,6 @@ jq --version && gh --version && node --version && python3 --version
 ```bash
 [ -d ~/.claude ] && mv ~/.claude ~/.claude.backup && echo "Backed up to ~/.claude.backup"
 ```
-
-Skip this step if `~/.claude` doesn't exist yet.
 
 ### Step 4 — Clone this repo into ~/.claude
 
@@ -850,28 +654,29 @@ git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.clau
 
 ```bash
 chmod +x ~/.claude/hooks/memory-persistence/*.sh
+chmod +x ~/.claude/bin/*
 ```
 
-### Step 6 — Set your ANTHROPIC_API_KEY (for mem0)
+### Step 6 — Configure mem0 auth
 
-mem0 fact extraction calls the Anthropic API directly using Haiku. Without this key, fact extraction is silently skipped — everything else works fine.
+mem0 uses `claude -p` subprocess — no separate API key needed for Claude Max subscribers.
 
-Preferred — store in a secure file, keeps it out of your shell environment:
+**Claude Max subscription (default):**
+```bash
+# Leave ~/.config/anthropic/key empty — mem0 uses keychain OAuth automatically
+mkdir -p ~/.config/anthropic
+touch ~/.config/anthropic/key   # empty file is correct
+chmod 600 ~/.config/anthropic/key
+```
 
+**API key users (no subscription):**
 ```bash
 mkdir -p ~/.config/anthropic
 echo "sk-ant-..." > ~/.config/anthropic/key
 chmod 600 ~/.config/anthropic/key
 ```
 
-Alternative — export from shell config:
-
-```bash
-echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
-source ~/.zshrc
-```
-
-Replace `sk-ant-...` with your actual key from [console.anthropic.com](https://console.anthropic.com).
+Never set `ANTHROPIC_API_KEY` in `.zshrc` or `.bashrc` — it will override keychain auth for all `claude -p` calls.
 
 ### Step 7 — Initialize your global memory
 
@@ -902,32 +707,6 @@ Load with Read tool when task domain matches:
 EOF
 ```
 
-Create empty topic files:
-```bash
-cat > ~/.claude/projects/-Users-$(whoami)/memory/topics/debugging.md << 'EOF'
-# Debugging
-
-## Format
-`[context] Problem → Cause → Fix`
-
-## Entries
-<!-- Populated as non-obvious bugs are solved -->
-EOF
-
-cat > ~/.claude/projects/-Users-$(whoami)/memory/topics/patterns.md << 'EOF'
-# Patterns
-
-## Architecture Decisions
-<!-- Populated as decisions are made -->
-
-## What Works
-<!-- Confirmed patterns -->
-
-## Known Gotchas
-<!-- Non-obvious behaviour -->
-EOF
-```
-
 ### Step 8 — Install Claude Code plugins
 
 Open Claude Code and run:
@@ -935,17 +714,23 @@ Open Claude Code and run:
 /plugins
 ```
 
-Install these plugins:
+Install:
 - `hookify@claude-plugins-official`
 - `context7@claude-plugins-official`
 - `mgrep@Mixedbread-Grep`
 - `pyright-lsp@claude-plugins-official` (if you use Python)
 
-The `settings.json` already has these configured — installing them activates them.
+### Step 9 — Set up browse skill (optional — for live web testing)
 
-### Step 9 — Set up Stitch (optional — for AI UI generation)
+```bash
+cd ~/.claude/skills/browse
+bun install
+bunx playwright install chromium
+```
 
-The `/stitch` skill requires Node.js dependencies and a Stitch API key. Skip this if you don't plan to use AI UI generation.
+### Step 10 — Set up Stitch skill (optional — for AI UI generation)
+
+The `/stitch` skill requires Node.js dependencies and a Google Stitch API key.
 
 ```bash
 # Install dependencies
@@ -962,31 +747,15 @@ Optional — make `stitch` available as a global CLI:
 ln -sf ~/.claude/skills/stitch/stitch.mjs ~/bin/stitch
 ```
 
-Verify:
+### Step 11 — Verify the system
+
+Run the health check:
 ```bash
-node ~/.claude/skills/stitch/stitch.mjs list
+~/.claude/hooks/memory-persistence/health-check.sh
+# No output = all healthy
 ```
 
-### Step 10 — Verify hooks are wired
-
-Open Claude Code and run `/hey`. You should see either a session recap (if you have prior handoffs) or a dev joke with "No recent sessions found."
-
-If you see either output, the system is running correctly. If you see nothing, check that hooks are executable:
-```bash
-ls -la ~/.claude/hooks/memory-persistence/*.sh
-# All .sh files should show -rwxr-xr-x
-```
-
-### Step 11 — First session
-
-Open Claude Code and run:
-```
-/hey
-```
-
-`/hey` is your session opener. It reads the last session handoff and shows what you were working on and what's next. On a fresh install with no prior sessions it tells a dev joke instead — that's expected.
-
-**From now on, start every Claude Code session with `/hey`.** It replaces `/fork` as the standard session-opening command.
+Open Claude Code and run `/hey`. You should see either a session recap or a dev joke. Either output means the system is running correctly.
 
 </details>
 
@@ -994,8 +763,6 @@ Open Claude Code and run:
 
 <details>
 <summary><strong>Windows Setup (via WSL2)</strong></summary>
-
-
 
 Claude Code runs inside WSL2 on Windows. All bash hooks, scripts, and tools run in the Linux environment.
 
@@ -1006,80 +773,53 @@ Open PowerShell as Administrator and run:
 wsl --install
 ```
 
-This installs WSL2 with Ubuntu by default. Restart your machine when prompted.
-
-Open the Ubuntu app from the Start menu and complete the Ubuntu setup (create a username and password).
-
-Verify:
-```bash
-wsl --version
-```
+This installs WSL2 with Ubuntu by default. Restart your machine when prompted. Open the Ubuntu app and complete setup.
 
 ### Step 2 — Install Claude Code CLI inside WSL
 
 Open your Ubuntu terminal and follow the Linux install instructions at [claude.ai/code](https://claude.ai/code).
-
-Verify:
-```bash
-claude --version
-```
 
 > All remaining steps run **inside the Ubuntu/WSL terminal**, not in PowerShell or CMD.
 
 ### Step 3 — Install prerequisites inside WSL
 
 ```bash
-# Update package list
 sudo apt update && sudo apt upgrade -y
 
-# jq — JSON parsing used by all hooks
-sudo apt install -y jq
+# Core tools
+sudo apt install -y jq python3 python3-pip gh
 
-# Python 3 — for mem0 fact extraction
-sudo apt install -y python3 python3-pip
-
-# Node.js — for prettier + tsc
+# Node.js
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# GitHub CLI
-sudo apt install -y gh
-gh auth login
+# Bun
+curl -fsSL https://bun.sh/install | bash
 ```
 
-Verify:
-```bash
-jq --version && gh --version && node --version && python3 --version
-```
-
-### Step 4 — Back up your existing ~/.claude (if any)
+### Step 4 — Back up and clone
 
 ```bash
-[ -d ~/.claude ] && mv ~/.claude ~/.claude.backup && echo "Backed up to ~/.claude.backup"
-```
-
-### Step 5 — Clone this repo into ~/.claude
-
-```bash
+[ -d ~/.claude ] && mv ~/.claude ~/.claude.backup
 git clone https://github.com/anhnguyensynctree/unified-claude-system.git ~/.claude
 ```
 
-### Step 6 — Make hooks executable
+### Step 5 — Make hooks executable
 
 ```bash
 chmod +x ~/.claude/hooks/memory-persistence/*.sh
+chmod +x ~/.claude/bin/*
 ```
 
-### Step 7 — Disable the macOS notification hook
+### Step 6 — Disable the macOS notification hook
 
-The `Notification` hook in `settings.json` uses `osascript`, which is macOS-only. On WSL you need to remove it or it will throw errors silently.
+Find and delete the `Notification` block in `settings.json` — it uses `osascript` which is macOS-only:
 
-Open the settings file:
 ```bash
 nano ~/.claude/settings.json
 ```
 
-Find and delete this entire block:
+Remove:
 ```json
 "Notification": [
   {
@@ -1094,47 +834,29 @@ Find and delete this entire block:
 ],
 ```
 
-Save and exit (`Ctrl+X`, then `Y`, then `Enter`).
+> Optional: replace with `notify-send` (requires `sudo apt install -y libnotify-bin`).
 
-> Optional: replace it with a WSL-compatible notification using `notify-send` if you want alerts:
-> ```bash
-> "command": "notify-send 'Claude Code' 'Claude needs your attention' 2>/dev/null || true"
-> ```
-> Requires `sudo apt install -y libnotify-bin`.
-
-### Step 8 — Set your ANTHROPIC_API_KEY (for mem0)
-
-Preferred — store in a secure file:
+### Step 7 — Configure mem0 auth
 
 ```bash
 mkdir -p ~/.config/anthropic
-echo "sk-ant-..." > ~/.config/anthropic/key
-chmod 600 ~/.config/anthropic/key
+
+# Claude Max subscription (empty file = keychain OAuth):
+touch ~/.config/anthropic/key && chmod 600 ~/.config/anthropic/key
+
+# API key users (no subscription):
+# echo "sk-ant-..." > ~/.config/anthropic/key && chmod 600 ~/.config/anthropic/key
 ```
 
-Alternative — export from shell config:
+### Step 8 — Initialize global memory
 
-```bash
-echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
-source ~/.bashrc
-```
-
-Replace `sk-ant-...` with your actual key from [console.anthropic.com](https://console.anthropic.com).
-
-### Step 9 — Initialize your global memory
-
-On WSL/Linux, your home path is `/home/username` — the encoded memory path uses `-home-` not `-Users-`.
+On Linux/WSL, your home path is `/home/username` — encoded as `-home-username`:
 
 ```bash
 mkdir -p ~/.claude/projects/-home-$(whoami)/memory/topics
-```
 
-Create the memory index file:
-```bash
 cat > ~/.claude/projects/-home-$(whoami)/memory/MEMORY.md << 'EOF'
 # Memory Index
-
-Always loaded at session start. Read the Topic Index and load relevant files before starting work.
 
 ## User Preferences | importance:high
 - [Add your preferences here]
@@ -1150,78 +872,20 @@ Always loaded at session start. Read the Topic Index and load relevant files bef
 EOF
 ```
 
-Create empty topic files:
-```bash
-cat > ~/.claude/projects/-home-$(whoami)/memory/topics/debugging.md << 'EOF'
-# Debugging
+### Step 9 — Install plugins and verify
 
-## Format
-`[context] Problem → Cause → Fix`
-
-## Entries
-<!-- Populated as non-obvious bugs are solved -->
-EOF
-
-cat > ~/.claude/projects/-home-$(whoami)/memory/topics/patterns.md << 'EOF'
-# Patterns
-
-## Architecture Decisions
-<!-- Populated as decisions are made -->
-
-## What Works
-<!-- Confirmed patterns -->
-
-## Known Gotchas
-<!-- Non-obvious behaviour -->
-EOF
-```
-
-### Step 10 — Fix the session-start memory path
-
-The `session-start.sh` hook reads global facts from a hardcoded path pattern. On Linux/WSL it will encode your home as `-home-username`, which the script handles automatically — no change needed.
-
-Verify the hook runs correctly after setup:
-```bash
-bash ~/.claude/hooks/memory-persistence/session-start.sh
-```
-
-You should see `## Project Memory` in the output with no errors.
-
-### Step 11 — Set up Stitch (optional — for AI UI generation)
-
-```bash
-cd ~/.claude/skills/stitch && npm install
-
-mkdir -p ~/.config/stitch
-echo "your-key-here" > ~/.config/stitch/key
-chmod 600 ~/.config/stitch/key
-```
-
-Get your API key from stitch.withgoogle.com → Settings → API Keys.
-
-### Step 12 — Install Claude Code plugins
-
-Open Claude Code (inside WSL) and run:
-```
-/plugins
-```
-
-Install:
+Open Claude Code and run `/plugins`. Install:
 - `hookify@claude-plugins-official`
 - `context7@claude-plugins-official`
 - `mgrep@Mixedbread-Grep`
-- `pyright-lsp@claude-plugins-official` (if you use Python)
+- `pyright-lsp@claude-plugins-official`
 
-### Step 13 — First session
-
-Open Claude Code and run:
-```
-/hey
+Run the health check:
+```bash
+~/.claude/hooks/memory-persistence/health-check.sh
 ```
 
-`/hey` is your session opener. It reads the last session handoff and shows what you were working on and what's next. On a fresh install with no prior sessions it tells a dev joke instead — that's expected.
-
-**From now on, start every Claude Code session with `/hey`.**
+Open Claude Code and run `/hey` to confirm the system is working.
 
 </details>
 
@@ -1229,8 +893,6 @@ Open Claude Code and run:
 
 <details>
 <summary><strong>Verify Your Installation</strong></summary>
-
-Run this checklist after setup on either platform:
 
 ```bash
 # 1. Hooks are executable
@@ -1243,18 +905,16 @@ ls ~/.claude/projects/
 
 # 3. MEMORY.md is readable
 cat ~/.claude/projects/*/memory/MEMORY.md
-# Should show the Memory Index content
 
-# 4. ANTHROPIC_API_KEY is set (optional but recommended)
-echo $ANTHROPIC_API_KEY
-# Should show your key (sk-ant-...)
+# 4. Auth configured (one of:)
+wc -c ~/.config/anthropic/key   # 0 = subscription mode; >0 = API key mode
 
 # 5. Prerequisites installed
-jq --version && node --version && python3 --version
+jq --version && node --version && python3 --version && bun --version
 
 # 6. System health check passes
 ~/.claude/hooks/memory-persistence/health-check.sh
-# No output = all healthy. Warnings mean something needs fixing.
+# No output = all healthy
 ```
 
 </details>
@@ -1263,16 +923,14 @@ jq --version && node --version && python3 --version
 
 ## Keeping Your Config Up to Date
 
-This repo evolves. Pull updates without losing your personal memory:
-
 ```bash
 cd ~/.claude
 git pull origin main
 ```
 
-Your `projects/` directory (personal memory and sessions) is gitignored — it will never be touched by a pull.
+Your `projects/` directory (personal memory and sessions) is gitignored — never touched by a pull.
 
-If you've customized `settings.json` or `CLAUDE.md`, review the diff before pulling:
+Review diffs before pulling if you've customized `settings.json` or `CLAUDE.md`:
 ```bash
 cd ~/.claude
 git fetch origin
@@ -1306,18 +964,26 @@ git diff origin/main -- settings.json CLAUDE.md
 /consolidate-memory
 ```
 
+**OMS workflow:**
+```bash
+# Initialize OMS for a new project
+/oms-start
+
+# Plan the current milestone (C-suite discussion)
+/oms exec Q2 milestone — auth and billing
+
+# Discuss a specific technical decision
+/oms how should we handle token refresh for mobile clients
+
+# Execute the cleared task queue
+/oms-work
+```
+
 **UI workflow — design before code:**
 ```bash
-# First use in a project — infer style config from docs
 /stitch init --auto
-
-# Before implementing a screen that doesn't exist yet
 /stitch "dashboard with sidebar and activity feed"
-
-# Iterate on an existing screen
 /stitch update dashboard "make sidebar collapsible"
-
-# Explore design directions before committing
 /stitch variants login --range REIMAGINE --count 3
 ```
 
@@ -1330,8 +996,7 @@ This repo **is** `~/.claude`. Updating the system:
 
 ```bash
 cd ~/.claude
-# make changes to any config file
-git add rules/testing.md  # or whichever file changed
+git add rules/testing.md
 git commit -m "feat(testing): raise coverage threshold to 85%"
 git push
 ```
@@ -1347,17 +1012,7 @@ PRs and issues welcome. If you adapt this for a different stack, open a PR — e
 If this system improved your Claude Code workflow, a star helps others find it.
 
 **Contributions especially welcome for:**
-- Non-macOS / Linux native platform support
-- Alternative scaffold templates (non-Next.js / non-Supabase stacks)
-- Hook improvements and new slash commands
-- Screenshots or demo GIFs for the README
-
-Open an issue for bugs, questions, or ideas. PRs reviewed promptly.
-
-> Built and maintained by [@anhnguyensynctree](https://github.com/anhnguyensynctree)
-
----
-
-## License
-
-MIT
+- Stack-specific scaffold variants (Rails, Django, Go, Rust)
+- Additional OMS agent personas
+- Context mode files for domains not yet covered
+- Windows/WSL2 setup improvements
