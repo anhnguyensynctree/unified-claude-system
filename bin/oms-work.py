@@ -14,7 +14,6 @@ Fail → leave worktree open for review + notify Discord.
 Always posts final task status to Discord (CLI or Discord trigger).
 """
 import json
-import os
 import re
 import subprocess
 import sys
@@ -265,8 +264,7 @@ def run_claude(prompt: str, cwd: Path, model: str, allow_writes: bool = False) -
     args = [str(CLAUDE), '--print', '--output-format', 'json', '--model', model, '-p', prompt]
     if allow_writes:
         args.append('--dangerously-skip-permissions')
-    env = {**os.environ, 'OMS_BOT': '1'}
-    r = subprocess.run(args, capture_output=True, text=True, cwd=cwd, timeout=600, env=env)
+    r = subprocess.run(args, capture_output=True, text=True, cwd=cwd, timeout=600)
     if r.returncode != 0:
         print(f'[oms-work] claude exit {r.returncode}: {r.stderr[:200]}', file=sys.stderr)
         return '', r.returncode

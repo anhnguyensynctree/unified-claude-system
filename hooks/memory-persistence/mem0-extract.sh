@@ -8,17 +8,8 @@ PROJECT=$(basename "${PROJECT_CWD:-$(pwd)}")
 
 # mem0.py uses claude -p subprocess (subscription billing) — no API key needed
 
-# Skip all extraction for autonomous OMS bot steps — OMS task logs are the memory
-if [ "${OMS_BOT:-0}" = "1" ]; then
-  echo "[mem0] OMS_BOT session — skipping extraction" >&2
-  exit 0
-fi
-
-# Skip handoff for oms-work execution sessions — no decisions made, task logs are the record
-SKIP_MARKER="$HOME/.claude/.skip-handoff"
-if [ -f "$SKIP_MARKER" ]; then
-  rm -f "$SKIP_MARKER"
-  echo "[mem0] oms-work session — skipping handoff" >&2
+# Skip for all claude -p subprocesses — shim injects CLAUDE_SUBPROCESS=1 for any -p/--print call
+if [ "${CLAUDE_SUBPROCESS:-0}" = "1" ]; then
   exit 0
 fi
 

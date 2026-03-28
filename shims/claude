@@ -1,0 +1,9 @@
+#!/bin/bash
+# Shim: intercepts all claude invocations.
+# Sets CLAUDE_SUBPROCESS=1 for any -p/--print call so hooks skip immediately.
+for arg in "$@"; do
+    case "$arg" in
+        -p|--print) export CLAUDE_SUBPROCESS=1; break ;;
+    esac
+done
+exec ~/.local/bin/claude "$@"

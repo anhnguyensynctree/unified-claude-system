@@ -1,6 +1,9 @@
 #!/bin/bash
 # Stop hook — checks for codemap staleness
 
+# Skip for all claude -p subprocesses (shim sets CLAUDE_SUBPROCESS=1)
+[ "${CLAUDE_SUBPROCESS:-0}" = "1" ] && exit 0
+
 HOOK_INPUT=$(cat)
 PROJECT_CWD=$(echo "$HOOK_INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 CWD="${PROJECT_CWD:-$(pwd)}"
