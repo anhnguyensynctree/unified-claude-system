@@ -18,13 +18,6 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     exit 0
 fi
 
-# Skip non-interactive sessions (claude -p subprocesses, cadence, scripts).
-# These have tiny transcripts — 1-2 turns, under ~50 lines. Not worth extracting.
-TRANSCRIPT_LINES=$(wc -l < "$TRANSCRIPT_PATH" 2>/dev/null || echo 0)
-if [ "$TRANSCRIPT_LINES" -lt 50 ]; then
-    echo "[mem0] Short transcript (${TRANSCRIPT_LINES} lines) — subprocess session, skipping" >&2
-    exit 0
-fi
 
 # Steps run at true session exit. Each step has a per-step timeout.
 # session-end: single Haiku call → summary + facts + patterns (replaces summary+extract+learn)
