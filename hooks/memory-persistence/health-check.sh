@@ -259,7 +259,12 @@ if [ -n "$INSTALLED" ]; then
   fi
 fi
 
-# ── 10. Daemon skills — node_modules installed ───────────────────────────────
+# ── 10. System dependencies ──────────────────────────────────────────────────
+command -v bun >/dev/null 2>&1 && ok || warn "bun not installed — required for browse and stitch skills: curl -fsSL https://bun.sh/install | bash"
+command -v jq  >/dev/null 2>&1 && ok || warn "jq not installed — required by hooks and scripts: brew install jq"
+command -v node >/dev/null 2>&1 && ok || warn "node not installed — required by browse skill: brew install node"
+
+# ── 11. Daemon skills — node_modules + Playwright browsers ───────────────────
 SKILLS_DIR="$CLAUDE_DIR/skills"
 for pkg in "$SKILLS_DIR"/*/package.json; do
   [ -f "$pkg" ] || continue
@@ -269,10 +274,18 @@ for pkg in "$SKILLS_DIR"/*/package.json; do
     warn "Skill '$skill_name' needs setup: cd $skill_dir && bun install"
   else
     ok
+    # Check Playwright browser binaries if this skill uses Playwright
+    if grep -q '"playwright"' "$pkg" 2>/dev/null; then
+      if [ ! -d "$HOME/Library/Caches/ms-playwright" ] && [ ! -d "$HOME/.cache/ms-playwright" ]; then
+        warn "Skill '$skill_name': Playwright browsers not installed — run: cd $skill_dir && bunx playwright install chromium"
+      else
+        ok
+      fi
+    fi
   fi
 done
 
-# ── 11. mem0 wiring — required hooks registered in settings.json ─────────────
+# ── 12. mem0 wiring — required hooks registered in settings.json ─────────────
 if [ -f "$SETTINGS" ] && python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
   python3 - "$SETTINGS" "$HOOKS_DIR" <<'PYEOF' 2>&1 | while IFS= read -r line; do warn "$line"; done
 import json, sys, os
@@ -298,7 +311,7 @@ for event, expected_path in required.items():
 PYEOF
 fi
 
-# ── 12. Stitch API key — exists and non-empty ────────────────────────────────
+# ── 13. Stitch API key — exists and non-empty ────────────────────────────────
 STITCH_KEY_FILE="$HOME/.config/stitch/key"
 if [ ! -f "$STITCH_KEY_FILE" ]; then
   warn "Stitch API key not found at $STITCH_KEY_FILE — /stitch skill will not work. Create it: mkdir -p ~/.config/stitch && echo 'your-key' > ~/.config/stitch/key && chmod 600 ~/.config/stitch/key"
