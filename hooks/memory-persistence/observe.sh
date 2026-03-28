@@ -2,6 +2,8 @@
 # PostToolUse — appends lightweight tool observations to a session log.
 # Gives mem0 extract/handoff a dense action timeline beyond sampled transcript.
 
+[ "${CLAUDE_SUBPROCESS:-0}" = "1" ] && exit 0
+
 HOOK_INPUT=$(cat)
 TOOL=$(echo "$HOOK_INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 SESSION_ID=$(echo "$HOOK_INPUT" | jq -r '.session_id // empty' 2>/dev/null)
