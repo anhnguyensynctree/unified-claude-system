@@ -155,9 +155,16 @@ With this:      Claude already knows. Every session, from the first message.
 
 ## ★ OMS — One-Man-Show (v0.6)
 
-> The primary engine. OMS simulates a full product team inside a single Claude session — planning milestones, dispatching parallel agents, validating delivery, and posting CEO briefings to Discord. When the decision matters, don't ask one AI — convene a room.
+> **One AI is one blind spot.** OMS convenes a virtual product team inside a single Claude session — each persona argues from its own domain, rounds are structured, and the output is a traceable decision with `action_items[]`, assignees, and reopen conditions. Not an AI answer. A decision audit trail.
 
-OMS solves the single-perspective problem. On complex or cross-domain questions, a single AI answer is a single blind spot. OMS activates a roster of specialized personas — each arguing from their own domain — runs structured rounds, then produces a traceable synthesis with `action_items[]`. Minority positions are steelmanned. Reopen conditions are defined. The output isn't an AI answer; it's a decision audit trail.
+**Main statement:** Software is built by teams, not individuals. OMS applies the same principle to AI — specialized agents (CTO, CRO, QA, PM, CLO, UX) discuss, dissent, and synthesise. The result is a decision that accounts for engineering trade-offs, revenue impact, legal constraints, and delivery risk simultaneously. Minority positions are steelmanned before they're overruled. Nothing closes until CTO and QA both sign off.
+
+**Key philosophy:**
+- **Convene, don't ask** — for decisions where you'd normally call a meeting, OMS is cheaper, faster, and traceable
+- **Scope before execution** — `/oms exec` locks the milestone, `/oms` settles decisions within it, `/oms-work` executes; no step skips ahead
+- **Validation is non-negotiable** — nothing is "done" until the test suite passes and both CTO + QA sign off
+- **The system learns** — failures are captured as training scenarios (`/oms-capture`), agents improve across runs
+- **Cost-aware routing** — Haiku for workers, Sonnet for builders, Qwen (free via OpenRouter) when available; Opus only when Sonnet failed
 
 ### What's new in v0.6
 
@@ -243,49 +250,6 @@ OMS produces a decision. `/oms-work` executes it.
 `/oms-start` ingests any starting material — CLAUDE.md, README, PRD, raw notes — asks which departments are active, runs a short intake questionnaire, and generates the context files OMS needs to route tasks correctly.
 
 OMS registers projects in `~/.claude/oms-config.json`. Without `/oms-start`, `/oms` will refuse to run.
-
----
-
-## Memory Layer
-
-> Persistent context that makes Claude continuous — carries decisions, learned patterns, and project state across sessions so every session starts warm.
-
-```
-Session Start
-│
-├── MEMORY.md injected (index, <80 lines)
-│   └── Topic Index routes full topic files on demand
-│
-├── ctx: always entries injected inline (zero extra file load)
-│   └── model selection, API shapes, error handling, preferences
-│
-├── facts.json injected (structured facts from past transcripts)
-│
-└── Previous session handoff injected from ~/.claude/handoffs/ (last 7 days)
-```
-
-| Component | What it does | Benefit |
-|---|---|---|
-| **MEMORY.md index** | Lean routing index | Claude knows what exists without loading everything |
-| **Topic files** | Domain-specific memory, loaded on demand | Token cost scales with task, not total knowledge |
-| **ctx: always injection** | Critical entries injected at session start without a file load | Always-relevant knowledge in context at near-zero cost |
-| **Entry schema** (`importance`, `updated`, `ctx`) | Every entry tagged with priority, age, and scope | Enables automated decay and targeted projection |
-| **Decay pruning** | `importance:low` + >90 days → archived, not deleted | Memory stays lean; history is preserved |
-| **Dedup + contradiction archiving** | Consolidation merges duplicates, moves old contradicted entries to `archived.md` | No silent overwrites; memory stays coherent |
-| **mem0 fact extraction** | Haiku reads session transcript at end, extracts and deduplicates facts | Structured facts persist without manual writes |
-| **Session hooks** | Start injects full context; end persists state and warns on size | Every session starts warm; nothing lost between sessions |
-| **/consolidate-memory** | Haiku agent merges, prunes, archives, surfaces cross-topic insights | Routine maintenance is automated and cheap |
-| **Continuous learning** | Pattern extraction at session end + `/learn` for immediate capture | Non-trivial solutions accumulate as reusable skills |
-
-**Entry schema** — every `##` header in every topic file carries four tags:
-
-```
-## Section Name | importance:high | updated: 2026-03-07 | ctx: always
-```
-
-`ctx` values: `always` · `agent` · `debug` · `scaffold` · `hook` · `pattern` · `project`
-
-Entries tagged `ctx: always` are extracted and injected at session start without loading their full file. All other entries load only when their domain is active.
 
 ---
 
@@ -378,7 +342,49 @@ Automated behaviors wired to lifecycle events in `settings.json`:
 - Runs after `/exit` completes — you never wait for it
 - Failed steps written to `~/.claude/logs/mem0-retry.json` for retry on next session start
 
-### Memory System — Tiered
+### Memory System
+
+**How context flows in at session start:**
+> Persistent context that makes Claude continuous — carries decisions, learned patterns, and project state across sessions so every session starts warm.
+
+```
+Session Start
+│
+├── MEMORY.md injected (index, <80 lines)
+│   └── Topic Index routes full topic files on demand
+│
+├── ctx: always entries injected inline (zero extra file load)
+│   └── model selection, API shapes, error handling, preferences
+│
+├── facts.json injected (structured facts from past transcripts)
+│
+└── Previous session handoff injected from ~/.claude/handoffs/ (last 7 days)
+```
+
+| Component | What it does | Benefit |
+|---|---|---|
+| **MEMORY.md index** | Lean routing index | Claude knows what exists without loading everything |
+| **Topic files** | Domain-specific memory, loaded on demand | Token cost scales with task, not total knowledge |
+| **ctx: always injection** | Critical entries injected at session start without a file load | Always-relevant knowledge in context at near-zero cost |
+| **Entry schema** (`importance`, `updated`, `ctx`) | Every entry tagged with priority, age, and scope | Enables automated decay and targeted projection |
+| **Decay pruning** | `importance:low` + >90 days → archived, not deleted | Memory stays lean; history is preserved |
+| **Dedup + contradiction archiving** | Consolidation merges duplicates, moves old contradicted entries to `archived.md` | No silent overwrites; memory stays coherent |
+| **mem0 fact extraction** | Haiku reads session transcript at end, extracts and deduplicates facts | Structured facts persist without manual writes |
+| **Session hooks** | Start injects full context; end persists state and warns on size | Every session starts warm; nothing lost between sessions |
+| **/consolidate-memory** | Haiku agent merges, prunes, archives, surfaces cross-topic insights | Routine maintenance is automated and cheap |
+| **Continuous learning** | Pattern extraction at session end + `/learn` for immediate capture | Non-trivial solutions accumulate as reusable skills |
+
+**Entry schema** — every `##` header in every topic file carries four tags:
+
+```
+## Section Name | importance:high | updated: 2026-03-07 | ctx: always
+```
+
+`ctx` values: `always` · `agent` · `debug` · `scaffold` · `hook` · `pattern` · `project`
+
+Entries tagged `ctx: always` are extracted and injected at session start without loading their full file. All other entries load only when their domain is active.
+
+**File layout:**
 
 ```
 ~/.claude/projects/[encoded-project-path]/memory/
