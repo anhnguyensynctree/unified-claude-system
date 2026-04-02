@@ -55,6 +55,30 @@
     "kyodaikoifishmarket-ecommerce-for-fish-market": {
       "path": "/Users/Lewis/code/personal/kyodaikoifishmarket-ecommerce-for-fish-market",
       "status": "idea"
+    },
+    "one-man-show": {
+      "path": null,
+      "channel_id": "1489030870940647544",
+      "active": true,
+      "auto_start": true,
+      "deploy": null,
+      "mobile": null
+    },
+    "simulation101": {
+      "path": null,
+      "channel_id": "1489030873193123931",
+      "active": true,
+      "auto_start": true,
+      "deploy": null,
+      "mobile": null
+    },
+    "signaturevn": {
+      "path": null,
+      "channel_id": "1489139291270676551",
+      "active": true,
+      "auto_start": true,
+      "deploy": null,
+      "mobile": null
     }
   },
   "claude_channel_id": "1485719966274552019",

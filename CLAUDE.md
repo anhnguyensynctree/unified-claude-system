@@ -25,13 +25,7 @@ A partial output is a broken output. Never truncate or shortcut:
 - On "continue": resume exactly where stopped — no recap, no repetition
 
 ## Token Minimization — Always Active
-Context is expensive. Minimize usage at every step:
-- Read files at specific line ranges when possible, not full files
-- Use mgrep to locate before reading
-- Load rules/context files only when directly relevant
-- Compact after each major phase — do not wait for auto-compact
-- Never repeat information already in context
-- Prefer targeted edits over full rewrites
+See rules/performance.md for full rules. Key: line-range reads, mgrep before reading, targeted edits, compact at phase transitions.
 
 ## Fork — Use Proactively
 Suggest /fork when the conversation is about to branch:
@@ -62,7 +56,10 @@ Memory is split across files. MEMORY.md is always loaded — it is the index, no
 - `importance:medium` — relevant to active projects or recent work
 - `importance:low` — reference only, prune first during consolidation
 
-**Thresholds:** Run `/consolidate-memory` when any topic file exceeds 100 lines or MEMORY.md exceeds 80 lines. Consolidation uses Haiku — zero extra cost beyond session tokens.
+**Dedup rule — applies to ALL files (memory, rules, contexts, CLAUDE.md):**
+Before writing to any file, check if the content already exists in another file. If it does, reference it — don't repeat it. One source of truth per concept. Memory never restates rules/contexts. Rules never restate CLAUDE.md.
+
+**Thresholds:** Run `/consolidate-memory` when any topic file exceeds 100 lines or MEMORY.md exceeds 80 lines. SessionStart health check warns automatically when threshold is exceeded.
 
 ## Core Principles
 - **No Laziness** — find root causes, no temporary fixes, senior developer standards
@@ -97,41 +94,35 @@ Unless told otherwise:
 - For non-trivial implementations: pause before presenting and ask "is there a more elegant solution?" — skip for simple/obvious fixes
 
 ## Markdown File Standards
-Every .md costs tokens on load and shapes Claude's behavior. Rules for all .md writes:
-- Files under .claude/ — allowed only when improving workflow, rules, or memory; subject to strict quality gate below
-- README.md at project root — always allowed
-- Any .md in a project's docs/ folder — always allowed; docs/ is the base folder for all documentation writing
-- Any .md in a project's design/stitch/ folder — always allowed; managed exclusively by the /stitch skill
-- All other .md files anywhere — require explicit user request
-
-Quality gate — applies to every .md, especially files under .claude/:
-- Must have a # heading
-- Minimum 5 substantive lines — no stub or placeholder files
-- No unfilled placeholders ([empty], TODO, ...)
-- Dense and scannable — every line earns its place; cut anything decorative
-- A shallow .claude/ file is worse than no file — it loads as false context every session
+See rules/coding-style.md § Markdown Quality for the full gate. Key constraints:
+- .claude/ files — only when improving workflow/rules/memory
+- README, docs/, design/stitch/ — always allowed
+- All other .md — require explicit user request
+- Every .md must have # heading, 5+ substantive lines, no placeholders
 
 ## Switching Modes
-**Skip this entire section if `OMS_BOT=1`** — Router already distills relevant context per agent via `agent_briefings`. Loading context files here would double the token cost with no quality gain.
+Read the matching context file and apply it. For UI tasks, also load design-quality.md + design-system.md + stitch llms.txt.
 
-When asked to review, audit, critique, or give feedback on code or a PR → read ~/.claude/contexts/review.md and apply it
-When asked to research, explore, investigate, or understand a codebase or topic → read ~/.claude/contexts/research.md and apply it
-When asked to implement, build, add, create, or develop a feature → read ~/.claude/contexts/dev.md and apply it
-When asked to write, fix, debug, run, or review tests, E2E, Playwright, Cypress, Vitest, Jest, or QA → read ~/.claude/contexts/test.md and apply it
-When asked to design, build, or review UI, UX, components, layouts, or interface flows → read ~/.claude/contexts/ui-ux.md AND ~/.claude/contexts/design-quality.md AND rules/design-system.md AND ~/.claude/skills/stitch/llms.txt; check design/stitch/manifest.json for existing screens; run stitch skill autonomously per llms.txt trigger rules before writing any component code
-When asked to design, plan, or review system architecture, backend design, APIs, or data models → read ~/.claude/contexts/architecture.md and apply it
-When asked to plan, break down, scope, or roadmap a sprint, project, feature, or milestone → read ~/.claude/contexts/plan.md and apply it
-When asked to audit, harden, review, or fix security, vulnerabilities, or auth → read ~/.claude/contexts/security.md and apply it
-When asked to debug, diagnose, trace, or investigate a failure, error, crash, or unexpected behavior → read ~/.claude/contexts/debug.md and apply it
-When asked to handle CI/CD, pipelines, infrastructure, deployment, Docker, Terraform, or DevOps → read ~/.claude/contexts/devops.md and apply it
-When asked to refactor, clean up, restructure, simplify, or reduce technical debt → read ~/.claude/contexts/refactor.md and apply it
-When asked to profile, optimize, improve performance, reduce latency, or fix slow code → read ~/.claude/contexts/performance.md and apply it
-When asked to work on data pipelines, ETL, ML, analytics, transforms, or data engineering → read ~/.claude/contexts/data.md and apply it
-When asked to write, update, or generate documentation, runbooks, ADRs, changelogs, or API reference → read ~/.claude/contexts/docs.md and apply it
-When asked to test, verify, explore, or QA a live URL, staging environment, localhost app, or web interface → use /browse skill (persistent browser daemon — do NOT cold-start Playwright)
-When asked to check web design, UI layout, visual correctness, or how something looks in the browser → use /browse skill: screenshot first, then inspect, then report findings
-When asked to read, fetch, or extract content from any external URL (docs, API reference, blog post) → use browse `fetch <url>` command — isolated context, handles JS, strips noise. Never use the built-in WebFetch tool for content extraction.
-When making 3+ independent HTTP/API calls before reasoning → write a TS file and run via `~/.claude/bin/bun-exec.sh` — batches all calls into one tool invocation, eliminates per-call context overhead.
+| Task keywords | Context file |
+|---|---|
+| review, audit, feedback, PR | contexts/review.md |
+| research, explore, investigate | contexts/research.md |
+| implement, build, create, develop | contexts/dev.md |
+| test, E2E, Playwright, Vitest, Jest | contexts/test.md |
+| UI, UX, components, layouts | contexts/ui-ux.md + design-quality.md + rules/design-system.md |
+| architecture, backend, APIs, data models | contexts/architecture.md |
+| plan, scope, roadmap, sprint | contexts/plan.md |
+| security, vulnerabilities, auth | contexts/security.md |
+| debug, diagnose, trace, error | contexts/debug.md |
+| CI/CD, deploy, Docker, DevOps | contexts/devops.md |
+| refactor, clean up, simplify | contexts/refactor.md |
+| performance, optimize, latency | contexts/performance.md |
+| data pipelines, ETL, ML, analytics | contexts/data.md |
+| documentation, runbooks, ADRs | contexts/docs.md |
+| QA, visual-check, pixel-verify | contexts/qa-visual.md |
+| live URL, localhost, staging QA | /browse skill |
+| external URL content extraction | browse `fetch <url>` (not WebFetch) |
+| 3+ parallel HTTP calls | bun-exec.sh (batch into one tool call) |
 
 ## Available Tools & Skills
 Never guess a tool or skill's API — read its llms.txt first before using.
@@ -143,10 +134,28 @@ Never guess a tool or skill's API — read its llms.txt first before using.
 | browse fetch | ~/.claude/skills/browse/llms.txt | Read any external URL as clean text — docs, APIs, blog posts. Handles JS, isolated context. |
 | bun-exec | ~/.claude/bin/bun-exec.sh | Batch 3+ parallel HTTP/API calls into one tool call — write TS, pipe to bun-exec, get JSON back. |
 | ctx-exec | ~/.claude/bin/ctx-exec | Filter large bash output (>5KB) by intent — pipe test runs, build logs, gh issue lists through it. Never let raw large output hit context. |
+| visual-qa | ~/.claude/contexts/qa-visual.md | Visual QA: pixel verification, responsive checks, edge-case states |
 | /oms | ~/.claude/skills/oms/llms.txt | Architecture decisions, multi-domain tasks, high-stakes changes, research synthesis |
 | rv (remotion) | ~/code/tools/remotion/llms.txt | Render any video — ShortVideo (9:16), LandscapeVideo (16:9), Audiogram (1:1) |
 | ambient-music | ~/code/tools/ambient-music/llms.txt | Royalty-free music library — pick/search CC0 tracks by mood/BPM for any project |
 | cadence | ~/code/tools/cadence/llms.txt | LLM-powered music composer — generate owned WAV tracks by mood/style, suggest tracks for any scene |
+
+## OMS Queue Schema — Always Active
+
+**Reading / reporting:**
+1. Run `python3 ~/.claude/bin/validate-queue.py <path/to/cleared-queue.md>` first
+2. If violations exist: report them — never say "N tasks ready" over schema violations
+3. Never count a task as `queued` if it fails the schema gate
+
+**Writing new tasks:**
+- Every `queued` task must have all required fields before the write is considered done
+- Required: Feature, Milestone, Department, Type, Spec (SHALL), Scenarios (GIVEN/WHEN/THEN), Artifacts, Produces, Verify, Context, Activated, Validation, Depends, File-count, Model-hint
+- After any write to `cleared-queue.md`: check the PostToolUse hook output — if violations appear, fix them before moving on. Never leave a session with schema violations in a queue.
+- Model-hint is auto-corrected by the hook — but all other fields require human/agent authoring
+
+**Schema sync:**
+- `REQUIRED_FIELDS` and `MAX_FILES` in `~/.claude/bin/validate-queue.py` must stay in sync with `agents/oms-work/task-schema.md`
+- When `task-schema.md` is updated, update `validate-queue.py` in the same edit session — never one without the other
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation
@@ -159,6 +168,7 @@ Never guess a tool or skill's API — read its llms.txt first before using.
 2. Run targeted tests for modified files — must pass
 3. Run full test suite — no regressions
 4. Add E2E test if a user-facing flow was added or changed
+4.5. If the task modified a user-facing page: run Tier 1 visual QA (see qa-visual.md)
 5. Check for console.log in modified files
 6. Update .claude/codemap.md if structure changed
 7. Write any new decisions or patterns to project memory

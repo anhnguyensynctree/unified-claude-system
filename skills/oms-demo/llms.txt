@@ -1,0 +1,35 @@
+# oms-demo
+
+Trigger: /oms-demo [project-slug]
+         /oms-demo (from inside project directory)
+
+What it does:
+- Walks all done UI tasks in the most recent milestone on the live deployed URL
+- Records VIDEO of each multi-step flow (record:start / record:stop)
+- Executes every Scenario GIVEN/WHEN/THEN from the task spec against the live URL
+- Posts narration + screenshots to Discord milestone thread
+- Outputs CEO-readable health summary (terminal + Discord)
+
+When to use:
+- After /oms-work milestone gate passes
+- When CEO wants to see what shipped on the live URL
+- Before milestone sign-off / next milestone planning
+
+Does NOT:
+- Run automated tests (that is oms-work milestone gate)
+- Modify code or fix issues found
+- Re-run failed oms-work tasks
+
+Requires:
+- Browse daemon (auto-started by skill)
+- Live deployed URL (Vercel production, Railway, or staging)
+- Done tasks in cleared-queue.md for the milestone
+- Discord channel_id in oms-config.json
+
+Output:
+- qa/videos/demo-[milestone]/  — video per flow
+- qa/screenshots/demo-TASK-NNN-*.png — screenshots per state
+- Discord milestone thread: per-task results + screenshots + health summary
+- Terminal: same health summary
+
+Model: Sonnet only. Browse requires multi-step tool chains — never route to qwen/haiku.

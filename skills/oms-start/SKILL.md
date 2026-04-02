@@ -7,25 +7,9 @@ description: Initialize OMS for a project. Ingests any starting material (idea, 
 Bootstraps OMS for the current project. Accepts any starting material — raw idea, PRD, CLAUDE.md, research notes, or URL summary. Generates all ctx files needed for OMS to run. Run once per project, or re-run on major pivot.
 
 ## When to Use
-- First time using `/oms` in a project
-- Major pivot or scope change
-- Adding a new department to an existing project
-- CEO wants to update company belief or product direction
+Primary entry point for all project-level OMS changes. Step 1 detects which mode to run — no need to decide upfront.
 
-## Bot Mode (OMS_BOT=1) — READ THIS FIRST
-
-> **If `OMS_BOT=1` is set OR this is a `claude --print` session: skip ALL interactive steps. Execute rules below immediately before reading anything else.**
-
-- **Write files now** — `--dangerously-skip-permissions` is active; all writes are pre-approved
-- **Zero questions** — answer everything from files on disk (`README.md`, `IDEA.md`, `CLAUDE.md`, `package.json`, etc.)
-- **Zero permission text** — never output "I need write access", "please approve", "grant permission", or any approval request
-- **Zero confirmations** — do not ask to proceed, do not summarize what you're about to do, just do it
-- **Scope detection** — reason about what expertise the project genuinely needs, don't pattern-match keywords. Ask: does this product depend on domain knowledge outside software engineering? Does it handle regulated data or operate in a regulated industry? Does it have a revenue model or financial product dimension? Activate Research, Legal, or Finance only when the answer is clearly yes. Examples: game → Engineering only (unless it involves behavioral psychology or monetization); personal finance app → Engineering + Finance + Legal; astrology/personality app → Engineering + Research; healthcare → Engineering + Research + Legal.
-- **Roster detection** — standard engineering roster is a default, not a ceiling. Reason about whether the project needs specialists beyond cto, product-manager, backend-developer, frontend-developer, engineering-manager, qa-engineer. A game needs a game-designer. An ML product needs an ml-engineer. A mobile-first product needs a mobile-developer. Add only what's genuinely recurring across tasks, not one-off.
-- **Placeholders for unknowns**: write `TBD — update via /oms-start` and continue
-- **Single-pass output**: write all ctx files, then output exactly: `## OMS Update\n[one sentence: files written + active departments + any non-standard agents added]` — nothing else
-
----
+**Do NOT use** for single non-standard agent additions (approved via exec `roster_changes[]`) — those run via `/oms-work` directly. `/oms-start` is for department-level changes and above.
 
 ## Step 1 — Check Existing Context
 
@@ -38,10 +22,14 @@ Found existing OMS context for [project]:
 - product-direction: [one line summary]
 - active departments: [list from company-hierarchy.md]
 
-Update it? (y/n) — or specify what changed: pivot / new department / product update
+What changed? pivot / new department / product update — or "nothing" to exit.
 ```
-If no → skip to done.
-If yes → determine what changed and jump to the relevant step.
+
+Route by answer — do not ask again:
+- `pivot` → re-run Steps 2, 2.5, 3, 3.5, 5 (full re-scope). Use when the product direction fundamentally changed — not for normal milestone planning (exec handles that). CEO-initiated, rare.
+- `new department` → jump directly to Step 3. Output: "Department-add mode — running Step 3 and 3.5 only." Do not run Steps 2, 4, or 5.
+- `product update` → re-run Step 5 only. Use when CEO brings new external material (new PRD, research doc, stakeholder brief) that wasn't generated through OMS and needs to be reflected in ctx files. Normal exec output updates ctx files directly — this is for external input only.
+- `nothing` → exit
 
 **If not**: continue to Step 2.
 
@@ -112,10 +100,11 @@ CEO replies. "Go" or confirmation → proceed to Step 3.5. If CEO rejects a prop
 
 For each non-standard agent approved by CEO in Step 3:
 
-1. Read `~/.claude/agents/engine/agent-creation-rules.md`
+1. Read `~/.claude/agents/engine/agent-creation-rules.md` — hard gate, no persona written until this is read
 2. Write the persona file to `~/.claude/agents/[agent-name]/persona.md` following the required structure (Identity → Activation Condition → Primary Output → Non-Negotiables → Working Guidelines)
-3. Create empty `~/.claude/agents/[agent-name]/lessons.md` and `~/.claude/agents/[agent-name]/MEMORY.md`
-4. Add the agent to `company-hierarchy.md` under the correct department
+3. Create `~/.claude/agents/[agent-name]/MEMORY.md` (empty)
+4. Create `~/.claude/agents/[agent-name]/lessons.md` (empty) — Trainer populates it organically after task cycles
+5. Add the agent to `company-hierarchy.md` under the correct department
 
 These agents are now live and will participate in Step 4's question round.
 
@@ -327,6 +316,25 @@ The C-suite picks the first milestone from `product-direction.ctx.md`, drafts FE
 - Do not ask CEO "shall I run exec?" — just run it
 - If exec fails or produces no features: tell CEO and suggest running `/oms-exec` manually
 - After exec completes, the full summary (oms-start init + exec features) is shown together as the final output
+
+## Infra Requirements — Auto-added for Web Projects
+
+If the project is a web app (has a frontend, UI routes, or components), append these as mandatory tasks in milestone 1 before any feature work:
+
+```
+## TASK-infra-001 — CI/CD pipeline + Playwright E2E setup
+- **Status:** queued
+- **Milestone:** [milestone 1 name]
+- **Type:** impl
+- **Spec:** The project SHALL have GitHub Actions CI, Vercel deploy, Playwright E2E suite, and Lighthouse CI configured before any feature tasks run. CI runs Playwright on every PR for regression — it SHALL upload `qa/screenshots/` as a GitHub Actions artifact on failure for debugging. Screenshot posting to Discord is handled by the OMS milestone gate (`oms-work.py`) at end-of-milestone, not by CI. `qa/screenshots/` SHALL be in `.gitignore`.
+- **Artifacts:** .github/workflows/ci.yml | playwright.config.ts | lighthouserc.json | e2e/ | .gitignore
+- **Verify:** pnpm exec playwright test
+- **Validation:** dev → cto → em
+- **Model-hint:** sonnet
+- **Depends:** none
+```
+
+This task must complete before any UI feature tasks are queued. oms-work enforces E2E coverage from the first milestone — no backfilling needed later.
 
 ## Rules
 - **Never write to `~/.claude/agents/`** — all files go to the current project's `.claude/agents/`

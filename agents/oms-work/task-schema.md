@@ -78,6 +78,7 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 - **Milestone:** [milestone name]
 - **Department:** backend | frontend | qa | data | research | cto
 - **Type:** impl | research
+- **Infra-critical:** true | false
 - **Spec:** The system SHALL [verb] [object] so that [outcome].
 - **Scenarios:** GIVEN [precondition] WHEN [trigger] THEN [outcome] | GIVEN ...
 - **Artifacts:** [src/path/file.ts — exports: foo, bar] | [src/path/other.ts — exists with real impl]
@@ -87,6 +88,11 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 - **Activated:** [agent, agent, ...]
 - **Validation:** [agent → agent → agent]
 - **Depends:** none | TASK-NNN
+- **File-count:** [N] — number of files in Artifacts
+- **Model-hint:** qwen | haiku | sonnet — auto-derived from File-count + Type
+- **Script-model:** haiku | sonnet | qwen36 | omit — model the script's subprocess calls use (required if task produces a long-running script)
+- **Script-timeout:** 30s | 60s | 180s | omit — per-call timeout for subprocess inside the script
+- **Script-partial-results:** true | false | omit — must be true if script loops over N items and calls a slow subprocess
 ```
 
 ---
@@ -104,13 +110,25 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 
 **Produces** — downstream contract. Feeds into dependent tasks' `Context:` verbatim. Write `none` if nothing consumed downstream.
 
-**Verify** — shell commands, deterministic pass/fail. Pipe-separated.
+**Verify** — shell commands, deterministic pass/fail. Pipe-separated. Test/build commands MUST be wrapped in ctx-exec — this fires in both interactive Claude and claude -p subprocesses (LLM router + Anthropic). The PreToolUse hook blocks unwrapped commands with exit 2.
+```
+# Correct — always wrap test/build/lint/tsc in ctx-exec:
+~/.claude/bin/ctx-exec "failing tests" pnpm test lib/path/file.test.ts
+~/.claude/bin/ctx-exec "type error" npx tsc --noEmit
+~/.claude/bin/ctx-exec "lint error" pnpm run lint
+```
 
 **Milestone** — exact name from `product-direction.ctx.md`. Never invented.
 
 **Feature** — exact FEATURE-NNN from `cleared-queue.md`. Never invented.
 
 **Interface-contract** (draft only) — the shared interface agreed by all departments in the feature discussion. This is what makes parallel cross-functional tasks safe — every department knows the contract before they start.
+
+**Script-model** — the model the script's internal subprocess calls use. Required whenever a task produces a script that loops and calls claude --print or llm-route.sh. Drives CEO cost awareness at elaboration time. Omit for tasks that produce no such script.
+
+**Script-timeout** — per-call timeout for each subprocess invocation inside the script. Required when Script-model is set. Must match the model: haiku ≤ 30s, sonnet ≤ 60s, external (qwen36/opus) ≤ 180s. The script must wrap each call in `Promise.race` with this timeout and continue on failure.
+
+**Script-partial-results** — must be `true` when the script loops over N items. Means: write partial JSON to disk after each item, never accumulate-then-write at the end. CEO can inspect partial output even if the run is killed or a profile stalls.
 
 **Context** — files pre-loaded at execution time. List only files that exist.
 
@@ -126,6 +144,13 @@ A task is the right size when ALL are true:
 - Does not mix research + impl (always split with Depends)
 
 If any rule fails: elaboration agent splits into two tasks with `Depends`.
+
+**Model-hint derivation** (auto at elaboration time):
+- File-count ≤ 3 + Type: impl + Verify exists → `Model-hint: qwen`
+- File-count = 4 + Type: impl → `Model-hint: sonnet`
+- File-count > 4 → MUST split before queuing (violates sizing rules)
+- Type: research → `Model-hint: qwen36`
+- Infra-critical: true → `Model-hint: sonnet`
 
 ---
 
@@ -157,6 +182,9 @@ If any rule fails: elaboration agent splits into two tasks with `Depends`.
 - [ ] Every scenario is GIVEN/WHEN/THEN — deterministic pass/fail
 - [ ] Artifacts lists every file with exports
 - [ ] Produces declares downstream contract (or `none`)
+- [ ] Verify field is non-empty for all impl tasks (required — milestone gate runs these on main)
+- [ ] All Verify test/build/lint/tsc commands wrapped in ctx-exec (hook blocks unwrapped commands in both interactive + claude -p)
+- [ ] Script-model + Script-timeout + Script-partial-results set when task produces a looping subprocess script
 - [ ] All Context files exist and are referenced by path
 - [ ] No decision required that would change other queued tasks
 - [ ] Scope is completable in one Claude session
@@ -173,6 +201,28 @@ Task:     draft → queued → in-progress → done
                                        → cto-stop
           queued → needs-review → queued | re-spec
 ```
+
+---
+
+## Model Routing Rules (oms-work executor)
+
+Model-hint is auto-derived at elaboration time. oms-work reads it to route task execution.
+
+| Condition | Model-hint | Route | Cost |
+|---|---|---|---|
+| File-count ≤ 3 + Type: impl + Verify exists | `qwen` | LiteLLM → qwen3-coder:free (OpenRouter) | $0 |
+| File-count 4 + Type: impl | `sonnet` | claude -p --model sonnet (subscription) | medium |
+| File-count > 4 (should not happen — split first) | split | n/a | n/a |
+| Type: research (any file count) | `qwen36` | LiteLLM → qwen3.6-plus:free (OpenRouter) | $0 |
+| Infra-critical: true (any file count) | `sonnet` | claude -p --model sonnet (subscription) | medium |
+
+Fallback chains:
+- **qwen-routed (impl):** qwen3-coder:free → qwen-3.6:free → Haiku (subscription)
+- **qwen36-routed (research):** qwen-3.6:free → qwen3-coder:free → Haiku (subscription)
+
+**Research quality gate:** If CRO validation fails on a qwen36-routed research task, oms-work auto-retries with Sonnet before marking the task failed. This ensures research quality without paying Sonnet cost on every research task.
+
+Browse QA (Phase 2) always runs on Sonnet — never routed to external LLMs.
 
 ---
 

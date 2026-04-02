@@ -194,6 +194,97 @@ except Exception:
   fi
 done
 
+# ── 7b. Memory topic files — check for bloat (>100 lines threshold) ──────────
+for dir in "$CLAUDE_DIR/projects/$CWD_ENCODED/memory/topics" "$CLAUDE_DIR/projects/$HOME_ENCODED/memory/topics"; do
+  [ -d "$dir" ] || continue
+  for topic in "$dir"/*.md; do
+    [ -f "$topic" ] || continue
+    TLINES=$(wc -l < "$topic" | tr -d ' ')
+    TNAME=$(basename "$topic")
+    if [ "$TLINES" -gt 100 ]; then
+      warn "Memory topic bloated ($TLINES lines, threshold 100): $TNAME — run /consolidate-memory"
+    fi
+  done
+done
+
+# ── 7c. Dedup scan — detect repeated content across memory, rules, contexts ──
+python3 - "$CLAUDE_DIR" "$HOME" <<'PYEOF' 2>&1 | while IFS= read -r line; do warn "$line"; done
+import os, sys, re, hashlib
+from collections import defaultdict
+
+claude_dir, home = sys.argv[1], sys.argv[2]
+
+# Collect all .md files from memory topics, rules, contexts
+scan_dirs = [
+    os.path.join(claude_dir, "rules"),
+    os.path.join(claude_dir, "contexts"),
+]
+# Add memory topic dirs (global + project-scoped)
+for d in os.listdir(os.path.join(claude_dir, "projects")):
+    topics = os.path.join(claude_dir, "projects", d, "memory", "topics")
+    if os.path.isdir(topics):
+        scan_dirs.append(topics)
+    # Also scan loose memory .md files
+    mem = os.path.join(claude_dir, "projects", d, "memory")
+    if os.path.isdir(mem):
+        scan_dirs.append(mem)
+
+# Extract meaningful phrases (>30 chars) from each file
+file_phrases = {}
+for d in scan_dirs:
+    if not os.path.isdir(d):
+        continue
+    for f in os.listdir(d):
+        if not f.endswith(".md"):
+            continue
+        fp = os.path.join(d, f)
+        try:
+            lines = open(fp).readlines()
+        except:
+            continue
+        phrases = set()
+        for line in lines:
+            line = line.strip()
+            # Skip headers, empty lines, short lines, format markers
+            if not line or line.startswith("#") or line.startswith("--") or len(line) < 35:
+                continue
+            # Normalize whitespace and case for comparison
+            norm = re.sub(r'\s+', ' ', line.lower().strip())
+            # Use first 60 chars as fingerprint (catches same concept, different tail)
+            fp_key = norm[:60]
+            phrases.add(fp_key)
+        rel = os.path.relpath(fp, claude_dir)
+        file_phrases[rel] = phrases
+
+# Find duplicates: same phrase in 2+ files
+phrase_to_files = defaultdict(list)
+for fname, phrases in file_phrases.items():
+    for p in phrases:
+        phrase_to_files[p].append(fname)
+
+dupes = {}
+for p, files in phrase_to_files.items():
+    if len(files) > 1:
+        key = tuple(sorted(files))
+        if key not in dupes:
+            dupes[key] = []
+        dupes[key].append(p[:50])
+
+# Report (max 3 warnings to keep output small)
+reported = 0
+for files, phrases in sorted(dupes.items(), key=lambda x: -len(x[1])):
+    if reported >= 3:
+        break
+    # Skip self-duplication within same directory
+    dirs = set(os.path.dirname(f) for f in files)
+    if len(dirs) == 1 and len(files) == 1:
+        continue
+    count = len(phrases)
+    if count >= 2:
+        print(f"Dedup: {count} shared phrases between {' & '.join(files)} — run /consolidate-memory")
+        reported += 1
+PYEOF
+
 # ── 8. Project path encoding — encoded dir must match Claude Code's scheme ────
 # Claude Code encodes paths: slashes→hyphens, dots→hyphens, double-slash→double-hyphen
 # e.g. /Users/username/.claude → -Users-username--claude (dot becomes hyphen, / becomes -)
@@ -255,7 +346,11 @@ if [ -n "$INSTALLED" ]; then
   fi
 
   if [ -n "$CACHED_LATEST" ] && [ "$INSTALLED" != "$CACHED_LATEST" ]; then
-    warn "Claude Code update available: $INSTALLED → $CACHED_LATEST (run: brew upgrade claude-code)"
+    # Only warn if available version is strictly newer (semver compare)
+    NEWER=$(printf '%s\n%s\n' "$INSTALLED" "$CACHED_LATEST" | sort -V | tail -1)
+    if [ "$NEWER" = "$CACHED_LATEST" ] && [ "$NEWER" != "$INSTALLED" ]; then
+      warn "Claude Code update available: $INSTALLED → $CACHED_LATEST (run: brew upgrade claude-code)"
+    fi
   fi
 fi
 
@@ -305,7 +400,8 @@ for event, expected_path in required.items():
         for entry in entries if isinstance(entry, dict)
         for h in entry.get("hooks", []) if isinstance(h, dict)
     ]
-    if not any(expected_path in cmd for cmd in all_cmds):
+    tilde_path = expected_path.replace(os.path.expanduser("~"), "~")
+    if not any(expected_path in cmd or tilde_path in cmd for cmd in all_cmds):
         print(f"mem0 hook not registered: {event} → {expected_path}")
         print(f"  settings.json may have been modified — restore with: git checkout settings.json")
 PYEOF

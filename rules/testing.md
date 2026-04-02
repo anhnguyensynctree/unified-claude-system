@@ -1,22 +1,27 @@
 # Testing Rules — Always Follow
 
 ## Quick Reference
-- Every component/service/hook/route/utility **must** have tests — no exceptions
-- TDD: RED (failing test) → GREEN (minimal impl) → IMPROVE (refactor)
-- 80% coverage minimum; every error path needs a test
-- Unit: components, hooks, utils | Integration: API routes | E2E: auth, checkout, multi-step flows
-- Done = implementation written + tests written + tests passing
+- TDD: RED → GREEN → IMPROVE. Never write implementation before tests.
+- 80% coverage minimum. Every public function + every error path tested.
+- Done = implementation + tests + tests passing. No exceptions.
+- Unit: components, hooks, utils | Integration: API routes, contracts | E2E: user flows (5 categories)
 
-## Mandatory — No Exceptions
-Every new or modified component, service, hook, utility, or API route MUST have tests.
-"Done" means: implementation written + tests written + tests passing.
-Never mark a task complete if tests are missing or skipped.
+## E2E User Inputs — Always Realistic, Always Non-Technical
+All E2E test inputs must read like a real end user typed them — never placeholder text, never developer shorthand.
 
-## TDD Workflow
-- Write failing tests first (RED)
-- Implement minimal code to pass (GREEN)
-- Refactor without breaking tests (IMPROVE)
-- Never write implementation before tests exist
+**Rules:**
+- Inputs describe a real-world goal with current situation context: "I run a [type of business/activity] and want to [goal] — currently [current state]"
+- No technical jargon, no product internals (e.g. never "tune my model", "optimize CTR", "run inference")
+- useCase strings (mock API responses) must also be plain language: "reduce cart abandonment for small online shop", not "optimize conversion funnel"
+- One consistent user persona per spec file — don't mix different scenarios across tests in the same file
+
+**Examples of good inputs:**
+- `"I run a small online shop and want to understand why customers add items to their cart but don't complete the purchase — I get around 80 visitors a day"`
+- `"I teach yoga classes and want more students to rebook after their first session — about 3 out of 10 come back"`
+- `"I write a weekly newsletter and want to understand why people unsubscribe after the first email — I have about 600 subscribers"`
+
+**Examples of bad inputs (never use):**
+- `"tune my model"`, `"optimize CTR"`, `"run training pipeline"`, `"download training data"`
 
 ## Test Type by Artifact
 | Artifact | Test Type | What to Cover |
@@ -25,74 +30,145 @@ Never mark a task complete if tests are missing or skipped.
 | Hook | Unit | return values, state transitions, side effects |
 | Service / utility | Unit | all branches, edge cases, error paths |
 | API route / controller | Integration | request/response, auth, validation, error codes |
-| Critical user flow | E2E (Playwright/Cypress) | happy path + key failure path |
-| Data migration | Unit + Integration | transform correctness, rollback safety |
+| API shape | Contract (vitest) | response matches Zod/Pydantic schema |
+| Critical user flow | E2E (Playwright) | all 5 categories below |
+| Auth project | Security E2E | auth bypass, session expiry, roles, XSS, CSRF |
+| Critical flow (real) | Smoke E2E | real backend, no mocks |
 
-## Coverage
-- 80% minimum — enforced, not aspirational
-- Every public function needs at least one test
-- Every error path needs a test
-- Never consider a task done without running tests
-
-## E2E Tests — Mandatory for All OMS Projects
-Every user-facing flow must have an E2E test. Not optional. Applies to all OMS projects.
-
-**One file per flow** — never one monolithic test file:
+## E2E — One File Per Flow
 ```
 e2e/
-  home-to-questionnaire.spec.ts   # entry → adaptive flow
-  questionnaire-to-confirm.spec.ts
-  confirm-to-output.spec.ts
   auth-login.spec.ts
   checkout.spec.ts
+  disputes.spec.ts
+e2e/smoke/
+  auth.smoke.ts          # real backend, no mocks
+  listing-crud.smoke.ts
+security.spec.ts         # auth bypass, XSS, CSRF, roles
+```
+File naming: `e2e/<flow>.spec.ts`. Write when: new page/route, navigation path changed, form submission, URL param contract, auth/payment flow.
+
+## E2E Coverage — 5 Categories Per Spec
+| # | Category | Example |
+|---|---|---|
+| 1 | Happy path | Login → OTP → dashboard |
+| 2 | Error states | 500, 422, network timeout → error UI |
+| 3 | Empty state | No data → empty state component |
+| 4 | Auth edge | Expired session → login redirect |
+| 5 | Input edge | 200-char name → truncated, not broken |
+
+All 5 as `test.describe` blocks. If one doesn't apply, add a comment — never silently skip:
+```typescript
+// N/A (auth edge): this product has no authentication
+// N/A (empty state): API always returns at least a fallback — no empty render path
 ```
 
-**Write an E2E test when:**
-- A new page, route, or screen is added
-- A navigation path between pages is introduced or changed
-- A form submission or multi-step flow is implemented
-- Any URL param contract exists between two pages
-- Auth, checkout, or session-sensitive flows
+**Enforcement rules — always apply when writing E2E specs:**
+- Every `e2e/*.spec.ts` must contain exactly 5 `test.describe` blocks, or a `// N/A` comment for each missing one
+- N/A categories must surface to the CEO in the milestone briefing — list them under "Skipped E2E categories" with reasons
+- When creating a new spec, start from this skeleton and fill every block before marking the task done:
 
-**File naming:** `e2e/<feature-or-flow>.spec.ts` — one flow per file, never combine unrelated flows.
+```typescript
+test.describe('1 — happy path', () => { ... })
+test.describe('2 — error states', () => { ... })
+test.describe('3 — empty state', () => { ... })
+// N/A (4 — auth edge): no auth in this product
+test.describe('5 — input edge', () => { ... })
+```
 
-**Run order:** unit + integration pass first → then E2E. Never substitute one for the other.
+- OMS task specs must reference this skeleton explicitly in their Spec field
+- CI: add a grep check `grep -r "test.describe" e2e/ | wc -l` — if a spec has fewer than 3 describes and no N/A comments, flag it in the PR
 
-**Setup:** Use Playwright. `playwright.config.ts` at project root. Each spec uses `test.describe('<flow name>')`. Happy path + at least one failure path per flow.
+## Smoke Tests — Real Backend
+Mocked e2e proves UI works. Smoke tests prove the system works.
+- One smoke spec per critical flow (auth, CRUD, payments) — hits real backend, no mocks
+- Lives in `e2e/smoke/`, uses staging/test environment
+- Runs at milestone gate + post-deploy only (too slow for dev)
+- Smoke fails + e2e passes → config/infra bug, not UI bug
 
-## Running Tests — Required Steps
-After any implementation:
-1. Run unit tests for modified files: `[test runner] [file pattern]`
-2. Run full test suite: confirm no regressions
-3. For consistency-critical tasks: run suite 3 consecutive times, all must pass
+## Contract Tests
+- One test per API endpoint: validates response shape matches frontend schema
+- Vitest, no browser — fast. Lives in `src/__tests__/contracts/`
+- Backend schema changes → contract test fails → frontend updates before merge
+
+## Visual QA — Screenshots in E2E (required for all UI flows)
+
+Every E2E spec that tests a UI page **must** call `page.screenshot()` at key states and save to `qa/screenshots/`. This is how visual QA runs automatically — no separate browse step, no manual trigger. Screenshots get posted to the Discord milestone thread by the milestone gate.
+
+```typescript
+test('login flow', async ({ page }) => {
+  await page.goto('/login')
+  await page.screenshot({ path: 'qa/screenshots/login-initial.png' })
+
+  await page.fill('[name=email]', 'user@example.com')
+  await page.fill('[name=password]', 'password')
+  await page.click('[type=submit]')
+  await page.waitForURL('/dashboard')
+  await page.screenshot({ path: 'qa/screenshots/login-success.png' })
+})
+```
+
+Screenshot naming: `qa/screenshots/<flow>-<state>.png`
+- One screenshot per meaningful state: initial render, after interaction, error state, empty state
+- `qa/screenshots/` must be in `.gitignore` — cleared before each milestone gate run, browse task screenshots only
+- `qa/milestones/` must be in `.gitignore` — permanent archive of Playwright screenshots per milestone, not source
+
+**Visual regression** — use `toHaveScreenshot()` for pixel-level drift detection:
+```typescript
+// Creates baseline on first run, diffs on every subsequent run
+await expect(page).toHaveScreenshot('login-initial.png')
+await page.fill('[name=password]', 'wrong')
+await page.click('[type=submit]')
+await expect(page).toHaveScreenshot('login-error.png')
+```
+Store baselines in `e2e/snapshots/` (committed). Run `playwright test --update-snapshots` only when intentionally changing UI.
+
+**Coverage target:** every 5-category state must have at least one screenshot + `toHaveScreenshot()` call. Automated visual QA runs in both paths (Python milestone gate runs playwright, screenshots post to Discord). No manual step needed.
+
+## E2E Speed
+- **Cookie auth** — inject session via fixture, never login through UI (except auth spec)
+- **Parallel workers** — `workers: 4` minimum, specs must be independent
+- **Targeted runs** — `playwright test --grep "<flow>"` during dev, full suite at milestone
+- **Centralized mocks** — one `mockRoutes()` in `e2e/fixtures.ts`, no inline mocking
+- **No `waitForTimeout`** — use `waitForSelector`, `waitForURL`, `waitForResponse`
+
+## Milestone Test Strategy
+| Layer | Time | When |
+|---|---|---|
+| Unit + Contract | ~30s | Every task |
+| E2E targeted | ~2-3 min | Every task |
+| Visual QA Tier 1 | ~2 min | Every frontend task |
+| E2E full suite | ~8-10 min | Milestone gate |
+| Smoke tests | ~3-5 min | Milestone gate + post-deploy |
+| Visual QA Tier 2 | ~10 min | Milestone gate |
+
+All layers must pass at milestone gate. Fix and re-run on failure.
 
 ## Consistency-Critical Tasks
-Auth, payments, data migrations, shared utils:
-- Use pass^3 standard: 3 consecutive full suite passes
-- If any run fails: stop, fix, restart the count
-- Mark these: `# consistency-critical`
+Auth, payments, data migrations, shared utils: 3 consecutive full suite passes (pass^3). Any failure → fix → restart count.
 
-For regular tasks: pass@1 is sufficient.
-
-## Test Quality Standards
-- Tests are co-located with source or in a parallel `__tests__` / `*.test.*` file
-- Use fakes/fixtures/mocks — no real network or DB calls in unit tests
-- Test names describe behavior: `it('returns null when user is unauthenticated')`
-- One assertion concept per test — avoid multi-scenario `it` blocks
-
-## Mock Stability — React Hook Mocks
-Any mock that returns an object/function used in a `useEffect` dependency array MUST be a stable reference:
+## Mock Stability — React Hooks
+Mocks used in `useEffect` deps MUST be stable references:
 ```ts
-// BAD — new object every render → infinite re-render loop if used in useEffect deps
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush, back: vi.fn() }) }));
-
+// BAD — new object every render → infinite loop
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush }) }));
 // GOOD — stable reference
 const mockRouter = { push: mockPush, back: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => mockRouter }));
 ```
-Failure mode: silent hang after N passing tests — NO error message. `act()` waits for the loop to drain (never happens). Always use the stable pattern for `useRouter`, `usePathname`, and any custom hook whose return value is listed as a `useEffect` dependency.
 
-## What Not To Test
-- Implementation details — test user-visible behavior
-- Third-party library internals
-- Generated code (e.g., migrations auto-generated by ORM CLI)
+## Multi-file Shared Interface Edits — Always Apply
+When a task modifies a shared type, interface, or contract used by N files:
+1. Edit ALL N files first — no test runs between individual edits
+2. ONE targeted run after all edits land: `vitest run file1.test.ts file2.test.ts ... fileN.test.ts`
+3. Full suite only once at the very end — never between individual file edits
+
+**Why:** Running the full suite after each file edit causes N redundant suite runs (expensive and fills context with noise). A shared interface change is atomic — all files must be consistent before any test is meaningful.
+
+**Enforcement:** If you find yourself running `pnpm test` or `vitest run` after editing only 1 of N files that all import the changed interface → stop, finish the remaining edits first, then run.
+
+## Test Quality
+- Co-located with source or in `__tests__/` / `*.test.*`
+- Names describe behavior: `it('returns null when unauthenticated')`
+- One assertion concept per test
+- Don't test: implementation details, third-party internals, generated code

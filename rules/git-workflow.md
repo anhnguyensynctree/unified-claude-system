@@ -35,6 +35,19 @@ Every project with a GitHub repo must have a GitHub Actions CI pipeline that run
 - No feature work merges without CI passing
 - Production deploys gate on CI — never bypass it with a direct push
 
+### CI Pipeline Order (web projects with Vercel)
+```
+1. lint + typecheck + unit tests
+2. E2E (playwright) — against localhost or test env
+3. Deploy to Vercel → capture preview URL
+4. Lighthouse CI — run against Vercel preview URL
+   lhci autorun --collect.url=$VERCEL_URL
+   Thresholds: performance ≥ 85, accessibility ≥ 95, best-practices ≥ 90
+5. Post Lighthouse scores as PR comment
+```
+Lighthouse runs AFTER deploy — it needs the real URL. Never run it against localhost in CI.
+`lighthouserc.json` lives at project root. Vercel token + project IDs in GitHub Actions secrets.
+
 ## Parallel Work (CLI)
 - Use `EnterWorktree` or `--worktree` flag for isolated parallel work
 - Each worktree gets its own branch based on HEAD

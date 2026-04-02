@@ -20,10 +20,17 @@ When a subagent returns, ALWAYS:
 Never accept a summary without checking it against the objective.
 
 ## Model Selection Per Task
-- Haiku: repetitive tasks, clear instructions, "worker" in multi-agent
-- Sonnet: default for 90% of coding tasks
-- Opus: first attempt failed, spans 5+ files, architectural decisions, security-critical
-Haiku vs Sonnet ≈ 20x cheaper. Haiku vs Opus ≈ 60x cheaper. Default to Haiku for mechanical work.
+
+| Role | Model | When to use |
+|---|---|---|
+| **Judge** | Haiku | Validation (pass/fail), extraction, slug generation, fact extraction, format checks |
+| **Worker** | Haiku | Clear instructions, single-file mechanical edits, repetitive structured output |
+| **Builder** | Sonnet | Default for all code generation, multi-file impl, research synthesis, briefings |
+| **Architect** | Opus | Failed first attempt, 5+ files, architecture decisions, security-critical, strategic planning |
+
+Cost: Haiku ≈ 20x cheaper than Sonnet ≈ 60x cheaper than Opus.
+
+**Decision rule:** If the agent's output is binary (pass/fail) or follows a rigid template → Haiku. If the agent must reason across files, synthesize, or write quality prose → Sonnet. If it failed on Sonnet or the blast radius is high → Opus.
 
 ## Default Behavior
 Prefer parallel subagents whenever a task can be split, even small ones — never ask the user to specify this.

@@ -4,7 +4,9 @@ Discord notification helper for oms-work.
 Reads bot token from ~/.config/discord/token.
 Posts only final task status — no intermediate steps.
 """
+from __future__ import annotations
 import json
+import uuid
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -97,6 +99,134 @@ def notify_task(channel_id: str, threads_file: Path,
             return
 
     post_message(channel_id, msg)
+
+
+_DISCORD_LIMIT = 8 * 1024 * 1024  # 8MB — standard server limit
+
+_MIME: dict[str, str] = {
+    '.png':  'image/png',
+    '.jpg':  'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif':  'image/gif',
+    '.webm': 'video/webm',
+    '.mp4':  'video/mp4',
+}
+
+
+def post_media_to_thread(thread_id: str, caption: str, paths: list[Path]) -> None:
+    """Upload up to 8 media files (images or videos) as Discord attachments.
+    Files over 8MB are skipped with a note appended to caption."""
+    token = _token()
+    if not token:
+        return
+
+    skipped: list[str] = []
+    files: list[Path] = []
+    for p in paths:
+        if not p.exists():
+            continue
+        if p.stat().st_size > _DISCORD_LIMIT:
+            skipped.append(p.name)
+            continue
+        files.append(p)
+        if len(files) == 8:
+            break
+
+    if not files and not skipped:
+        return
+
+    full_caption = caption[:1800]
+    if skipped:
+        full_caption += f'\n*(videos too large for Discord: {", ".join(skipped)} — see qa/videos/)*'
+
+    boundary = uuid.uuid4().hex
+    parts: list[bytes] = []
+    b = boundary.encode()
+
+    parts.append(b'--' + b + b'\r\n')
+    parts.append(b'Content-Disposition: form-data; name="payload_json"\r\n')
+    parts.append(b'Content-Type: application/json\r\n\r\n')
+    parts.append(json.dumps({'content': full_caption}).encode() + b'\r\n')
+
+    for i, path in enumerate(files):
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        mime = _MIME.get(path.suffix.lower(), 'application/octet-stream')
+        parts.append(b'--' + b + b'\r\n')
+        parts.append(f'Content-Disposition: form-data; name="files[{i}]"; filename="{path.name}"\r\n'.encode())
+        parts.append(f'Content-Type: {mime}\r\n\r\n'.encode())
+        parts.append(data + b'\r\n')
+
+    parts.append(b'--' + b + b'--\r\n')
+    body = b''.join(parts)
+
+    req = urllib.request.Request(
+        f'{API}/channels/{thread_id}/messages',
+        data=body,
+        method='POST',
+        headers={
+            'Authorization': f'Bot {token}',
+            'Content-Type': f'multipart/form-data; boundary={boundary}',
+            'User-Agent': 'DiscordBot (https://github.com/lewis/oms, 1.0)',
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60):
+            pass
+    except Exception as e:
+        print(f'[discord] post_media failed: {e}', flush=True)
+
+
+# Alias — old callers still work
+def post_images_to_thread(thread_id: str, caption: str, image_paths: list[Path]) -> None:
+    post_media_to_thread(thread_id, caption, image_paths)
+
+
+def post_media_batched(thread_id: str, caption: str, paths: list[Path], batch_size: int = 8) -> None:
+    """Post all media files to a thread, batching into groups of batch_size (Discord max = 8)."""
+    if not paths:
+        return
+    for i in range(0, len(paths), batch_size):
+        batch = paths[i:i + batch_size]
+        batch_caption = caption if i == 0 else f'{caption} (cont. {i // batch_size + 1})'
+        post_media_to_thread(thread_id, batch_caption, batch)
+
+
+def post_visual_qa_report(channel_id: str, threads_file: Path,
+                          milestone: str,
+                          groups: list[dict]) -> None:
+    """Post grouped visual QA screenshots to a milestone thread.
+
+    groups: list of dicts with keys:
+      - title: str          e.g. "Home Entry"
+      - description: str    e.g. "initial render + validation error state"
+      - paths: list[Path]   screenshots for this group
+    """
+    thread_id = get_or_create_thread(channel_id, threads_file, milestone)
+    if not thread_id:
+        return
+
+    # Header message
+    post_to_thread(thread_id, f'**Visual QA — {milestone}**')
+
+    for group in groups:
+        title = group.get('title', '')
+        description = group.get('description', '')
+        paths = [Path(p) for p in group.get('paths', [])]
+        paths = [p for p in paths if p.exists()]
+        if not paths:
+            continue
+
+        # Build caption: bold title + description + bullet per image
+        lines = [f'**{title}** — {description}']
+        for p in paths:
+            # Convert filename to readable label: sim-panel-open → sim panel open
+            label = p.stem.replace('-', ' ')
+            lines.append(f'  • {label}')
+        caption = '\n'.join(lines)
+        post_media_to_thread(thread_id, caption, paths)
 
 
 def post_brief_to_thread(channel_id: str, threads_file: Path,

@@ -33,15 +33,23 @@ Wait for the user to pick a/b/c before continuing.
 
 ## Step 1: Find the latest handoff
 
-Run this bash command to locate the most recent handoff file:
+Run this bash command to find the most recent handoff whose `Dir:` field matches the current working directory. No fallback — if nothing matches CWD, treat it as no session found.
 
 ```bash
-ls -t ~/.claude/handoffs/*.tmp 2>/dev/null | head -1
+CWD="$(pwd)"
+for f in $(ls -t ~/.claude/handoffs/*.tmp 2>/dev/null); do
+  DIR_LINE=$(head -5 "$f" | grep '^Dir:' | sed 's/^Dir: *//')
+  if [ "$DIR_LINE" = "$CWD" ]; then
+    echo "$f"
+    exit 0
+  fi
+done
+echo "NONE"
 ```
 
 ## Step 2: Determine session state
 
-**If no handoff file exists OR the file is older than 7 days:**
+**If the output is "NONE" or the file is older than 7 days:**
 → Go to Step 4 (joke mode)
 
 **If a handoff file is found and recent:**

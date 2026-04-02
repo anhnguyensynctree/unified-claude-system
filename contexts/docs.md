@@ -78,16 +78,7 @@ Each runbook must document:
 - Owner: who maintains this runbook
 
 ## ADR Standard
-Use the format in `~/.claude/contexts/architecture.md`:
-```
-# ADR-[N]: [Title]
-Date: [date]
-Status: Proposed | Accepted | Deprecated
-Context: [why this decision is needed]
-Decision: [what was decided]
-Consequences: [trade-offs accepted]
-Alternatives considered: [what was rejected and why]
-```
+Use the ADR template from `contexts/architecture.md` § ADR Template — not duplicated here.
 
 ## Human Writing Patterns — Strip These
 When producing any external-facing prose (READMEs, changelogs, PR descriptions, ADRs, guides):

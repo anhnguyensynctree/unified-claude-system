@@ -1,9 +1,10 @@
 # Performance Rules — Always Follow
 
 ## Model Selection
-- Haiku: repetitive, clear instructions, worker agents
-- Sonnet: default for 90% of tasks
-- Opus: failed first attempt, 5+ files, architecture, security-critical
+See `rules/agents.md` § Model Selection Per Task for the full decision table.
+- Haiku = judge/worker (pass/fail, extraction, mechanical)
+- Sonnet = builder (code gen, synthesis, briefings, research)
+- Opus = architect (failed on Sonnet, 5+ files, high-stakes)
 CLI Agent tool uses `model` parameter: `model: "haiku"` / `model: "sonnet"` / `model: "opus"`
 
 ## Token Minimization
@@ -15,16 +16,47 @@ Every token costs. Apply these at all times:
 - Prefer targeted Edit over full Write rewrites
 - Cut responses to the minimum that communicates clearly
 
-## Large Output Commands — Use ctx-exec
-When a Bash command will produce >5KB output (test runs, build logs, `gh issue list`, `kubectl`, `docker logs`, large diffs), use ctx-exec to filter by intent:
+## Debug Loop — Fork + ctx-exec (Always Apply)
+A debug loop is any sequence of: run test → read error → edit → repeat.
+
+- **Always pipe test output through ctx-exec** — never let raw `pnpm test` output hit context:
+  ```bash
+  ~/.claude/bin/ctx-exec "failing tests" pnpm test
+  ~/.claude/bin/ctx-exec "type error" npx tsc --noEmit
+  ```
+- **Fork before iteration 3** — if the loop has not resolved in 2 attempts, `/fork` to an isolated context before continuing. Each failed attempt leaves noise in context that compounds cost.
+- **Why:** The blinded-judge fix on 2026-03-31 required 5 context compactions in one session because raw test output filled the 200k window on each iteration. Estimated 500k+ extra input tokens.
+
+## Large Output Commands — Always Use ctx-exec
+Do not rely on size detection — the first run is already too late. Always use ctx-exec for these command patterns:
+
 ```bash
-~/.claude/bin/ctx-exec "intent phrase" <command>
-# Examples:
+# Test runners — always
 ~/.claude/bin/ctx-exec "failing tests" pnpm test
+~/.claude/bin/ctx-exec "failing tests" vitest run
+~/.claude/bin/ctx-exec "failing tests" npx jest
+
+# Type check + lint — always
+~/.claude/bin/ctx-exec "type error" npx tsc --noEmit
+~/.claude/bin/ctx-exec "lint error" pnpm run lint
+
+# Build — always
 ~/.claude/bin/ctx-exec "error warning" npm run build
+~/.claude/bin/ctx-exec "error warning" pnpm build
+
+# GitHub / infra — always
 ~/.claude/bin/ctx-exec "open issues" gh issue list --limit 50
+~/.claude/bin/ctx-exec "failed" gh run view
+~/.claude/bin/ctx-exec "error" docker logs <container>
+~/.claude/bin/ctx-exec "error" kubectl logs <pod>
+
+# Large diffs — always
+~/.claude/bin/ctx-exec "changed" git diff
 ```
-ctx-exec returns only lines matching the intent (+ 2 lines context). Raw output never enters context window.
+
+Raw bash is fine for: `git status`, `ls`, `cat <single-file>`, `echo`, simple one-liners.
+
+The PostToolUse hook warns when raw output exceeds 5KB — that is the fallback catch, not the primary guard.
 
 ## Context Hygiene
 - Compact manually at logical phase transitions: after exploration, after a milestone, before switching major tasks

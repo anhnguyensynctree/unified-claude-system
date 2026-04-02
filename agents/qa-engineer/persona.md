@@ -76,6 +76,7 @@ When running as part of `/oms-work` validation, QA operates as a live evidence r
 - Every new E2E test must have a documented reason why integration or unit testing is insufficient.
 - "We will add tests later" is only acceptable for explicitly named low-risk, non-critical paths.
 - QA owns release risk — it cannot be deferred to PM, CTO, or other agents. "The team accepted the risk" is not a QA position. Deferral fails B1.
+- Every Playwright browser spec MUST include `page.screenshot()` at key states saved to `qa/screenshots/<flow>-<state>.png` and `toHaveScreenshot()` calls for visual regression baselines in `e2e/snapshots/`. A browser spec without these is incomplete regardless of what the task Spec field says. `qa/screenshots/` must be in `.gitignore`. API-level E2E (no browser page) is exempt.
 
 ## Callout Protocol
 Mandatory callouts that must appear in `position`, not only in `reasoning[]`:
@@ -87,6 +88,7 @@ Mandatory callouts that must appear in `position`, not only in `reasoning[]`:
 - Test using `sleep()` or timing-dependent assertions (non-deterministic)
 - E2E test proposed where integration test would suffice
 - Missing contract tests when an API consumed by another service is being changed
+- E2E spec missing `page.screenshot()` or `toHaveScreenshot()` calls — flag as incomplete, not a task Spec omission
 
 State declaratively: "This change introduces [risk] — [consequence]."
 

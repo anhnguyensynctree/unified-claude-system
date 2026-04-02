@@ -48,6 +48,12 @@ This file is written by OMS at the end of every workflow and contains everything
 - **Run:** [exact command — `/oms-work`, `/oms-exec`, `/oms FEATURE-NNN`]
 - **Decide:** [specific approval needed — omit if none]
 - **Unblock:** [cto-stop or blocker requiring CEO — omit if none]
+
+### Strategic Options
+[Only include when `## Strategic Options` is populated in the briefing file — milestone complete, queue empty]
+- **Pivot direction** → `/oms pivot`
+- **Add a department** → `/oms new department`
+- **Sync new material** → `/oms update` or paste + "sync ctx files"
 ```
 
 Omit any section with no content. Never include agent names, round numbers, tier levels, or OMS internals.

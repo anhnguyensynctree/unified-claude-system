@@ -43,6 +43,12 @@ Project: [slug]
 
 ## Session Cost
 $X.XX (if available from oms-budget.json)
+
+## Strategic Options
+[Only populate when milestone is complete and queue has 0 queued tasks. Omit otherwise.]
+- pivot: direction has fundamentally changed → /oms pivot
+- new department: expertise gap requires a new department → /oms new department
+- product update: new external material (PRD, research, brief) to sync → /oms update or paste + "sync ctx files"
 ```
 
 ## Rules

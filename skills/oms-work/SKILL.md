@@ -72,6 +72,19 @@ d.notify_task(proj['channel_id'], tf, 'MILESTONE', 'TASK-ID', 'TITLE', None, 'ru
 ```
 Replace MILESTONE, TASK-ID, TITLE with actual values. Use `get_or_create_thread` + `post_to_thread` for the `▶ TASK-ID — title \`running\`` message.
 
+**Model routing per task** — read `Model-hint` from the task block:
+
+- `Model-hint: sonnet` → Agent tool with `model: "sonnet"`
+- `Model-hint: haiku` → Agent tool with `model: "haiku"`
+- `Model-hint: missing` → Agent tool with `model: "sonnet"` (safe default)
+- `Model-hint: qwen` or `Model-hint: qwen36` → **Bash tool**, not Agent tool:
+  ```bash
+  printf '%s' "<full exec prompt>" | ~/.claude/bin/llm-route.sh qwen
+  # or qwen36 for research tasks
+  ```
+  Capture stdout as the task output. If exit code non-zero or output empty → retry once, then fall back to Agent tool with `model: "haiku"`.
+- If CRO validation fails on `qwen36` research task → re-run via Agent tool with `model: "sonnet"`
+
 Each subagent receives this prompt:
 
 ```
@@ -83,8 +96,13 @@ Acceptance criteria:
 
 Context files: [comma-separated paths]
 
+Working directory: [worktree_path]
+ALL file reads and edits MUST use absolute paths under [worktree_path].
+Never read or edit files outside [worktree_path]. If a context file path does not start
+with [worktree_path], prepend [worktree_path] to it before reading.
+
 Instructions:
-1. Read context files.
+1. Read context files from [worktree_path].
 2. Complete the task fully. For impl: make all file changes. For research: write findings to logs/research/[task-id].md.
 3. Run package installs if the task requires them. Do NOT re-run builds or installs to verify — make your changes, run installs once if needed, then stop.
 4. Run validation chain: [agent → agent → agent]
@@ -176,6 +194,157 @@ d.notify_task(proj['channel_id'], tf, 'MILESTONE', 'TASK-ID', 'TITLE', PASSED, '
 
 After a task completes (done), check if any blocked tasks are now unblocked.
 If yes: run them immediately (they become the next wave of parallel agents).
+
+---
+
+## Step 3.5 — Visual QA (automated via E2E screenshots)
+
+Visual QA runs automatically as part of the E2E suite (Step 3.6 milestone gate). No separate browse session needed.
+
+**Primary path (both SKILL and Python/Discord):**
+E2E specs call `page.screenshot()` at each key state and save to `qa/screenshots/<flow>-<state>.png`.
+Milestone gate posts these to the Discord milestone thread automatically. CEO sees visual proof without any manual step.
+
+**Browse QA (SKILL path only, use only when E2E coverage is insufficient):**
+If a UI route is not covered by E2E specs yet, run a single browse session:
+1. Navigate to the route
+2. Screenshot: `qa/screenshots/TASK-NNN-<criterion>.png`
+3. Check: renders without error, no console errors, layout matches spec
+4. Fix inline if issue found (max 2 cycles), then re-screenshot
+5. Close session
+
+**Cost:** Browse adds ~20K tokens. Skip if E2E screenshots already cover the route.
+
+---
+
+## Step 3.6 — Milestone Gate (every milestone, both paths)
+
+After all tasks are done, run the milestone gate before the CEO brief. This is an integration check — confirms all merged changes work together on main, not just in isolated worktrees.
+
+**What runs:**
+1. All unique `Verify:` commands from completed tasks (unit tests, lint, type checks)
+2. Full E2E suite — if `playwright.config.ts` exists, runs automatically
+3. All against main branch post-merge
+
+**If all pass:** update `product-direction.ctx.md` (see below), then proceed to Step 4 (Final Report) and Step 5 (CEO Brief).
+**If any fail:** do NOT run CEO brief. Post failure to milestone thread. Fix and re-run.
+
+**Milestone completion — update `product-direction.ctx.md` (mandatory, always):**
+After milestone gate passes, before Step 4:
+1. Move the completed milestone from `## Active Milestone` to `## Completed Milestones` with `✅ Complete [date] | [N]/[N] tasks`
+2. Set the next planned milestone (from `## Next Milestone`) as the new `## Active Milestone` — or write `## Active Milestone\nNone — run /oms-exec to plan next milestone` if none planned
+3. Clear the `## Current Priorities` section — it belongs to the new milestone, not the old one
+4. Commit the ctx update as part of the milestone gate commit
+
+This step has no exception. A milestone that passes gate but whose ctx is not updated is incomplete.
+
+**Python/Discord path:** `run_milestone_gate()` in `oms-work.py` handles this automatically when `--all` is used. No action needed here.
+
+**SKILL path (here):** run manually with Bash tool:
+```bash
+# unit/verify checks — use Verify: fields if present; fallback if tasks predate the field:
+~/.claude/bin/ctx-exec "failing tests" pnpm test
+~/.claude/bin/ctx-exec "type error" npx tsc --noEmit
+~/.claude/bin/ctx-exec "lint error" pnpm run lint
+# E2E (if playwright configured)
+pnpm exec playwright test  # or npx/bunx
+```
+
+**Verify field fallback:** if completed tasks have no `Verify:` field (pre-schema tasks), run the three fallback commands above. All Verify commands and fallbacks MUST be wrapped in ctx-exec — the PreToolUse hook blocks unwrapped test/build/tsc/lint commands.
+
+**After E2E passes — post grouped visual QA report to Discord (SKILL path, mandatory):**
+
+Build a `groups` list by reading the E2E spec files under `e2e/` — for each spec, extract the `test.describe` block names and map them to screenshots. Each group should have:
+- `title`: human-readable flow name (e.g. "Home Entry", "Questionnaire Flow")
+- `description`: one-line summary of the E2E scenarios covered (from the spec's describe blocks)
+- `paths`: list of `qa/screenshots/<flow>-*.png` files that belong to that flow
+
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '$HOME/.claude/bin')
+import oms_discord as d, json, re
+from pathlib import Path
+
+cfg = json.loads(Path('$HOME/.claude/oms-config.json').read_text())
+proj = cfg['projects']['PROJECT_SLUG']
+tf = Path(proj['path']) / '.claude/oms-work-threads.json'
+qa = Path('qa/screenshots')
+if not qa.exists():
+    print('No qa/screenshots dir')
+    exit(0)
+
+# Group screenshots by filename prefix (part before second dash segment)
+# e.g. home-entry-initial.png → prefix 'home-entry'
+from collections import defaultdict
+groups_map = defaultdict(list)
+for p in sorted(qa.glob('*.png')):
+    if p.stem.startswith('TASK-'):
+        continue
+    parts = p.stem.split('-')
+    # Use first two segments as prefix key, or first if single-word
+    prefix = '-'.join(parts[:2]) if len(parts) > 2 else parts[0]
+    groups_map[prefix].append(p)
+
+# Build group dicts — read describe block names from matching e2e spec
+FLOW_META = FLOW_META_PLACEHOLDER  # replaced below with actual values
+groups = []
+for prefix, paths in groups_map.items():
+    meta = FLOW_META.get(prefix, {})
+    groups.append({
+        'title': meta.get('title', prefix.replace('-', ' ').title()),
+        'description': meta.get('description', 'E2E coverage'),
+        'paths': paths,
+    })
+
+d.post_visual_qa_report(proj['channel_id'], tf, 'MILESTONE_NAME', groups)
+print(f'Posted {sum(len(g[\"paths\"]) for g in groups)} screenshots in {len(groups)} groups')
+"
+```
+
+Before running: replace `FLOW_META_PLACEHOLDER` with a Python dict mapping prefix → `{title, description}` derived from reading `e2e/*.spec.ts` describe blocks. Example:
+```python
+{
+    'home-entry':    {'title': 'Home Entry',         'description': 'initial render + validation error on empty submit'},
+    'questionnaire': {'title': 'Questionnaire Flow', 'description': 'loaded, turn progression, empty state, API error'},
+    'confirm':       {'title': 'Confirm → Output',   'description': 'loaded, empty state, error, successful navigation to output'},
+    'sim-panel':     {'title': 'Simulation Panel',   'description': 'hidden by default, expand/collapse, error state, long input'},
+    'rate-limit':    {'title': 'Rate Limit UX',      'description': 'absent (normal flow), output page under rate limit'},
+    'happy-path':    {'title': 'Full Happy Path',    'description': 'home → questionnaire → confirm → output end-to-end'},
+}
+```
+
+Replace `MILESTONE_NAME` and `PROJECT_SLUG` with actual values. This is a required step — if no screenshots exist, it means `page.screenshot()` calls are missing from the specs.
+
+**After posting — archive screenshots and delete browse QA evidence (mandatory):**
+```bash
+python3 -c "
+import shutil, os
+from pathlib import Path
+milestone = 'MILESTONE_NAME'
+src = Path('qa/screenshots')
+if not src.exists():
+    print('No qa/screenshots dir — nothing to archive')
+    exit(0)
+# Archive E2E flow screenshots to qa/milestones/<milestone>/
+dest = Path('qa/milestones') / milestone
+dest.mkdir(parents=True, exist_ok=True)
+flow_shots = [p for p in src.glob('*.png') if not p.stem.startswith('TASK-')]
+for p in flow_shots:
+    shutil.move(str(p), str(dest / p.name))
+# Delete browse QA evidence (TASK-NNN-*.png)
+for p in src.glob('TASK-*.png'):
+    p.unlink()
+print(f'Archived {len(flow_shots)} screenshots to qa/milestones/{milestone}/')
+print(f'qa/screenshots/ is now clear')
+"
+```
+Replace `MILESTONE_NAME` with the actual milestone name. This step ensures `qa/screenshots/` is empty for the next milestone and browse QA evidence (TASK-NNN-*.png) is not accumulated. Archived flow screenshots are committed to git under `qa/milestones/`.
+
+**Discord posts automatically:**
+- Pass: `✅ Milestone gate [milestone] — unit + E2E pass`
+- Fail: `⚠️ Milestone gate [milestone] — N check(s) failed on main` with tail output
+
+**Visual QA** (Step 3.5) is the only check that stays SKILL-only — it requires browse screenshots and cannot run as a subprocess.
 
 ---
 

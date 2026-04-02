@@ -2,8 +2,8 @@ import { mkdirSync, existsSync } from "fs";
 import { resolve } from "path";
 import type { Browser, BrowserContext, Page } from "playwright";
 
-export const SCREENSHOTS_DIR = resolve(import.meta.dir, ".screenshots");
-export const VIDEOS_DIR = resolve(import.meta.dir, ".videos");
+export const SCREENSHOTS_DIR = resolve(process.cwd(), "qa/screenshots");
+export const VIDEOS_DIR = resolve(process.cwd(), "qa/videos");
 export const STATE_FILE = resolve(import.meta.dir, ".state.json");
 
 export interface ContextEntry {

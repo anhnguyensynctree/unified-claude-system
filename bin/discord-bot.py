@@ -26,6 +26,8 @@ CONFIG_FILE = HOME / ".claude/oms-config.json"
 TOKEN_FILE = HOME / ".config/discord/token"
 LOG_DIR = HOME / ".claude/logs"
 PENDING_DIR = HOME / ".claude/oms-pending"
+PENDING_RESUMES_FILE = HOME / ".claude/oms-pending-resumes.json"
+BUDGET_FILE = HOME / ".claude/oms-budget.json"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 PENDING_DIR.mkdir(parents=True, exist_ok=True)
@@ -315,7 +317,7 @@ async def _generate_completion_report(proj_path: str, task_id: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
-            env={**__import__("os").environ, "OMS_BOT": "1"},
+            env={**__import__("os").environ},
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
         return stdout.decode().strip()
@@ -334,129 +336,49 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 config: dict = {}
 
 
-async def send_daily_brief():
-    """Post a daily OMS budget + checkpoint summary to updates_channel_id at 08:00 UTC."""
-    import datetime
+BRIEF_LAST_FILE = HOME / ".claude" / "oms-brief-last.txt"
+OMS_BRIEF = HOME / ".claude" / "bin" / "oms-brief.py"
+BRIEF_HOUR_LOCAL = 6  # 6am local time (system timezone handles PST/PDT)
+
+
+def _brief_sent_today() -> bool:
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        return BRIEF_LAST_FILE.exists() and BRIEF_LAST_FILE.read_text().strip() == today
+    except Exception:
+        return False
+
+
+def _mark_brief_sent() -> None:
+    try:
+        BRIEF_LAST_FILE.write_text(datetime.now().strftime("%Y-%m-%d"))
+    except Exception:
+        pass
+
+
+async def poll_brief():
+    """Check every 60s if it's 6am local time and brief hasn't been sent today.
+    Runs inside the bot — fires even if the Mac was asleep at 6am, as long as
+    the bot process is running (kept alive by the OMS heartbeat + caffeinate).
+    """
     while True:
+        await asyncio.sleep(60)
         try:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            next_8 = now.replace(hour=8, minute=0, second=0, microsecond=0)
-            if now >= next_8:
-                next_8 += datetime.timedelta(days=1)
-            await asyncio.sleep((next_8 - now).total_seconds())
-
-            cfg = load_config()
-            updates_id = cfg.get("updates_channel_id")
-            if not updates_id:
-                continue
-            ch = bot.get_channel(int(updates_id))
-            if not isinstance(ch, discord.TextChannel):
-                continue
-
-            today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-            lines = [f"**OMS Daily Brief** — {today}"]
-
-            budget_file = HOME / ".claude/oms-budget.json"
-            try:
-                b = json.loads(budget_file.read_text()) if budget_file.exists() else {}
-                now_dt = datetime.datetime.now(datetime.timezone.utc)
-
-                # Session window
-                session_spend = b.get("current_session_spend_usd", 0)
-                session_limit = b.get("session_limit_usd", 20)
-                session_pct = int(session_spend / session_limit * 100) if session_limit else 0
-                window_hours = b.get("session_window_hours", 5)
-                session_remaining = ""
-                session_start_raw = b.get("current_session_start", "")
-                if session_start_raw:
-                    try:
-                        ss = datetime.datetime.fromisoformat(session_start_raw)
-                        if ss.tzinfo is None:
-                            ss = ss.replace(tzinfo=datetime.timezone.utc)
-                        elapsed = now_dt - ss
-                        if elapsed < datetime.timedelta(hours=window_hours):
-                            rem = int((datetime.timedelta(hours=window_hours) - elapsed).total_seconds())
-                            h, m = divmod(rem // 60, 60)
-                            session_remaining = f" — {h}h{m:02d}m remaining"
-                        else:
-                            session_remaining = " — window expired"
-                    except Exception:
-                        pass
-                lines.append(f"Session: ${session_spend:.2f} / ${session_limit:.0f} ({session_pct}%){session_remaining}")
-
-                # Weekly
-                weekly_spend = b.get("current_week_spend_usd", 0)
-                weekly_limit = b.get("weekly_limit_usd", 100)
-                weekly_pct = int(weekly_spend / weekly_limit * 100) if weekly_limit else 0
-                lines.append(f"Week: ${weekly_spend:.2f} / ${weekly_limit:.0f} ({weekly_pct}%)")
-            except Exception:
-                lines.append("Budget: unavailable")
-
-            # Per-project breakdown with session % contribution
-            lines.append("")
-            costs_dir = HOME / ".claude/oms-costs"
-            budget_data: dict = {}
-            try:
-                budget_data = json.loads((HOME / ".claude/oms-budget.json").read_text()) if (HOME / ".claude/oms-budget.json").exists() else {}
-            except Exception:
-                pass
-            session_limit = budget_data.get("session_limit_usd", 20) or 1
-            session_start_raw = budget_data.get("current_session_start", "")
-            window_hours = budget_data.get("session_window_hours", 5)
-            now_dt = datetime.datetime.now(datetime.timezone.utc)
-
-            for slug, proj in cfg.get("projects", {}).items():
-                cp = read_checkpoint(proj)
-                nxt = cp.get("next", "")
-                task_id = cp.get("task_id", "")
-                if not task_id:
-                    lines.append(f"**{slug}**: idle")
-                    continue
-
-                # Sum costs for this slug within current session window
-                session_cost = 0.0
-                total_cost = 0.0
-                try:
-                    window_start = None
-                    if session_start_raw:
-                        ss = datetime.datetime.fromisoformat(session_start_raw)
-                        if ss.tzinfo is None:
-                            ss = ss.replace(tzinfo=datetime.timezone.utc)
-                        if now_dt - ss <= datetime.timedelta(hours=window_hours):
-                            window_start = ss
-
-                    for f in costs_dir.glob(f"{slug}-*.json"):
-                        try:
-                            d = json.loads(f.read_text())
-                            task_total = d.get("total_usd", 0.0)
-                            total_cost += task_total
-                            if window_start:
-                                for step in d.get("steps", []):
-                                    ts_raw = step.get("ts", "")
-                                    if ts_raw:
-                                        ts = datetime.datetime.fromisoformat(ts_raw)
-                                        if ts.tzinfo is None:
-                                            ts = ts.replace(tzinfo=datetime.timezone.utc)
-                                        if ts >= window_start:
-                                            session_cost += step.get("cost_usd", 0.0)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-
-                slug_pct = int(session_cost / session_limit * 100)
-                status = nxt if nxt not in ("done", "complete") else "✅ done"
-                lines.append(
-                    f"**{slug}**: {task_id} → `{status}`"
-                    f" | session `{slug_pct}%` (${session_cost:.2f})"
-                    f" | total ${total_cost:.2f}"
+            now = datetime.now()
+            if now.hour >= BRIEF_HOUR_LOCAL and not _brief_sent_today():
+                proc = await asyncio.create_subprocess_exec(
+                    sys.executable, str(OMS_BRIEF),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-
-            brief = "\n".join(lines)
-            for chunk in split_for_discord(brief):
-                await ch.send(chunk)
-        except Exception as e:
-            log.error(f"[daily_brief] {e}")
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+                if proc.returncode == 0:
+                    _mark_brief_sent()
+                    log.info("[brief] daily brief posted")
+                else:
+                    log.error(f"[brief] failed: {stderr.decode()[:200]}")
+        except Exception as exc:
+            log.error(f"[poll_brief] {exc}")
 
 
 @bot.event
@@ -471,7 +393,7 @@ async def on_ready():
             ch = bot.get_channel(int(updates_id))
             if isinstance(ch, discord.TextChannel):
                 await ch.send("🤖 OMS bot online")
-        asyncio.create_task(send_daily_brief())
+        pass  # daily brief is handled by com.lewis.oms-brief launchd job
 
 
 
@@ -577,7 +499,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
                 await _write_idea_to_disk(slug, project_path, conversation)
 
             prompt = (
-                "AUTONOMOUS BOT MODE — OMS_BOT=1. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
+                "AUTONOMOUS BOT MODE. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
                 f"/oms-start\n\n"
                 f"ARGUMENTS:\n"
                 f"Project: {slug}\n"
@@ -595,7 +517,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(project_path),
-                env={**os.environ, "OMS_BOT": "1"},
+                env={**os.environ},
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
             try:
@@ -606,7 +528,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
         else:
             # Q&A mode — answer the question in context of the full conversation
             prompt = (
-                "AUTONOMOUS BOT MODE — OMS_BOT=1.\n\n"
+                "AUTONOMOUS BOT MODE.\n\n"
                 f"Project: {slug}\n"
                 f"Directory: {project_path}\n\n"
                 f"Full thread conversation so far:\n{conversation}\n\n"
@@ -623,7 +545,7 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(project_path) if project_path.exists() else str(HOME),
-                env={**os.environ, "OMS_BOT": "1"},
+                env={**os.environ},
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             response = stdout.decode().strip()
@@ -872,7 +794,7 @@ async def handle_project_message(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(HOME),
-            env={**__import__("os").environ, "OMS_BOT": "1"},
+            env={**__import__("os").environ},
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
         output = stdout.decode().strip()
@@ -880,7 +802,17 @@ async def handle_project_message(
         if bot.user:
             await message.remove_reaction("⚙️", bot.user)
         if proc.returncode != 0 and err:
-            await channel.send(f"[{slug}] oms-work error: {err[:500]}")
+            if _is_rate_limited(err):
+                reset_iso = _rate_limit_reset_iso()
+                _save_pending_resume(slug, str(channel.id), reset_iso)
+                import datetime as _dt
+                rt = _dt.datetime.fromisoformat(reset_iso).astimezone()
+                await channel.send(
+                    f"⏸ `{slug}` hit Claude rate limit — will auto-resume at "
+                    f"`{rt.strftime('%H:%M %Z')}` when session window resets."
+                )
+            else:
+                await channel.send(f"[{slug}] oms-work error: {err[:500]}")
             return
         await channel.send(output or f"[{slug}] oms-work: no tasks ran")
         return
@@ -907,7 +839,7 @@ async def handle_thread_qa(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
-            env={**__import__("os").environ, "OMS_BOT": "1"},
+            env={**__import__("os").environ},
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
         response = stdout.decode().strip() or "_(no response)_"
@@ -1063,7 +995,7 @@ async def handle_idea(message: discord.Message, content: str):
     # Short prefix tells the model it's in autonomous mode BEFORE it loads the skill.
     # The skill does all the real work (ctx files, departments, hierarchy, etc.)
     prompt = (
-        "AUTONOMOUS BOT MODE — OMS_BOT=1. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
+        "AUTONOMOUS BOT MODE. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
         f"/oms-start\n\n"
         f"ARGUMENTS:\n"
         f"Project: {slug}\n"
@@ -1082,7 +1014,7 @@ async def handle_idea(message: discord.Message, content: str):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(project_path),
-            env={**os.environ, "OMS_BOT": "1"},
+            env={**os.environ},
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
         try:
@@ -1126,6 +1058,146 @@ async def handle_idea(message: discord.Message, content: str):
     if bot.user:
         await message.remove_reaction("⏳", bot.user)
     await message.add_reaction("✅")
+
+
+# --- Rate-limit retry helpers ---
+
+_RATE_LIMIT_PATTERNS = (
+    "rate limit", "rate_limit", "usage limit", "claude max", "overloaded",
+    "429", "529", "exceeded", "quota",
+)
+
+
+def _is_rate_limited(err: str) -> bool:
+    low = err.lower()
+    return any(p in low for p in _RATE_LIMIT_PATTERNS)
+
+
+def _rate_limit_reset_iso() -> str:
+    """Return ISO timestamp of when the current session window resets."""
+    import datetime as _dt
+    try:
+        if BUDGET_FILE.exists():
+            b = json.loads(BUDGET_FILE.read_text())
+            start_raw = b.get("current_session_start", "")
+            window_h = b.get("session_window_hours", 5)
+            if start_raw:
+                ss = _dt.datetime.fromisoformat(start_raw)
+                if ss.tzinfo is None:
+                    ss = ss.replace(tzinfo=_dt.timezone.utc)
+                reset = ss + _dt.timedelta(hours=window_h)
+                # If already past, reset is now + 5 minutes (handles edge cases)
+                now = _dt.datetime.now(_dt.timezone.utc)
+                if reset <= now:
+                    reset = now + _dt.timedelta(minutes=5)
+                return reset.isoformat()
+    except Exception:
+        pass
+    # Fallback: 5h from now
+    import datetime as _dt2
+    return (_dt2.datetime.now(_dt2.timezone.utc) + _dt2.timedelta(hours=5)).isoformat()
+
+
+def _save_pending_resume(slug: str, channel_id: str, reset_iso: str) -> None:
+    try:
+        data: dict = {}
+        if PENDING_RESUMES_FILE.exists():
+            data = json.loads(PENDING_RESUMES_FILE.read_text())
+        data[slug] = {"channel_id": channel_id, "reset_at": reset_iso}
+        PENDING_RESUMES_FILE.write_text(json.dumps(data))
+    except Exception as exc:
+        log.error(f"[rate-limit] Failed to save pending resume for {slug}: {exc}")
+
+
+def _clear_pending_resume(slug: str) -> None:
+    try:
+        if not PENDING_RESUMES_FILE.exists():
+            return
+        data = json.loads(PENDING_RESUMES_FILE.read_text())
+        data.pop(slug, None)
+        PENDING_RESUMES_FILE.write_text(json.dumps(data))
+    except Exception:
+        pass
+
+
+async def poll_pending_resumes():
+    """
+    Check oms-pending-resumes.json every 60s.
+    When a project's reset_at time has passed, auto-trigger oms-work for it.
+    """
+    import datetime as _dt
+    while True:
+        await asyncio.sleep(60)
+        try:
+            if not PENDING_RESUMES_FILE.exists():
+                continue
+            data: dict = json.loads(PENDING_RESUMES_FILE.read_text())
+            if not data:
+                continue
+            now = _dt.datetime.now(_dt.timezone.utc)
+            for slug, entry in list(data.items()):
+                reset_raw = entry.get("reset_at", "")
+                channel_id = entry.get("channel_id", "")
+                if not reset_raw or not channel_id:
+                    continue
+                try:
+                    reset_dt = _dt.datetime.fromisoformat(reset_raw)
+                    if reset_dt.tzinfo is None:
+                        reset_dt = reset_dt.replace(tzinfo=_dt.timezone.utc)
+                except Exception:
+                    continue
+                if now < reset_dt:
+                    continue
+                # Window has reset — fire oms-work
+                ch = _get_sendable(channel_id)
+                if ch:
+                    await ch.send(f"⏰ Session window reset — auto-resuming `{slug}` OMS queue…")
+                _clear_pending_resume(slug)
+                cfg = load_config()
+                proj = cfg.get("projects", {}).get(slug, {})
+                queue_path = Path(proj.get("path", "")) / ".claude" / "cleared-queue.md"
+                if not queue_path.exists():
+                    if ch:
+                        await ch.send(f"[{slug}] No cleared-queue.md found — skipping auto-resume.")
+                    continue
+                proc = await asyncio.create_subprocess_exec(
+                    str(HOME / ".local/bin/claude"),
+                    "--print", "--permission-mode", "auto",
+                    "--model", "claude-sonnet-4-6",
+                    "-p", f"/oms-work {slug}",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(HOME),
+                    env={**__import__("os").environ},
+                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
+                except asyncio.TimeoutError:
+                    if ch:
+                        await ch.send(f"[{slug}] auto-resume timed out (2h)")
+                    continue
+                output = stdout.decode().strip()
+                err = stderr.decode().strip()
+                if proc.returncode != 0 and err:
+                    if _is_rate_limited(err):
+                        # Still rate limited — reschedule
+                        new_reset = _rate_limit_reset_iso()
+                        _save_pending_resume(slug, channel_id, new_reset)
+                        if ch:
+                            import datetime as _dt3
+                            rt = _dt3.datetime.fromisoformat(new_reset).astimezone()
+                            await ch.send(
+                                f"[{slug}] Still rate limited — will retry at "
+                                f"`{rt.strftime('%H:%M %Z')}`"
+                            )
+                    else:
+                        if ch:
+                            await ch.send(f"[{slug}] auto-resume error: {err[:500]}")
+                else:
+                    if ch:
+                        await ch.send(output or f"[{slug}] auto-resume: no tasks ran")
+        except Exception as exc:
+            log.error(f"[poll_pending_resumes] {exc}")
 
 
 # --- Blocking question polling ---
@@ -1205,6 +1277,8 @@ async def poll_and_post_questions():
 @bot.event
 async def setup_hook():
     bot.loop.create_task(poll_and_post_questions())
+    bot.loop.create_task(poll_pending_resumes())
+    bot.loop.create_task(poll_brief())
 
 
 async def _post_offline():

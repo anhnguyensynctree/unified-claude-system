@@ -64,6 +64,9 @@ This file accumulates all workflow runs for the day. The Discord daily brief rea
 | `/oms exec` | **Exec** — C-suite strategic discussion; auto-triggered at milestones |
 | `/oms all` | **Elaborate All** — runs `/oms FEATURE-NNN` for every `Status: draft` feature in `cleared-queue.md`, sequentially |
 | `/oms think [framework]: <question>` | **Framework** — CEO invokes a named lens on a specific question |
+| `/oms pivot` or natural language ("we're pivoting", "direction change") | **Pivot** — triggers `/oms-start` in pivot mode (full re-scope: Steps 2, 2.5, 3, 3.5, 5). CEO-initiated, rare. |
+| `/oms new department` or "add [dept] department" | **New Department** — triggers `/oms-start` in new-department mode (Steps 3 + 3.5 only). |
+| `/oms update` + pasted material or file | **Product Update** — triggers `/oms-start` in product-update mode (Step 5 only, external material → ctx file sync). Alternatively: paste material directly and say "sync ctx files" — skips /oms-start entirely for simple updates. |
 
 ## Framework Invocation Mode
 
@@ -244,7 +247,7 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 | facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | Sonnet | After each round (Tier 2+, when pre-facilitator requires it) |
 | verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | Sonnet | On-demand |
 | ceo-gate | `~/.claude/agents/ceo-gate/persona.md` | — | Haiku | Step 3.5 (Tier 1+) — always a quick pass, escalates on match |
-| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | Sonnet (Opus: 5+ or livelock) | Step 4 (Tier 2+) |
+| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | Sonnet (Opus: livelock confirmed, or 5+ agents round 2+ no convergence) | Step 4 (Tier 2+) |
 | trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | Sonnet | Step 6 — always |
 | executive-briefing-agent | `~/.claude/agents/executive-briefing-agent/persona.md` | `executive-briefing-agent/lessons.md` | Sonnet | Terminal — fires once after every workflow completes. Reads `.claude/oms-briefing.md`. Never participates in discussion rounds. |
 
@@ -320,16 +323,50 @@ Trainer does not evaluate onboarding sessions.
 
 ## Elaborate All Mode — `/oms all`
 
-Reads `cleared-queue.md` and runs a full engineering OMS discussion for every FEATURE block with `Status: draft`, sequentially in order. Each FEATURE becomes a set of `Status: queued` TASK blocks with full OpenSpec fields (Spec, Scenarios, Artifacts, Produces, Verify, Depends).
+Reads `cleared-queue.md` and runs a **decomp pipeline** (not the full strategic discussion engine) for every FEATURE block with `Status: draft`, sequentially in order. Each FEATURE becomes a set of `Status: queued` TASK blocks with full OpenSpec fields (Spec, Scenarios, Artifacts, Produces, Verify, Depends).
+
+The goal is decomposition — cataloging what a feature involves across domains. But complex cross-department features embed real design decisions (who owns the shared interface? how to split ownership across teams?). The pipeline branches on complexity: simple features use a lightweight decomp path; complex features get the full discussion engine.
+
+**Decomp pipeline (per FEATURE)**:
+
+**D1 — Router (Haiku)**
+- Input: feature block (`Departments[]`, `Exec-decision`, `Why`, `Context-hints`) + project ctx files + codemap
+- Output: `activated_agents` (hard-capped to declared roster + `Departments[]`), `expertise_gaps[]` (agents NOT in roster that would be useful — do not activate them), `tier`
+- **Pipeline branch**:
+  - Tier 0/1 (single dept or clear scope, no cross-team design decisions) → continue with D2→D5 decomp path below
+  - Tier 2+ (cross-dept tradeoffs, architectural decisions embedded in scope, multiple valid decompositions) → **skip D2–D5, run full Steps 1–8.5 for this feature** (Facilitator, Synthesizer, and all). The `Exec-decision` constraint still applies as a hard ceiling on all agent briefings. This is where the open discussion engine earns its place.
+
+**D2 — Proposal Round (all activated agents, parallel)**
+- Each agent receives: persona + `Exec-decision` constraint + `Why` + `Context-hints`
+- Each agent outputs: their domain's proposed tasks (Spec, Scenarios, Artifacts, Produces, Verify), cross-team interfaces needed (what they Produce that other teams Depend on), and any risks or open questions within their domain
+- This is a parallel, blind pass — agents do not see each other's proposals yet
+
+**D2.5 — Cross-Review Pass (Tier 0/1 only — all activated agents, parallel, one pass)**
+- Each agent receives: their D2 proposal + all other agents' D2 proposals
+- Each agent outputs only: (a) conflicts — "my task X conflicts with [agent]'s task Y because [reason]", (b) missing pieces — "I need [artifact/interface] from [domain] that nobody is producing", (c) scope flags — "task [title] is too large — should split at [boundary]"
+- Agents do NOT rewrite their full proposals here — conflict/gap flags only
+- OMS resolves all flags inline before D3: adjusts task boundaries, adds missing Produces, splits oversized tasks
+- **Escalation rule**: if OMS cannot resolve a flag inline (e.g. two agents have incompatible approaches with no clear winner) → this feature escalates to full Steps 1–8.5. Do not silently override agent disagreement.
+- Purpose: catch cross-team assumptions for simple features. For complex features, Tier 2+ routing in D1 already sent them to full discussion — D2.5 never fires for those.
+
+**D3 — Interface-Contract Pass (inline, no separate agent)**
+- OMS resolves cross-team Depends: ensure every `Produces` from one agent's tasks aligns with `Depends` in another agent's tasks, after D2.5 amendments
+- If a contract gap remains (team A needs X but no team produces X): flag as `cto-stop` on the relevant task, not a roster change
+
+**D4 — OpenSpec Write**
+- Merge all agent task proposals into OpenSpec TASK-NNN blocks
+- Apply scaffold artifact rules: if any `Spec:` contains "initialize", "scaffold", "create project", "pnpm install", or "npm install" → `.gitignore` MUST appear in `Artifacts:`. Missing it is a spec defect; fix before writing.
+- Replace the FEATURE block in `cleared-queue.md` with elaborated TASK-NNN blocks (`Status: queued`)
+- Output: "FEATURE-NNN → [N] tasks queued" and continue
+
+**D5 — Trainer (Router + decomp accuracy only)**
+- Evaluates: roster restraint, `Departments[]` hard cap respected, interface contracts resolved, no scope creep beyond `Exec-decision`
+- Does NOT run full SBI eval — this is not a strategic discussion
 
 **Execution**:
 1. Read `cleared-queue.md` — collect all `Status: draft` FEATURE blocks
 2. If none: output "No draft features found. Run /oms-exec to generate features first." and stop.
-3. For each FEATURE (in order, one at a time):
-   - Run full OMS discussion using the FEATURE's `Departments` as the agent roster and `Exec-decision` as a hard constraint injected into all briefings
-   - Before finalising any TASK spec: apply scaffold artifact rules — if the task `Spec:` contains "initialize", "scaffold", "create project", "pnpm install", or "npm install", `.gitignore` MUST appear in `Artifacts:`. Missing it is a spec defect; the elaborating agent must add it before writing the task block.
-   - Replace the FEATURE block in `cleared-queue.md` with elaborated TASK-NNN blocks (`Status: queued`)
-   - Output: "FEATURE-NNN → [N] tasks queued" and continue
+3. For each FEATURE (in order, one at a time): run D1 → D2 → D3 → D4 → D5
 4. After all features elaborated: output the queue summary (format below), then the CEO Product Summary roll-up (see Output Discipline section), then "**Next: run /oms-work to begin execution.**"
 
    **CEO Product Summary roll-up for `/oms all`** — after queue summary, output one consolidated block:
@@ -341,9 +378,22 @@ Reads `cleared-queue.md` and runs a full engineering OMS discussion for every FE
    Pros:            [why this plan is solid]
    Cons/Risks:      [biggest risks in the task plan or scope gaps]
    Blockers:        [ceo-gate tasks that need approval before running, or "None"]
-   Next action:     /oms-work
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ```
+
+   **Expertise gap gate** — if any `expertise_gaps[]` were collected across all features, present a blocking gate BEFORE outputting "Next: /oms-work". CEO must acknowledge each gap:
+   ```
+   ⚑ Expertise gaps detected — resolve before running /oms-work:
+
+   [role] — needed for: [which feature/task] because [why]
+     (a) Proceed without — accept the risk
+     (b) Add this agent — create persona + add to company-hierarchy.md
+         → Non-standard agent (add to existing department): create ~/.claude/agents/[role]/persona.md + add to company-hierarchy.md Non-Standard Agents section
+         → New department: run /oms-start (update path → "new department") — re-elaborates affected features after
+     (c) Dismiss — not relevant to this project
+   ```
+   Wait for CEO response on each gap before proceeding. Only output "**Next: run /oms-work**" once all gaps are acknowledged.
+   If no expertise gaps: output "**Next: run /oms-work to begin execution.**" immediately after the CEO summary.
 
 Features with `Research-gate: true` are elaborated last.
 Never pause between features — run all sequentially without CEO input unless an actual escalation fires.
@@ -384,14 +434,47 @@ The executive discussion. C-suite meets to evaluate product direction, translate
 2. **Step 1.5 — Path Diversity**: run (exec is Tier 2+) — each C-suite agent gets a distinct strategic frame
 3. **Step 2 — Round 1**: all 5 agents post positions in parallel, blind NGT. Display each position to CEO.
 4. **Step 3 — Rounds 2+**: Facilitator runs between rounds. Continue until convergence or round cap.
-5. **Step 4 — Synthesizer**: output is a recommendation brief (milestone selected, action_items[], rationale). Update `product-direction.ctx.md`.
+5. **Step 4 — Synthesizer**: output is a recommendation brief (milestone selected, `action_items[]`, `roster_changes[]`, rationale). Update `product-direction.ctx.md`. Each `roster_changes[]` entry must include `{ role, domain_brief, non_negotiables, sponsored_by }`.
+   - The sponsoring C-suite head must provide `domain_brief` and `non_negotiables` during their round position, not after synthesis.
+   - Facilitator enforces two things before synthesis: (1) if a C-suite agent flags a roster need without a domain brief → inject back to them; (2) if the domain_brief contains project-specific details (schema names, product names, stack choices) → flag and ask for the generic domain version. Personas are project-agnostic — project specifics go in ctx.md, not the persona.
 6. **Step 5 — Log**: write task log to `.claude/logs/tasks/[task-id].md`
 7. **Step 6 — Trainer**: evaluates exec session
 8. **Step 7 — Context Optimizer**: lightweight check
 9. **Step 8 — CEO feedback**: present brief, wait for response
-10. **Step 8.5 — Queue Commit**: elaborate action_items[] → OpenSpec tasks → write to `cleared-queue.md`
+10. **Step 8.5 — Queue Commit**: elaborate `action_items[]` → OpenSpec tasks → write to `cleared-queue.md`. For each entry in `roster_changes[]`, write a CEO-gate task block before the milestone's feature tasks.
 
 The exec session is not complete until `cleared-queue.md` is written with OpenSpec tasks.
+
+**`roster_changes[]`** — when exec surfaces a need to expand the team:
+
+Exec agents (CPO/CTO/CRO/CLO/CFO) may flag that a milestone requires expertise the current roster lacks. Common cases:
+- Legal/compliance risk the current team can't evaluate → CLO or a compliance specialist
+- Research domain the milestone depends on → CRO + relevant domain researcher
+- Technical domain outside the current engineers (mobile, ML, infra) → non-standard agent
+- Financial model or unit economics work → CFO
+
+These surface as `roster_changes[]` in Synthesizer output — not as inline activations. Each becomes a `Status: queued, Gate: ceo-gate` task in the queue written before the milestone tasks:
+
+```
+TASK-NNN: Add [role] to engineering roster
+Spec:     ⛔ Read ~/.claude/agents/engine/agent-creation-rules.md FIRST. Do not write a single line of persona until this file is read and the C-Suite Narrowing Gate (CPO + CTO checks) passes.
+          Then: create ~/.claude/agents/[role]/persona.md from the domain_brief captured in this task's Context field. Add to .claude/agents/company-hierarchy.md under [department] > Non-Standard Agents.
+Context:  [domain_brief and non_negotiables from Synthesizer roster_changes entry — injected here at task-write time]
+Gate:     ceo-gate — CEO approves before this task executes
+Depends:  none
+Blocks:   [TASK-NNN of the milestone tasks that need this expertise]
+```
+
+**Persona authorship** — the sponsoring C-suite head provides `domain_brief` and `non_negotiables` during their exec round. Synthesizer captures `{ role, domain_brief, non_negotiables, sponsored_by }` in `roster_changes[]` and injects the brief into the task's Context field at queue-write time. OMS writes the persona from that brief. The C-suite head is the author; OMS is the typist.
+
+**Persona standard** — `~/.claude/agents/engine/agent-creation-rules.md` is the hard gate. Required structure: `## Identity`, `## Activation Condition`, `## Primary Output`, `## Non-Negotiables`, `## Working Guidelines`. Project-specific knowledge goes in the project's ctx.md, not the persona — Facilitator enforces this when the domain_brief is captured. Line targets: engineering 70, researcher 65, C-suite 60. Create empty `lessons.md` and `MEMORY.md` alongside persona.
+
+**History bootstrapping** — not needed. New agents start with empty `lessons.md`. Task specs are self-contained; project-specific context is in ctx.md files. Trainer populates lessons.md organically after each task cycle.
+
+**Department expansion (e.g. CFO adding a unit-economics-analyst)** — same `roster_changes[]` path. The sponsoring C-suite head (CFO, CTO, CRO, etc.) surfaces the need in the exec discussion. Synthesizer includes it in `roster_changes[]`. CEO-gate task is written before the milestone tasks it unblocks. The C-suite head's department is updated in `company-hierarchy.md` when the agent is created.
+
+For a full new department (not a single agent): the task Spec references `/oms-start` update path ("new department") instead of direct persona creation.
+CEO approves this task at the CEO gate, then it runs before the milestone. `/oms-work` respects the Blocks dependency — milestone tasks wait.
 
 **Exec output to CEO** — executive summary only (see Output Discipline at top of this file). Round transcripts go to task log only. No narration of agent positions during the discussion.
 
@@ -423,14 +506,12 @@ Run Router (Haiku):
 - Input: CEO intent + all shared context + codemap + project memory + ctx files
 - Output must include: `task_id`, `tier`, `activated_agents`, `domain_lead`, `primary_recommender`, `complexity`, `round_cap`, `triz_contradiction`, `premortem_failure_modes`, `agent_briefings`, `briefing_mode`, `why_chain` (if company context is real), `stage_gate`, `locked: true`
 
-**Feature discussion routing (when CEO runs `/oms FEATURE-NNN`):**
+**Feature discussion routing (when CEO runs `/oms FEATURE-NNN` or during `/oms all`):**
 - Read the feature draft from `cleared-queue.md` — load `Departments[]`, `Research-gate`, `Exec-decision`, `Why`, `Context-hints`
 - Inject `Exec-decision` as a hard constraint into ALL agent briefings — it cannot be overturned
-- Treat `Departments[]` as a **starting recommendation only** — Router applies its own judgment:
-  - Add agents the feature needs but exec didn't list (e.g. CTO if infra-critical signals present)
-  - Swap agents if the actual feature scope differs from what exec assumed
-  - Add CRO if Router detects high uncertainty not flagged by exec
-  - Always justify any deviation from `Departments[]` in `why_chain`
+- `Departments[]` is a **hard cap** — only activate agents declared in the project's `company-hierarchy.md` roster AND listed in `Departments[]`. Do not add agents outside this set.
+  - If Router detects that the feature requires expertise not present in the roster (e.g. security, legal, research), do NOT add those agents inline. Instead: append to `expertise_gaps[]` in Router output — these surface to CEO in the final summary.
+  - Swapping within the declared departments is allowed (e.g. preferring backend-developer over engineering-manager for a data-heavy task) — justify in `why_chain`
 - If `Research-gate: true`: activate research agents as domain lead; engineering agents present but do not own the interface-contract until research findings are known
 
 If `clarifying_questions`: present to CEO, collect answers, re-run Router.
@@ -497,7 +578,7 @@ Run CEO Gate per `ceo-gate/persona.md` — fires after all rounds complete, befo
 - `route: "ceo_brief"` → present brief to CEO inline; wait for response before Step 4. Log CEO response in task log under `## CEO Feedback` before proceeding.
 
 ## Step 4 — Synthesizer *(Tier 2+ only)*
-Run Synthesizer (Sonnet; Opus if 5+ agents or livelock):
+Run Synthesizer (Sonnet first; escalate to Opus only if: livelock confirmed by Facilitator, OR 5+ agents AND round 2+ with no convergence signal):
 - Input: full log from disk (all rounds) + Router's `domain_lead` / `primary_recommender` / `activated_agents` + Facilitator `capitulation_flags` + per-agent `confidence_pct` per round
 - Instruction: "Synthesize. Cite agent + round for every rationale claim. Apply reversibility gate. Derive reopening conditions."
 
@@ -629,6 +710,41 @@ Skip the Next line only when the pipeline is complete and there is genuinely not
 - A `cto-stop` written to the queue
 
 Everything else proceeds automatically.
+
+---
+
+## LLM Model Selection Per OMS Command
+
+Every OMS command has an optimal model. This table governs which model runs the REPL session or subprocess.
+
+| Command | Model | Why |
+|---|---|---|
+| `/oms <task>` (Tier 0-1) | Sonnet | Default discussion, low complexity |
+| `/oms <task>` (Tier 2) | Sonnet | Multi-agent discussion, needs reliable synthesis |
+| `/oms <task>` (Tier 3) | Sonnet → Opus (Synthesizer only) | Complex reasoning at synthesis stage |
+| `/oms exec` | Sonnet | C-suite strategic discussion — Sonnet handles well |
+| `/oms exec` (complex: 4+ milestones, major pivot) | Opus | Deep strategic reasoning, catches edge cases in specs |
+| `/oms all` | Sonnet | Sequential feature elaboration |
+| `/oms think [fw]` | Sonnet | Single-agent, low overhead |
+| `/oms-start` | Sonnet | Project bootstrap, agent creation |
+| `/oms-start` (complex: regulated, multi-department) | Opus | Better at identifying department needs and constraints |
+| `/oms-work` task (Model-hint: qwen) | Qwen-coder via LiteLLM | ≤3 files impl, has Verify, free |
+| `/oms-work` task (Model-hint: qwen36) | Qwen-3.6 via LiteLLM | Research tasks, free — sonnet retry on CRO fail |
+| `/oms-work` task (Model-hint: sonnet) | Sonnet | 4 files impl, infra-critical, or default |
+| `/oms-work` browse QA | Sonnet | Multi-step tool chain, visual analysis |
+| `/oms-audit` | Sonnet | System health check |
+| `/oms-train` | Sonnet | Scenario validation |
+
+**Key principle:** OMS discussions (where specs are born) stay on Anthropic models — spec quality is the foundation. OMS execution (where specs are implemented) can route to external LLMs because the spec already defines success criteria.
+
+**Opus trigger conditions for OMS discussions:**
+- Synthesizer: livelock confirmed by Facilitator (primary trigger — earned, not assumed)
+- Synthesizer: 5+ agents AND still no convergence after round 2 (escalate, not default)
+- `/oms exec` when product-direction.ctx.md has 4+ milestones with no coverage
+- `/oms-start` for projects touching regulated data, payments, or 3+ departments
+- CEO explicitly requests deeper analysis
+
+**Default for 5-agent exec discussions: Sonnet.** Most C-suite discussions converge in 1–2 rounds. Only escalate to Opus if Facilitator signals deadlock or repeated position cycling.
 
 ---
 

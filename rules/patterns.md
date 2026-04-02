@@ -58,6 +58,46 @@ curl -s -X POST http://127.0.0.1:$PORT/command \
 
 Never use the built-in WebFetch tool for content extraction — it returns raw HTML overhead and cannot handle JS-rendered pages.
 
+## Script Hardening — Long-running CLI Scripts
+Any script that loops over N profiles/items and calls a slow subprocess (claude --print, llm-route.sh, external API) MUST follow this pattern:
+
+**Default N = 3.** Never default to 10. Let the caller override via `--profiles N`.
+
+**Per-item partial results:** Write JSON to disk after each item completes — never accumulate then write at the end. Use `appendFileSync` or overwrite the full array each iteration:
+```typescript
+results.push(newResult);
+writeFileSync(outPath, JSON.stringify(results, null, 2)); // after each item
+```
+
+**Graceful timeout per subprocess call:** Wrap each slow call in `Promise.race`:
+```typescript
+const HAIKU_TIMEOUT_MS = 30_000;  // 30s — Haiku
+const SONNET_TIMEOUT_MS = 60_000; // 60s — Sonnet
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout: ${label} exceeded ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
+// Usage — continue on timeout, write placeholder:
+try {
+  const score = await withTimeout(scoreContrastive(...), HAIKU_TIMEOUT_MS, label);
+  results.push({ id: label, score });
+} catch (err) {
+  console.error(`[${label}] timed out or errored:`, (err as Error).message);
+  results.push({ id: label, score: null, error: (err as Error).message });
+}
+writeFileSync(outPath, JSON.stringify(results, null, 2)); // partial write even on failure
+```
+
+**Never block the loop:** `continue` after timeout — never `process.exit` or rethrow. The next profile must run regardless.
+
+**Why:** TASK-133 failed because 7 × 120s timeouts = 14 min wall-time blocking a `claude -p` subprocess. Partial writes + graceful continue = recoverable runs even when profiles stall.
+
 ## Documentation
 - Public functions need docstrings
 - Complex logic needs inline explanation of WHY
