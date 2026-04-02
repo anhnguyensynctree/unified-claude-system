@@ -1,7 +1,7 @@
 # unified-claude-system
 
-> Claude Code with persistent memory, enforced conventions, 10 context modes, and automated quality gates.
-> Every session starts warm — Claude remembers your codebase, your decisions, and what you did yesterday.
+> A multi-agent autonomous development system built on Claude Code. OMS convenes a virtual product team, plans milestones, executes tasks, and validates delivery — while persistent memory, enforced conventions, and automated quality gates keep every session coherent.
+> Drop it into `~/.claude` and Claude becomes a stateful, opinionated development partner with a full team behind it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/requires-Claude%20Code%20CLI-blue)](https://claude.ai/code)
@@ -33,17 +33,19 @@ Every Claude Code session starts cold. You re-explain your stack, your conventio
 
 **This system fixes that.** Drop it into `~/.claude` and Claude becomes a stateful development partner:
 
+- **[OMS v0.6](#oms--one-man-show-v06)** — multi-agent autonomous pipeline: convenes a virtual product team, plans milestones, dispatches parallel agents, validates delivery, posts CEO briefings to Discord — all without manual re-briefing
+- **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — routes to free Qwen via OpenRouter when available
 - **Persistent memory** — remembers decisions, patterns, and project context across sessions without manual re-briefing
 - **Enforced conventions** — rules load automatically via hooks, not trusted to per-prompt engineering
 - **14 context modes** — Claude shifts persona and priorities based on what you're doing: dev, test, review, security, debug, plan, ui-ux, architecture, devops, refactor, performance, data, docs, research — each loaded on demand, zero token cost until triggered
 - **Automated quality gates** — catches `console.log`, runs TypeScript checks, enforces test coverage in real time
-- **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — never overpay
 - **Continuous learning** — patterns discovered during work are extracted and reused in future sessions
-- **[OMS v0.6](#oms--one-man-show)** — multi-agent discussion engine that convenes a virtual product team, plans milestones, executes tasks, and validates delivery autonomously
 
 ```
 Without this:   "Use pnpm. TDD. Conventional commits. No console.log. 80% coverage minimum."
+                "Plan this milestone. Write the tasks. Execute them. Validate delivery."
 With this:      Claude already knows. Every session, from the first message.
+                OMS handles the rest — plan → execute → validate → brief, autonomously.
 ```
 
 ---
@@ -151,9 +153,102 @@ With this:      Claude already knows. Every session, from the first message.
 
 ---
 
-## ★ Memory Layer — The Core
+## ★ OMS — One-Man-Show (v0.6)
 
-> Every other component enforces standards. The memory layer is what makes Claude *continuous* — able to carry context, decisions, and learned patterns across sessions without manual re-briefing.
+> The primary engine. OMS simulates a full product team inside a single Claude session — planning milestones, dispatching parallel agents, validating delivery, and posting CEO briefings to Discord. When the decision matters, don't ask one AI — convene a room.
+
+OMS solves the single-perspective problem. On complex or cross-domain questions, a single AI answer is a single blind spot. OMS activates a roster of specialized personas — each arguing from their own domain — runs structured rounds, then produces a traceable synthesis with `action_items[]`. Minority positions are steelmanned. Reopen conditions are defined. The output isn't an AI answer; it's a decision audit trail.
+
+### What's new in v0.6
+
+- **Milestone hierarchy** — projects have milestones; milestones have tasks. Work is always scoped to one milestone at a time.
+- **Step 0 queue check** — before any execution, OMS checks if there are already cleared tasks in the queue and runs them first. No duplicate elaboration.
+- **One-milestone exec** — `/oms exec` now focuses on a single milestone per discussion. Cleaner scope, faster decisions.
+- **PM out of exec** — C-suite only in exec discussions. Product Manager participates in engineering rounds, not strategic direction.
+- **CRO always active in exec** — revenue impact is evaluated on every strategic discussion.
+- **Auto-confirm cross-milestone contracts** — dependency contracts between milestones confirm automatically on the happy path, no CEO gate required.
+- **New agents** — content-strategist, ux-researcher, executive-briefing-agent.
+- **oms-work replaces oms-implement** — unified execution engine with schema validation, cost tracking, and Discord integration.
+
+### When to use it
+
+- Architecture decisions that cut across security, performance, and delivery
+- High-stakes changes where a wrong call is expensive to reverse
+- Research questions where the right framework is itself unknown
+- Strategic product direction where engineering, product, and business pull differently
+
+For routine tasks — a bug fix, a simple feature — just ask Claude directly. OMS is for decisions where you'd normally call a meeting.
+
+### Skill suite
+
+| Command | Phase | What it does |
+|---|---|---|
+| `/oms-start` | Setup | Initialize OMS for a project — run once before anything else |
+| `/oms <intent>` | Discussion | Run a multi-agent discussion, get a synthesis with `action_items[]` |
+| `/oms exec` | Strategic | C-suite milestone planning — CTO, CRO, CLO, CPO, CTO (no PM) |
+| `/oms-work` | Execution | Execute cleared tasks in the queue with full validation |
+| `/oms-capture` | Learning | Capture a real failure as a training scenario |
+| `/oms-train [ids]` | Maintenance | Run training scenarios against agent personas |
+| `/oms audit` | Maintenance | Token and context audit across OMS system |
+| `/oms-tool` | Improvement | External research scan (GitHub/Reddit/HN) to identify system improvements |
+
+### Hierarchy
+
+```
+Project
+└── Milestone (one at a time)
+    └── Tasks (cleared → in progress → done)
+```
+
+`/oms exec` plans the current milestone. `/oms` discusses tasks within it. `/oms-work` executes the cleared queue.
+
+### Modes
+
+**Engineering** (default) — technical tasks. The system classifies complexity and activates only the personas the task warrants. A button label change gets one agent. A database migration gets five.
+
+**Research** — activated when the task requires domain expertise rather than engineering judgment. Produces a framework map of where the field agrees, where it conflicts, and what remains unknown.
+
+**Exec** — C-suite milestone planning. CTO, CRO, CLO, CPO discuss scope, dependencies, and delivery order. Produces milestone roadmap and updates project direction. PM is not in exec — they participate in engineering rounds only.
+
+### Discussion → Execution
+
+OMS produces a decision. `/oms-work` executes it.
+
+`/oms` locks scope and outputs `action_items[]` with assignees, rationale, and reopen conditions. `/oms-work` picks up the cleared task queue, dispatches items as parallel agents, runs the full test suite, and validates delivery — CTO checks code quality, QA checks requirement fidelity. Nothing closes until both sign off.
+
+### Workflow
+
+```bash
+# Once per project
+/oms-start
+
+# Plan the current milestone (C-suite, no PM)
+/oms exec Q2 milestone — payments and user onboarding
+
+# Settle a technical decision within the milestone
+/oms how should we handle optimistic locking for concurrent reservations
+
+# Execute cleared tasks
+/oms-work
+
+# If an agent behaved badly, capture it
+/oms-capture
+
+# Research mode — domain knowledge questions
+/oms how should we design the question bank to maximize honest self-reflection
+```
+
+### Project setup
+
+`/oms-start` ingests any starting material — CLAUDE.md, README, PRD, raw notes — asks which departments are active, runs a short intake questionnaire, and generates the context files OMS needs to route tasks correctly.
+
+OMS registers projects in `~/.claude/oms-config.json`. Without `/oms-start`, `/oms` will refuse to run.
+
+---
+
+## Memory Layer
+
+> Persistent context that makes Claude continuous — carries decisions, learned patterns, and project state across sessions so every session starts warm.
 
 ```
 Session Start
@@ -478,99 +573,6 @@ EOF
 TypeScript LSP, code-review, and security-guidance plugins are scoped **per package** in per-project `settings.json` — only loaded where needed.
 
 </details>
-
----
-
-## OMS — One-Man-Show (v0.6)
-
-> A multi-agent discussion engine that simulates a full product team inside a single Claude session. When the decision matters, don't ask one AI — convene a room.
-
-OMS solves the single-perspective problem. On complex or cross-domain questions, a single AI answer is a single blind spot. OMS activates a roster of specialized personas — each arguing from their own domain — runs structured rounds, then produces a traceable synthesis with `action_items[]`. Minority positions are steelmanned. Reopen conditions are defined. The output isn't an AI answer; it's a decision audit trail.
-
-### What's new in v0.6
-
-- **Milestone hierarchy** — projects have milestones; milestones have tasks. Work is always scoped to one milestone at a time.
-- **Step 0 queue check** — before any execution, OMS checks if there are already cleared tasks in the queue and runs them first. No duplicate elaboration.
-- **One-milestone exec** — `/oms exec` now focuses on a single milestone per discussion. Cleaner scope, faster decisions.
-- **PM out of exec** — C-suite only in exec discussions. Product Manager participates in engineering rounds, not strategic direction.
-- **CRO always active in exec** — revenue impact is evaluated on every strategic discussion.
-- **Auto-confirm cross-milestone contracts** — dependency contracts between milestones confirm automatically on the happy path, no CEO gate required.
-- **New agents** — content-strategist, ux-researcher, executive-briefing-agent.
-- **oms-work replaces oms-implement** — unified execution engine with schema validation, cost tracking, and Discord integration.
-
-### When to use it
-
-- Architecture decisions that cut across security, performance, and delivery
-- High-stakes changes where a wrong call is expensive to reverse
-- Research questions where the right framework is itself unknown
-- Strategic product direction where engineering, product, and business pull differently
-
-For routine tasks — a bug fix, a simple feature — just ask Claude directly. OMS is for decisions where you'd normally call a meeting.
-
-### Skill suite
-
-| Command | Phase | What it does |
-|---|---|---|
-| `/oms-start` | Setup | Initialize OMS for a project — run once before anything else |
-| `/oms <intent>` | Discussion | Run a multi-agent discussion, get a synthesis with `action_items[]` |
-| `/oms exec` | Strategic | C-suite milestone planning — CTO, CRO, CLO, CPO, CTO (no PM) |
-| `/oms-work` | Execution | Execute cleared tasks in the queue with full validation |
-| `/oms-capture` | Learning | Capture a real failure as a training scenario |
-| `/oms-train [ids]` | Maintenance | Run training scenarios against agent personas |
-| `/oms audit` | Maintenance | Token and context audit across OMS system |
-| `/oms-tool` | Improvement | External research scan (GitHub/Reddit/HN) to identify system improvements |
-
-### Hierarchy
-
-```
-Project
-└── Milestone (one at a time)
-    └── Tasks (cleared → in progress → done)
-```
-
-`/oms exec` plans the current milestone. `/oms` discusses tasks within it. `/oms-work` executes the cleared queue.
-
-### Modes
-
-**Engineering** (default) — technical tasks. The system classifies complexity and activates only the personas the task warrants. A button label change gets one agent. A database migration gets five.
-
-**Research** — activated when the task requires domain expertise rather than engineering judgment. Produces a framework map of where the field agrees, where it conflicts, and what remains unknown.
-
-**Exec** — C-suite milestone planning. CTO, CRO, CLO, CPO discuss scope, dependencies, and delivery order. Produces milestone roadmap and updates project direction. PM is not in exec — they participate in engineering rounds only.
-
-### Discussion → Execution
-
-OMS produces a decision. `/oms-work` executes it.
-
-`/oms` locks scope and outputs `action_items[]` with assignees, rationale, and reopen conditions. `/oms-work` picks up the cleared task queue, dispatches items as parallel agents, runs the full test suite, and validates delivery — CTO checks code quality, QA checks requirement fidelity. Nothing closes until both sign off.
-
-### Workflow
-
-```bash
-# Once per project
-/oms-start
-
-# Plan the current milestone (C-suite, no PM)
-/oms exec Q2 milestone — payments and user onboarding
-
-# Settle a technical decision within the milestone
-/oms how should we handle optimistic locking for concurrent reservations
-
-# Execute cleared tasks
-/oms-work
-
-# If an agent behaved badly, capture it
-/oms-capture
-
-# Research mode — domain knowledge questions
-/oms how should we design the question bank to maximize honest self-reflection
-```
-
-### Project setup
-
-`/oms-start` ingests any starting material — CLAUDE.md, README, PRD, raw notes — asks which departments are active, runs a short intake questionnaire, and generates the context files OMS needs to route tasks correctly.
-
-OMS registers projects in `~/.claude/oms-config.json`. Without `/oms-start`, `/oms` will refuse to run.
 
 ---
 
