@@ -89,7 +89,7 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 - **Validation:** [agent → agent → agent]
 - **Depends:** none | TASK-NNN
 - **File-count:** [N] — number of files in Artifacts
-- **Model-hint:** qwen-coder | qwen | llama | gpt-oss | nemotron | gemma | stepfun — auto-derived from task characteristics
+- **Model-hint:** qwen-coder | qwen | llama | gpt-oss | nemotron | gemma | stepfun — **REQUIRED, auto-derived from task characteristics, enforced by validation hook**
 - **Script-model:** qwen-coder | qwen | llama | gpt-oss | nemotron | gemma | stepfun | omit — model the script's subprocess calls use (required if task produces a long-running script)
 - **Script-timeout:** 120s | 150s | 180s | omit — per-call timeout for subprocess inside the script (OpenRouter free tier: 120-180s)
 - **Script-partial-results:** true | false | omit — must be true if script loops over N items and calls a slow subprocess
@@ -224,6 +224,8 @@ If any rule fails: elaboration agent splits into two tasks with `Depends`.
 
 ## Queue Gate — Enforced Before Promoting draft → queued
 
+All validations below are BLOCKING — write is blocked if any fail.
+
 - [ ] Spec uses SHALL — one correct interpretation, no ambiguity
 - [ ] Spec makes no forward reference to unknown research output
 - [ ] Every scenario is GIVEN/WHEN/THEN — deterministic pass/fail
@@ -237,6 +239,37 @@ If any rule fails: elaboration agent splits into two tasks with `Depends`.
 - [ ] Scope is completable in one Claude session
 - [ ] Feature field references a real FEATURE-NNN in this queue
 - [ ] Interface-contract from feature discussion is in Context (cross-functional tasks)
+- [ ] **Model-hint is set and correct** (validated by ~/.claude/hooks/validate-model-hint.sh on every write)
+
+---
+
+## Model-Hint Enforcement — Blocking Validation
+
+All OMS queued tasks route through the LLM router — **Model-hint is mandatory**.
+
+**Validation Hook:** `~/.claude/hooks/validate-model-hint.sh`
+
+Fires on every Edit/Write to `cleared-queue.md`. Blocks the write if:
+1. **Missing Model-hint** on any queued task
+2. **Wrong Model-hint** — doesn't match auto-derived value based on Type + File-count + flags
+3. **Contradictory flags** — impl+large-context, speed-critical+large-context+≥4 files
+
+**Behavior:**
+```
+Task queued, Model-hint missing or wrong
+    ↓
+[model-hint] BLOCKED: Model-hint violations in cleared-queue.md:
+  TASK-NNN: Missing Model-hint → suggest qwen-coder
+[model-hint] Fix all suggestions above before queuing.
+    ↓
+Write blocked (exit 2) — task cannot be saved
+```
+
+**How to fix:**
+- Add the suggested Model-hint to the task
+- Or update task characteristics (Type, File-count, flags) to match desired model
+
+**Auto-derivation rules:** See §Model-hint derivation (line 183–200).
 
 ---
 
