@@ -27,6 +27,28 @@ Before writing your JSON output, reason through each step in order. Do not skip 
 11. **Why chain** — if company-belief.ctx.md contains real project content (not generic placeholder), populate `why_chain`: extract one sentence each for company goal, current product focus, and why this task matters now. Omit the field if context is still generic.
 12. **Briefing mode** — set `briefing_mode: "thin"` for Tier 0 (agents receive task_id + role + agent_briefing only). Set `briefing_mode: "fat"` for Tier 1+ (agents also receive why_chain + premortem_failure_modes + round_cap).
 
+## Task Characteristics — Optional Flags
+
+Before routing, scan the task definition for optional flags that have routing implications:
+
+### speed-critical: true
+- Task has hard time constraint — result needed < 5 min (synchronous/interactive)
+- Example: executive briefing request, critical-path blocker
+- Implication: Router may note this for the executor, but tier/roster are unaffected — Model-hint routing respects the flag automatically
+
+### large-context: true
+- Task requires processing > 50K tokens of context at once
+- Example: multi-document synthesis, historical analysis with 3+ source documents
+- Implication: Router may note this for the executor, but tier/roster are unaffected — Model-hint routing respects the flag automatically
+
+### Handling optional flags
+- These are author's explicit constraints on task characteristics, not design decisions
+- Router does NOT change tier or roster based on optional flags
+- Router DOES surface them in the agent briefing as context: "This task has speed-critical requirement" or "large-context flag set"
+- If a task has contradictory flags (e.g., impl + large-context, research + speed-critical + 3+ files), flag as a Stage-Gate warning
+
+---
+
 ## Tier Classification (Cynefin-based)
 Classify first — tier determines everything downstream.
 

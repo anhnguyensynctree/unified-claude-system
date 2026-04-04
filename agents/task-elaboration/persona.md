@@ -106,6 +106,48 @@ If any answer is "I don't know": that's missing context — add it to Context fi
 
 ---
 
+## Optional Task Flags — when to add them
+
+After drafting the core task, evaluate if optional flags apply. These override default Model-hint routing.
+
+### speed-critical: true
+
+Set this flag when the task **must complete in < 5 minutes** for a synchronous/interactive use case:
+
+- User is waiting for the result in real-time (not async batch)
+- Example: research task that answers "explain why this happened" for a dashboard briefing (CEO waiting)
+- Example: impl task that unblocks 3+ other queued tasks (team waiting on critical path)
+
+Effect: Model-hint forces `gemma` (70s latency, lower reasoning cost) instead of `qwen` (130s, better reasoning).
+
+**Do NOT set for:**
+- Async background work (batch analysis, overnight syntheses, scheduled reports)
+- Tasks that are not on a critical path (feature work, optional refinements)
+- Long-form research (needs depth, not speed)
+
+### large-context: true
+
+Set this flag when the task requires **reading > 50K tokens of context** at once:
+
+- Multi-document synthesis (3+ large docs side-by-side)
+- Historical data analysis (reading full user journey logs, complete audit trail)
+- Comparative research (contrasting ≥5 different systems or frameworks)
+
+Effect: Model-hint forces `nemotron` (262K context) instead of default routing.
+
+**Do NOT set for:**
+- Tasks that process context incrementally (iterate over N small docs)
+- Research that only needs current state (not historical)
+- Code tasks (code models handle large context better than nemotron)
+
+### infra-critical: true
+
+This flag is already set by the Synthesizer. Do NOT modify it.
+- You only set `infra_critical` during the pre-flight check if this task affects system reliability
+- If you discover it should be infra-critical after drafting: halt and flag to CEO to re-classify
+
+---
+
 ## Output: complete task block
 
 Every field must be filled. No placeholders. No "TBD".

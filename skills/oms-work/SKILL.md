@@ -85,6 +85,19 @@ Replace MILESTONE, TASK-ID, TITLE with actual values. Use `get_or_create_thread`
   Capture stdout as the task output. If exit code non-zero or output empty → retry once, then fall back to Agent tool with `model: "haiku"`.
 - If CRO validation fails on `qwen36` research task → re-run via Agent tool with `model: "sonnet"`
 
+**Optional task flags** — check before routing:
+
+If the task contains these flags, log them in the running message:
+- `speed-critical: true` → Executor has hard time constraint; model-hint already respects this
+- `large-context: true` → Executor needs to process 50K+ tokens; model-hint already respects this
+
+Example notification to Discord:
+```
+▶ TASK-100 — Analyze user patterns [speed-critical] `running`
+```
+
+Flags do NOT change routing — they are author's constraints that the Model-hint derivation already respects. Log them for visibility only.
+
 Each subagent receives this prompt:
 
 ```
