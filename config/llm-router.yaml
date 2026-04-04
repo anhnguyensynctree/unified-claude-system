@@ -1,15 +1,53 @@
+# Auto-generated from sync-openrouter-models.py
+# Run: python3 ~/.claude/bin/sync-openrouter-models.py
+
 model_list:
-  # Primary: OpenRouter free coding model
-  - model_name: qwen-coder
+  # Meta: Llama 3.3 70B Instruct (free) (2024-12-06, 65K ctx)
+  - model_name: llama-3.3-70b
+    litellm_params:
+      model: openrouter/meta-llama/llama-3.3-70b-instruct:free
+      api_key: os.environ/OPENROUTER_API_KEY
+      max_tokens: 8192
+
+  # OpenAI: gpt-oss-120b (free) (2025-08-05, 131K ctx)
+  - model_name: gpt-oss-120b
+    litellm_params:
+      model: openrouter/openai/gpt-oss-120b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+      max_tokens: 8192
+
+  # Google: Gemma 3 27B (free) (2025-03-11, 131K ctx)
+  - model_name: gemma-3-27b
+    litellm_params:
+      model: openrouter/google/gemma-3-27b-it:free
+      api_key: os.environ/OPENROUTER_API_KEY
+      max_tokens: 8192
+
+  # NVIDIA: Nemotron 3 Super (free) (2026-03-11, 262K ctx)
+  - model_name: nemotron-3-super
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3-super-120b-a12b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+      max_tokens: 8192
+
+  # Qwen: Qwen3.6 Plus (free) (2026-04-02, 1000K ctx)
+  - model_name: qwen-3.6-plus
+    litellm_params:
+      model: openrouter/qwen/qwen3.6-plus:free
+      api_key: os.environ/OPENROUTER_API_KEY
+      max_tokens: 8192
+
+  # Qwen: Qwen3 Coder 480B A35B (free) (2025-07-22, 262K ctx)
+  - model_name: qwen-3-coder
     litellm_params:
       model: openrouter/qwen/qwen3-coder:free
       api_key: os.environ/OPENROUTER_API_KEY
       max_tokens: 8192
 
-  # Fallback: OpenRouter free general model (1M context)
-  - model_name: qwen-3.6
+  # StepFun: Step 3.5 Flash (free) (2026-01-29, 256K ctx)
+  - model_name: stepfun-3.5
     litellm_params:
-      model: openrouter/qwen/qwen3.6-plus-preview:free
+      model: openrouter/stepfun/step-3.5-flash:free
       api_key: os.environ/OPENROUTER_API_KEY
       max_tokens: 8192
 
@@ -18,8 +56,9 @@ router_settings:
   num_retries: 1
   timeout: 120
   fallbacks:
-    - qwen-coder: [qwen-3.6]
-    - qwen-3.6: [qwen-coder]
+    - qwen-3.6-plus: [qwen-3-coder, stepfun-3.5]
+    - llama-3.3-70b: [gpt-oss-120b, gemma-3-27b]
+    - gpt-oss-120b: [nemotron-3-super, llama-3.3-70b]
 
 litellm_settings:
   drop_params: true

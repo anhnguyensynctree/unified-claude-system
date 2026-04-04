@@ -1,0 +1,41 @@
+# oms-start-client — LLM Reference
+
+Client marketing site initializer. Bootstraps from client-marketing-template — faster than /oms-start because stack, sections, tokens, and task queue are pre-built. Use for any local business client website.
+
+## Triggers — use /oms-start-client when
+
+- Starting a new client website project (any industry)
+- CEO has a new client and needs a site scaffolded quickly
+- Converting a client intake into a running OMS project
+
+Do NOT use for: SaaS products, internal tools, custom-architecture projects — use /oms-start for those.
+
+## Invocation
+
+```
+/oms-start-client                           # prompts for minimum input
+/oms-start-client Pho Saigon 88, San Jose   # inline client name + city
+```
+
+## What it does
+
+1. Collects: name, city, goal, optional Drive URL (max 5 questions)
+2. Research agent auto-fills: industry, colors, services, customer language, competitors
+3. Selects token preset from industry + visual research
+4. Clones template → new project dir at ~/code/clients/[slug]/
+5. Runs scripts/init-client.ts → generates all config + ctx files
+6. Triggers /oms-work → M1 starts immediately
+
+## What it does NOT do
+
+- Does not ask for approval on every data point — researches and decides
+- Does not block on media — Drive sync is M3, not M1
+- Does not re-ask questions already answered
+- Does not run /oms-exec — queue is pre-built from template
+
+## Key paths
+
+- Template source:  ~/.claude/templates/client-marketing-template/
+- Client projects:  ~/code/clients/[client-slug]/
+- Intake file:      [project]/client-intake.json
+- Research output:  [project]/client-profile.json

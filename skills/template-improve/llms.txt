@@ -1,0 +1,39 @@
+# template-improve — LLM Reference
+
+Post-project template improvement. Reads a completed client project, diffs against template defaults, applies improvements back to client-marketing-template. Run after each client ships.
+
+## Triggers
+
+- After a client project reaches M4 (deployed + passing)
+- User says "learn from [client]" or "update template from [client]"
+- After a significant pattern discovery mid-project
+
+## Invocation
+
+```
+/template-improve                          # reads current project
+/template-improve signaturevn              # reads named project
+/template-improve ~/code/clients/pho-saigon-88
+```
+
+## What it reads (client project)
+
+- .claude/agents/cleared-queue.md
+- .claude/agents/frontend-developer.ctx.md
+- apps/web/config/client.ts
+- apps/web/components/sections/ (new sections built)
+- retrospective.md (if exists)
+
+## What it writes (template only)
+
+- design/tokens/*.ts — preset refinements
+- apps/web/components/sections/ — new variants or sections
+- .claude/agents/*.ctx.template.md — new copy/UX rules
+- oms-init.json — updated section defaults
+- LEARNINGS.md — retrospective append
+
+## What it does NOT do
+
+- Never modifies the client project
+- Never adds client-specific logic to the template
+- Never adds a section with fewer than 3 variants

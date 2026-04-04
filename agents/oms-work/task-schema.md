@@ -77,7 +77,7 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 - **Feature:** FEATURE-NNN
 - **Milestone:** [milestone name]
 - **Department:** backend | frontend | qa | data | research | cto
-- **Type:** impl | research
+- **Type:** impl | research | gate
 - **Infra-critical:** true | false
 - **Spec:** The system SHALL [verb] [object] so that [outcome].
 - **Scenarios:** GIVEN [precondition] WHEN [trigger] THEN [outcome] | GIVEN ...
@@ -89,11 +89,46 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 - **Validation:** [agent → agent → agent]
 - **Depends:** none | TASK-NNN
 - **File-count:** [N] — number of files in Artifacts
-- **Model-hint:** qwen | haiku | sonnet — auto-derived from File-count + Type
-- **Script-model:** haiku | sonnet | qwen36 | omit — model the script's subprocess calls use (required if task produces a long-running script)
-- **Script-timeout:** 30s | 60s | 180s | omit — per-call timeout for subprocess inside the script
+- **Model-hint:** qwen-coder | qwen | llama | gpt-oss | nemotron | gemma | stepfun — auto-derived from task characteristics
+- **Script-model:** qwen-coder | qwen | llama | gpt-oss | nemotron | gemma | stepfun | omit — model the script's subprocess calls use (required if task produces a long-running script)
+- **Script-timeout:** 120s | 150s | 180s | omit — per-call timeout for subprocess inside the script (OpenRouter free tier: 120-180s)
 - **Script-partial-results:** true | false | omit — must be true if script loops over N items and calls a slow subprocess
 ```
+
+---
+
+## Gate Task Format (auto-appended — one per milestone, last task)
+
+Gate tasks are not authored through the OMS feature discussion. They are auto-appended to `cleared-queue.md` by the exec agent at milestone planning time — one per milestone, always the final task.
+
+```
+## TASK-NNN — Milestone Gate — [milestone name]
+- **Status:** queued
+- **Feature:** FEATURE-NNN
+- **Milestone:** [milestone name]
+- **Department:** qa
+- **Type:** gate
+- **Infra-critical:** false
+- **Spec:** The system SHALL pass all E2E scenarios for Milestone [X] with zero failures so that the milestone is closed.
+- **Scenarios:** GIVEN all milestone tasks are done WHEN full E2E suite runs THEN 0 test failures AND qa/milestones/[milestone-slug].json is written
+- **Artifacts:** qa/milestones/[milestone-slug].json — milestone closed sentinel
+- **Produces:** qa/milestones/[milestone-slug].json — milestone gate passed
+- **Verify:** ~/.claude/bin/ctx-exec "failing tests" pnpm exec playwright test | ~/.claude/bin/ctx-exec "gate file" ls qa/milestones/[milestone-slug].json
+- **Context:** [e2e spec files for this milestone]
+- **Activated:** qa
+- **Validation:** qa → cpo
+- **Depends:** [all final task IDs in milestone, comma-separated]
+- **File-count:** 1
+- **Model-hint:** sonnet
+```
+
+**Gate rules:**
+- One gate task per milestone — never per feature
+- `Depends` lists ALL final tasks in the milestone (not just direct predecessors)
+- `Type: gate` always routes to `sonnet` (Anthropic subscription) — never OpenRouter free models. Gate runs on subscription for reliability and speed.
+- When the gate task reaches `done`: the milestone is closed, CPO updates `product-direction.ctx.md`
+- Gate task failure = milestone stays open — no partial milestone close allowed
+- The sentinel file `qa/milestones/[milestone-slug].json` is written by the gate agent on pass; its absence means the gate never ran
 
 ---
 
@@ -126,7 +161,7 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 
 **Script-model** — the model the script's internal subprocess calls use. Required whenever a task produces a script that loops and calls claude --print or llm-route.sh. Drives CEO cost awareness at elaboration time. Omit for tasks that produce no such script.
 
-**Script-timeout** — per-call timeout for each subprocess invocation inside the script. Required when Script-model is set. Must match the model: haiku ≤ 30s, sonnet ≤ 60s, external (qwen36/opus) ≤ 180s. The script must wrap each call in `Promise.race` with this timeout and continue on failure.
+**Script-timeout** — per-call timeout for each subprocess invocation inside the script. Required when Script-model is set. Must match the model: OpenRouter free tier (all models) ≤ 120-180s (fair-use queueing). The script must wrap each call in `Promise.race` with this timeout and continue on failure.
 
 **Script-partial-results** — must be `true` when the script loops over N items. Means: write partial JSON to disk after each item, never accumulate-then-write at the end. CEO can inspect partial output even if the run is killed or a profile stalls.
 
@@ -146,11 +181,22 @@ A task is the right size when ALL are true:
 If any rule fails: elaboration agent splits into two tasks with `Depends`.
 
 **Model-hint derivation** (auto at elaboration time):
-- File-count ≤ 3 + Type: impl + Verify exists → `Model-hint: qwen`
-- File-count = 4 + Type: impl → `Model-hint: sonnet`
+
+*Code Generation & Implementation:*
+- File-count ≤ 3 + Type: impl + Verify exists → `Model-hint: qwen-coder` (primary for code)
+- File-count ≤ 3 + Type: impl + speed-critical flag → `Model-hint: gemma` (fastest option)
+- File-count = 4 + Type: impl → MUST split before queuing (violates sizing rules)
 - File-count > 4 → MUST split before queuing (violates sizing rules)
-- Type: research → `Model-hint: qwen36`
-- Infra-critical: true → `Model-hint: sonnet`
+
+*Analysis & Reasoning:*
+- Type: research + File-count ≤ 3 → `Model-hint: qwen` (best reasoning, 1M context)
+- Type: research + File-count 4-5 → `Model-hint: gpt-oss` (120B, large context)
+- Type: research + large-context flag → `Model-hint: nemotron` (262K context)
+- Type: research + speed-critical flag → `Model-hint: gemma` (fastest, good quality)
+
+*Subscription Routes (Quality Gates):*
+- Type: gate → `Model-hint: sonnet` (always — E2E gate runs on Sonnet for reliability)
+- Infra-critical: true + any Type → `Model-hint: sonnet` (highest reliability requirement)
 
 ---
 
@@ -163,6 +209,7 @@ If any rule fails: elaboration agent splits into two tasks with `Depends`.
 | Research | researcher → cro → cpo |
 | Engineering (any) | dev → qa → em |
 | CTO / infra-critical | dev → cto |
+| Gate | qa → cpo |
 
 **Feature sign-off** (runs after all tasks in feature are done):
 
@@ -206,23 +253,31 @@ Task:     draft → queued → in-progress → done
 
 ## Model Routing Rules (oms-work executor)
 
-Model-hint is auto-derived at elaboration time. oms-work reads it to route task execution.
+Model-hint is auto-derived at elaboration time. oms-work reads it to route task execution via llm-route.sh (free tier) or claude -p (subscription).
 
-| Condition | Model-hint | Route | Cost |
-|---|---|---|---|
-| File-count ≤ 3 + Type: impl + Verify exists | `qwen` | LiteLLM → qwen3-coder:free (OpenRouter) | $0 |
-| File-count 4 + Type: impl | `sonnet` | claude -p --model sonnet (subscription) | medium |
-| File-count > 4 (should not happen — split first) | split | n/a | n/a |
-| Type: research (any file count) | `qwen36` | LiteLLM → qwen3.6-plus:free (OpenRouter) | $0 |
-| Infra-critical: true (any file count) | `sonnet` | claude -p --model sonnet (subscription) | medium |
+| Model-hint | Route | Type | Cost | Latency | When to use |
+|---|---|---|---|---|---|
+| `qwen-coder` | LiteLLM → qwen3-coder:free | Code generation | Free | ~100s | Impl ≤3 files, code-heavy |
+| `qwen` | LiteLLM → qwen3.6-plus:free | Analysis/reasoning | Free | ~130s | Research, deep reasoning, 1M context |
+| `gpt-oss` | LiteLLM → gpt-oss-120b:free | Analysis/reasoning | Free | ~130s | Research, 120B parameters, general reasoning |
+| `nemotron` | LiteLLM → nemotron-3-super:free | Analysis/reasoning | Free | ~120s | Research, large context (262K), NVIDIA-opt |
+| `llama` | LiteLLM → llama-3.3-70b:free | General purpose | Free | ~120s | General reasoning, proven track record |
+| `gemma` | LiteLLM → gemma-3-27b:free | Fast fallback | Free | ~70s | Speed-critical, small task, lightweight |
+| `stepfun` | LiteLLM → stepfun-3.5-flash:free | Medium tasks | Free | ~90s | Medium complexity, fallback option |
+| `sonnet` | claude -p --model sonnet | Quality gate | Subscription | ~20-30s | Gate tasks, infra-critical, highest reliability |
 
-Fallback chains:
-- **qwen-routed (impl):** qwen3-coder:free → qwen-3.6:free → Haiku (subscription)
-- **qwen36-routed (research):** qwen-3.6:free → qwen3-coder:free → Haiku (subscription)
+**Fallback chains** (automatic escalation if timeout/error):
+- **Code tasks:** qwen-coder → llama → gemma → [timeout]
+- **Research tasks:** qwen → gpt-oss → nemotron → llama → gemma → [timeout]
+- **Speed-critical:** gemma → stepfun → llama → [timeout]
+- **Large context:** nemotron (262K) → qwen (1M) → gpt-oss (131K) → [timeout]
 
-**Research quality gate:** If CRO validation fails on a qwen36-routed research task, oms-work auto-retries with Sonnet before marking the task failed. This ensures research quality without paying Sonnet cost on every research task.
+**Quality gates (subscription only):**
+- **Gate tasks (milestone validation):** Always Sonnet — never OpenRouter models
+- **Infra-critical tasks:** Always Sonnet — critical reliability requirement
+- **CRO validation failure on research:** Auto-retry with Sonnet before marking failed (cost-quality tradeoff)
 
-Browse QA (Phase 2) always runs on Sonnet — never routed to external LLMs.
+**Browser QA (Phase 2):** Always runs on Sonnet — never routed to external LLMs.
 
 ---
 

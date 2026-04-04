@@ -108,7 +108,7 @@ Instructions:
 4. Run validation chain: [agent → agent → agent]
    For each validator, use their role below to assess the output:
    - dev: correctness, completeness, code quality. Always run: `git ls-files | grep -E "node_modules|coverage|\.next|dist/|\.env$"` — any results = FAIL (IQ1). Not scaffold-specific; runs on every task.
-   - qa: each acceptance criterion — pass or fail? Also verify: `git status --short` shows only source files — no build artifacts, no dependency dirs. For any task that adds or changes a user-facing flow: confirm an E2E spec exists under `e2e/<flow>.spec.ts` and passes (`pnpm exec playwright test`). Missing E2E for a UI/flow task = FAIL.
+   - qa: each acceptance criterion — pass or fail? Also verify: `git status --short` shows only source files — no build artifacts, no dependency dirs. For any task that adds or changes a user-facing flow: confirm an E2E spec exists under `e2e/<flow>.spec.ts` and passes (`pnpm exec playwright test`). Missing E2E for a UI/flow task = FAIL. For any task that removes or replaces a component: run `grep -rl 'data-testid' e2e/` and check that no remaining spec references a testid belonging to the removed component — stale specs that would fail CI = FAIL.
      **Browse evidence QA — required for every UI/flow task:** After E2E passes, use `/browse` to screenshot each acceptance criterion for this task only (not the full E2E suite) against the live deployed URL (Vercel production or localhost if not yet deployed). Navigate to the relevant page, take a screenshot, confirm the criterion is visually met. Save to `qa/screenshots/TASK-NNN-<criterion>.png`. If the page shows an error state, wrong content, or a console/network error: FAIL. No screenshot evidence = FAIL.
    - em: final approval — spec met, ready to merge? Confirm git diff is scoped to task deliverables only — no unintended files.
    - researcher: methodology sound, findings complete?
@@ -140,8 +140,13 @@ Instructions:
    proj_path = Path('PROJECT_PATH')
    mf = proj_path / '.claude' / 'oms-metrics.json'
    rows = json.loads(mf.read_text()) if mf.exists() else []
-   rows.append({'task_id': record['task_id'], 'slug': record['slug'], 'title': record['title'],
-                'date': record['date'], 'passed': record['passed'], 'fail_at': record['fail_at'], 'cost_usd': None})
+   rows.append({
+       'task_id': record['task_id'], 'slug': record['slug'], 'title': record['title'],
+       'date': record['date'], 'passed': record['passed'], 'fail_at': record['fail_at'],
+       'cost_usd': None, 'validators': record['validators'],
+       'milestone': record['milestone'], 'type': record['type'],
+       'first_pass': None, 'notes': record['notes'],
+   })
    mf.write_text(json.dumps(rows, indent=2))
    "
    ```
@@ -315,7 +320,10 @@ Before running: replace `FLOW_META_PLACEHOLDER` with a Python dict mapping prefi
 
 Replace `MILESTONE_NAME` and `PROJECT_SLUG` with actual values. This is a required step — if no screenshots exist, it means `page.screenshot()` calls are missing from the specs.
 
-**After posting — archive screenshots and delete browse QA evidence (mandatory):**
+**HARD GATE — archive is blocked until Discord post confirms success:**
+The `post_visual_qa_report` call above must print `Posted N screenshots in N groups` before the archive step runs. If it prints nothing, errors, or posts 0 screenshots — STOP. Fix the post first. Never run the archive command if the post did not succeed. This order is non-negotiable: Discord post → archive. Never archive → post.
+
+**After posting confirms success — archive screenshots and delete browse QA evidence (mandatory):**
 ```bash
 python3 -c "
 import shutil, os

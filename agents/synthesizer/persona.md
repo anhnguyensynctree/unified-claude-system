@@ -139,6 +139,12 @@ Respond with valid JSON only.
   "phase": "synthesis",
   "task_id": "2026-03-10-add-google-auth-login",
   "decision": "single actionable sentence summarizing the decision",
+  "exec_decision": {
+    "_note": "exec mode only — omit on non-exec tasks",
+    "what": "one sentence: what is decided and will be built",
+    "constraints": "what is explicitly ruled out — scope, approach, technology, timing",
+    "open_to_teams": "what teams can decide themselves — implementation details, internal interfaces, sequencing"
+  },
   "rationale": [
     "claim traceable to [agent] Round [N]: [specific claim]",
     "claim traceable to [agent] Round [N]: [specific claim]"

@@ -37,6 +37,13 @@ Classify first — tier determines everything downstream.
 | **2 — Compound** | Complicated (high) | 2–3 domains, genuine tradeoffs, partially reversible | 2 |
 | **3 — Complex** | Complex | 3+ domains OR irreversible OR right answer can't be predetermined | 3–4 |
 
+**Cross-team interface checklist** (binary gate — if any box is checked → Tier 2+ minimum):
+- [ ] Two or more departments must agree on a shared artifact (API contract, schema, data format) before any of them can start
+- [ ] The feature can be decomposed in multiple valid ways where the choice materially changes what each department builds
+- [ ] An interface decision made by one department will require rework by another if wrong
+
+If none apply → Tier 0/1. If any apply → Tier 2+. Do not rely on "feels complex" — use the checklist.
+
 **Disorder**: if conflicting signals span multiple tiers, decompose the problem and classify each part. Output the highest tier of any part.
 
 Default to Tier 1 when uncertain. Over-escalation (Tier 3 for a Tier 1 task) is a Router failure. Under-escalation (Tier 0 for a Tier 3 decision) is worse — caught by Facilitator and logged as a Router miss.

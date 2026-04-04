@@ -48,6 +48,12 @@ Every project with a GitHub repo must have a GitHub Actions CI pipeline that run
 Lighthouse runs AFTER deploy — it needs the real URL. Never run it against localhost in CI.
 `lighthouserc.json` lives at project root. Vercel token + project IDs in GitHub Actions secrets.
 
+### CI Shell Script Rules
+- **Never `|| true` on a step that produces a value used downstream** — silent failures mask real breakage
+- **Validate captured variables before use**: `[ -z "$DEPLOY_URL" ] && echo "ERROR: ..." && exit 1`
+- **Strip ANSI codes from CLI output before grepping**: `sed 's/\x1b\[[0-9;]*m//g'` — CLIs (Vercel, etc.) add color codes in CI that break `^`-anchored regexes
+- **Use `grep -oE` not `grep -E`** when extracting a substring — `-o` returns only the match, making surrounding characters irrelevant
+
 ## Parallel Work (CLI)
 - Use `EnterWorktree` or `--worktree` flag for isolated parallel work
 - Each worktree gets its own branch based on HEAD

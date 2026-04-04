@@ -429,8 +429,16 @@ The executive discussion. C-suite meets to evaluate product direction, translate
 
 **Exec follows the same full step pipeline as any other task — Steps 1 through 8.5, no exceptions.** The only differences from a regular task are the roster, context, and synthesis output format. Do not skip or abbreviate any step.
 
+**Retrospective mode** — exec is runnable even when the queue is empty or no new milestone is planned. In this mode, Router skips milestone gap report and instead runs history injection only. C-suite reviews patterns, re-orients direction, and updates `product-direction.ctx.md`. No FEATURE blocks are written. Triggered automatically when `cleared-queue.md` has no `Status: draft` features and no queued milestone gap.
+
 **Step-by-step for exec:**
-1. **Step 1 — Router**: classify as exec, set tier (exec is always Tier 2 minimum), output `task_id`, `activated_agents` = CPO+CTO+CRO+CLO+CFO, `agent_briefings` with milestone gap report injected into CPO's briefing
+1. **Step 1 — Router**: classify as exec, set tier (exec is always Tier 2 minimum), output `task_id`, `activated_agents` = CPO+CTO+CRO+CLO+CFO, `agent_briefings` with milestone gap report injected into CPO's briefing.
+
+   **Before building agent briefings — always, on every exec run**, Router reads two history sources and injects them as shared context into ALL C-suite briefings:
+   - **`## Known Failure Patterns`** — read `.claude/cleared-queue.md`, extract all CTO-stop entries and `needs-review` notes. Group recurring themes (same root cause appearing 2+ times). If none: omit section.
+   - **`## Previous Milestone Signals`** — read `.claude/agents/product-direction.ctx.md` completed milestones section. Extract: what shipped, what got reworked, what took longer than scoped. If no completed milestones: omit section.
+
+   These sections appear in every C-suite agent's briefing so every exec discussion starts with full project memory. No explicit trigger needed — this runs whether planning a new milestone or running retro.
 2. **Step 1.5 — Path Diversity**: run (exec is Tier 2+) — each C-suite agent gets a distinct strategic frame
 3. **Step 2 — Round 1**: all 5 agents post positions in parallel, blind NGT. Display each position to CEO.
 4. **Step 3 — Rounds 2+**: Facilitator runs between rounds. Continue until convergence or round cap.

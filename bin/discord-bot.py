@@ -44,6 +44,7 @@ if not _root.handlers:
     )
 log = logging.getLogger("oms-bot")
 
+
 # --- Thread registry: "slug:task_id" → discord.Thread ---
 task_threads: dict[str, discord.Thread] = {}
 _first_ready = True  # suppress repeated "bot online" on Discord gateway reconnects
@@ -317,7 +318,6 @@ async def _generate_completion_report(proj_path: str, task_id: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
-            env={**__import__("os").environ},
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
         return stdout.decode().strip()
@@ -396,6 +396,54 @@ async def on_ready():
         pass  # daily brief is handled by com.lewis.oms-brief launchd job
 
 
+
+
+def _record_work_session_cost(slug: str, cost_usd: float) -> None:
+    """Append a !work session total to oms-budget.json week/session spend."""
+    import datetime as _dt
+    budget_file = HOME / ".claude/oms-budget.json"
+    tmp = budget_file.with_suffix(".tmp")
+    try:
+        b = json.loads(budget_file.read_text()) if budget_file.exists() else {}
+        now = _dt.datetime.now(_dt.timezone.utc)
+
+        # Session window reset
+        window_hours = b.get("session_window_hours", 5)
+        start_raw = b.get("current_session_start", "")
+        if start_raw:
+            ss = _dt.datetime.fromisoformat(start_raw)
+            if ss.tzinfo is None:
+                ss = ss.replace(tzinfo=_dt.timezone.utc)
+            if (now - ss) >= _dt.timedelta(hours=window_hours):
+                b["current_session_spend_usd"] = 0.0
+                b["current_session_start"] = now.isoformat()
+        else:
+            b["current_session_start"] = now.isoformat()
+
+        # Week reset
+        week_start_raw = b.get("current_week_start", "")
+        if week_start_raw:
+            ws = _dt.datetime.fromisoformat(week_start_raw)
+            if ws.tzinfo is None:
+                ws = ws.replace(tzinfo=_dt.timezone.utc)
+            if (now - ws).days >= 7:
+                b["current_week_spend_usd"] = 0.0
+                b["current_week_start"] = now.isoformat()
+        else:
+            b["current_week_start"] = now.isoformat()
+
+        b["current_session_spend_usd"] = b.get("current_session_spend_usd", 0.0) + cost_usd
+        b["current_week_spend_usd"] = b.get("current_week_spend_usd", 0.0) + cost_usd
+        b.setdefault("work_sessions", []).append({
+            "slug": slug,
+            "cost_usd": cost_usd,
+            "ts": now.isoformat(),
+        })
+
+        tmp.write_text(json.dumps(b, indent=2))
+        tmp.replace(budget_file)
+    except Exception as exc:
+        log.error(f"[work] budget update failed: {exc}")
 
 
 def _budget_summary() -> str:
@@ -517,7 +565,6 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(project_path),
-                env={**os.environ},
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
             try:
@@ -545,7 +592,6 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(project_path) if project_path.exists() else str(HOME),
-                env={**os.environ},
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             response = stdout.decode().strip()
@@ -785,22 +831,40 @@ async def handle_project_message(
                 mention_author=False,
             )
             return
+        log.info(f"[work] {slug} — started")
         await message.add_reaction("⚙️")
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--permission-mode", "auto",
+            "--print", "--output-format", "json",
+            "--permission-mode", "auto",
             "--model", "claude-sonnet-4-6",
             "-p", f"/oms-work {slug}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(HOME),
-            env={**__import__("os").environ},
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
-        output = stdout.decode().strip()
+        raw = stdout.decode().strip()
         err = stderr.decode().strip()
         if bot.user:
             await message.remove_reaction("⚙️", bot.user)
+
+        # Extract cost + text from JSON output
+        session_cost: float | None = None
+        output = raw
+        try:
+            parsed = json.loads(raw)
+            session_cost = parsed.get("total_cost_usd")
+            output = parsed.get("result", "") or parsed.get("content", "") or raw
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        if session_cost is not None:
+            _record_work_session_cost(slug, session_cost)
+            log.info(f"[work] {slug} — done, cost ${session_cost:.4f}")
+        else:
+            log.info(f"[work] {slug} — done (no cost data)")
+
         if proc.returncode != 0 and err:
             if _is_rate_limited(err):
                 reset_iso = _rate_limit_reset_iso()
@@ -839,7 +903,6 @@ async def handle_thread_qa(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
-            env={**__import__("os").environ},
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
         response = stdout.decode().strip() or "_(no response)_"
@@ -1014,7 +1077,6 @@ async def handle_idea(message: discord.Message, content: str):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(project_path),
-            env={**os.environ},
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
         try:
@@ -1160,15 +1222,16 @@ async def poll_pending_resumes():
                     if ch:
                         await ch.send(f"[{slug}] No cleared-queue.md found — skipping auto-resume.")
                     continue
+                log.info(f"[work] {slug} — auto-resume started")
                 proc = await asyncio.create_subprocess_exec(
                     str(HOME / ".local/bin/claude"),
-                    "--print", "--permission-mode", "auto",
+                    "--print", "--output-format", "json",
+                    "--permission-mode", "auto",
                     "--model", "claude-sonnet-4-6",
                     "-p", f"/oms-work {slug}",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=str(HOME),
-                    env={**__import__("os").environ},
                 )
                 try:
                     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
@@ -1176,8 +1239,21 @@ async def poll_pending_resumes():
                     if ch:
                         await ch.send(f"[{slug}] auto-resume timed out (2h)")
                     continue
-                output = stdout.decode().strip()
+                raw = stdout.decode().strip()
                 err = stderr.decode().strip()
+                session_cost: float | None = None
+                output = raw
+                try:
+                    parsed = json.loads(raw)
+                    session_cost = parsed.get("total_cost_usd")
+                    output = parsed.get("result", "") or parsed.get("content", "") or raw
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+                if session_cost is not None:
+                    _record_work_session_cost(slug, session_cost)
+                    log.info(f"[work] {slug} — auto-resume done, cost ${session_cost:.4f}")
+                else:
+                    log.info(f"[work] {slug} — auto-resume done (no cost data)")
                 if proc.returncode != 0 and err:
                     if _is_rate_limited(err):
                         # Still rate limited — reschedule

@@ -61,6 +61,17 @@ State the project name, why `claude -p` subprocess is insufficient, expected cal
 Every security incident or correction gets appended to this file as a new rule.
 The configuration becomes an immune system that remembers every threat encountered.
 
+## Incident: daily-cosmos — 2026-04-04
+`claude --print` subprocesses (blinded-judge, contrastive-judge, synthesize-calibration) were firing SessionEnd hooks (mem0-extract.sh) on every call — each hook made another Claude call to extract facts from a 2-line conversation. A 21-profile calibration run burned 2x the tokens needed and hit the Max subscription limit.
+
+**Rule: ALL `claude -p` / `claude --print` subprocess calls in ALL projects MUST include `--bare`.**
+
+`--bare` skips hooks, LSP, plugin sync, attribution, auto-memory, and background prefetches. Subprocesses are one-shot LLM calls — they don't need any of that.
+
+Pattern: `claude --print --bare --model <model> < input.txt`
+
+When writing any new `claude --print` call or reviewing existing ones: if `--bare` is missing, add it. This applies globally — not just daily-cosmos.
+
 ## Incident: cadence project — 2026-03-27
 cadence/llm.py called `claude -p` with no `--model` flag, defaulting to Sonnet 4.6 during a batch music generation run (9+ calls, ~10 min). Subscription usage, not API key — but Sonnet is 20x more expensive than Haiku for the same task. Rule: all `claude -p` / `claude --print` calls must include an explicit `--model` flag. Fixed: added `--model claude-haiku-4-5-20251001` to cadence/llm.py.
 

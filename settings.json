@@ -17,7 +17,7 @@
       "Agent"
     ]
   },
-  "model": "sonnet",
+  "model": "haiku",
   "hooks": {
     "PreToolUse": [
       {
@@ -44,6 +44,15 @@
           {
             "type": "command",
             "command": "jq -r '.tool_input.command' | grep -q 'git push' && echo '[Hook] Review your diff before pushing. Run /review-pr first.' >&2 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r '.tool_input.command'); echo \"$CMD\" | grep -q 'git commit' || exit 0; TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; cd \"$TOPLEVEL\" && ~/.claude/bin/check-stale-testids.sh"
           }
         ]
       },
@@ -149,6 +158,10 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/schema-sync-hook.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/validate-model-hint.sh"
           }
         ]
       },

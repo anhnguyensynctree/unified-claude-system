@@ -114,6 +114,164 @@ These agents are now live and will participate in Step 4's question round.
 - GitHub Actions detected → note in `cto.ctx.md` under `## CI`
 - Supabase detected → add to `backend-developer.ctx.md` under `## Database`
 
+**Auto-deploy wiring — mandatory when Vercel + web project detected:**
+
+When the project is a web app AND Vercel is the deploy target, first detect available credentials, then wire accordingly. Do not attempt a step whose credential is missing — report what's missing and skip that step only.
+
+**Credential detection (run before any wiring step):**
+```bash
+# Vercel token
+VERCEL_TOKEN=$(cat ~/.config/vercel/key 2>/dev/null)
+[ -z "$VERCEL_TOKEN" ] && echo "MISSING: ~/.config/vercel/key — run 'vercel login' first"
+
+# GitHub auth
+gh auth status 2>&1 | grep -q "Logged in" && echo "GitHub: OK" || echo "MISSING: GitHub auth — run 'gh auth login' first"
+
+# Vercel project link (.vercel/project.json or apps/web/.vercel/project.json)
+VERCEL_PROJECT=$(cat .vercel/project.json 2>/dev/null || cat apps/web/.vercel/project.json 2>/dev/null)
+[ -z "$VERCEL_PROJECT" ] && echo "MISSING: .vercel/project.json — run 'vercel link' in the app directory first"
+```
+
+Only proceed with steps that have their required credential. Tell CEO which steps were skipped and why.
+
+1. **Create GitHub repo** (if no remote exists — requires GitHub auth):
+   ```bash
+   # Check for existing remote
+   git remote -v
+   # If none: create private repo, add remote, push
+   gh repo create [slug] --private --description "[project description]"
+   git remote add origin https://github.com/[gh-username]/[slug].git
+   git branch -M main
+   git push -u origin main
+   ```
+   Read GitHub username from: `gh api user --jq .login`
+
+2. **Set GitHub Actions secrets**:
+   ```bash
+   VERCEL_TOKEN=$(cat ~/.config/vercel/key)
+   # Read projectId and orgId from .vercel/project.json or apps/web/.vercel/project.json
+   gh secret set VERCEL_TOKEN --body "$VERCEL_TOKEN" --repo [gh-username]/[slug]
+   gh secret set VERCEL_ORG_ID --body "[orgId]" --repo [gh-username]/[slug]
+   gh secret set VERCEL_PROJECT_ID --body "[projectId]" --repo [gh-username]/[slug]
+   ```
+
+3. **Write `.github/workflows/ci.yml`** at the repo root (not inside any subdirectory):
+   ```yaml
+   name: CI
+
+   on:
+     push:
+       branches: [main]
+     pull_request:
+
+   jobs:
+     ci:
+       runs-on: ubuntu-latest
+       permissions:
+         pull-requests: write
+         contents: read
+
+       steps:
+         - name: Checkout
+           uses: actions/checkout@v4
+
+         - uses: pnpm/action-setup@v4
+           with:
+             version: 9
+
+         - uses: actions/setup-node@v4
+           with:
+             node-version: 20
+             cache: pnpm
+
+         - name: Install dependencies
+           run: pnpm install --frozen-lockfile
+
+         - name: Lint
+           run: pnpm --filter web lint
+
+         - name: Typecheck
+           run: pnpm --filter web exec tsc --noEmit
+
+         - name: Build
+           run: pnpm --filter web build
+
+         - name: Start Next.js server
+           run: |
+             pnpm --filter web exec next start &
+             npx wait-on http://localhost:3000 --timeout 60000
+
+         - name: Install Playwright browsers
+           run: pnpm --filter web exec playwright install chromium --with-deps
+
+         - name: Playwright E2E
+           id: e2e
+           run: pnpm --filter web exec playwright test --ignore-snapshots
+           continue-on-error: true
+           env:
+             BASE_URL: http://localhost:3000
+
+         - name: Upload E2E screenshots on failure
+           if: steps.e2e.outcome == 'failure'
+           uses: actions/upload-artifact@v4
+           with:
+             name: e2e-screenshots
+             path: apps/web/qa/screenshots/
+             if-no-files-found: ignore
+
+         - name: Fail if E2E failed
+           if: steps.e2e.outcome == 'failure'
+           run: exit 1
+
+         - name: Deploy to Vercel
+           id: vercel-deploy
+           run: |
+             if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+               DEPLOY_URL=$(npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod 2>&1 | tail -1)
+             else
+               DEPLOY_URL=$(npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | tail -1)
+             fi
+             echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+           env:
+             VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+             VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+         - name: Install Lighthouse CI
+           run: npm install -g @lhci/cli
+
+         - name: Run Lighthouse CI
+           id: lighthouse
+           run: lhci autorun --collect.url=${{ steps.vercel-deploy.outputs.url }} --config=lighthouserc.json 2>&1
+           continue-on-error: true
+
+         - name: Fail if Lighthouse failed
+           if: steps.lighthouse.outcome == 'failure'
+           run: exit 1
+   ```
+   Adapt filter names (`--filter web`) to the actual workspace package name. For non-monorepo projects, remove `--filter web` and adjust paths.
+
+4. **Update oms-config.json** with github and deploy fields:
+   ```python
+   cfg['projects']['[slug]']['deploy'] = 'vercel'
+   cfg['projects']['[slug]']['github'] = '[gh-username]/[slug]'
+   ```
+
+5. **Commit and push** the workflow:
+   ```bash
+   git add .github/workflows/ci.yml
+   git commit -m "ci: add GitHub Actions CI/CD with Vercel auto-deploy"
+   git push origin main
+   ```
+
+6. **Verify** the first CI run triggers: `gh run list --repo [gh-username]/[slug] --limit 1`
+
+Tell CEO: "GitHub repo created + CI/CD wired — every push to main auto-deploys to Vercel."
+
+**Notes:**
+- `--ignore-snapshots` is required in E2E step — CI runs Linux, local snapshots are macOS-specific. Functional assertions still run; visual regression runs locally only.
+- If `gh repo create` fails (repo already exists): skip creation, just add remote and push.
+- If `.vercel/project.json` is missing: run `vercel link` in the web app directory first.
+
 ## Step 4 — Agent Question Round (parallel)
 
 Run ALL active agents in parallel. Each agent reads `IDEA.md` (and any other material from Step 2) plus the scope summary from Step 3. Each agent produces:

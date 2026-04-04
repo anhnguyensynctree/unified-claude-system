@@ -6,6 +6,22 @@
 - Done = implementation + tests + tests passing. No exceptions.
 - Unit: components, hooks, utils | Integration: API routes, contracts | E2E: user flows (5 categories)
 
+## Stale Testid Prevention — Always Active (Global)
+
+When a component is removed or renamed: the task that removes it MUST also remove/update every E2E spec that references its `data-testid` values — same commit, never deferred.
+
+**Enforcement: pre-commit hook** (`~/.claude/bin/check-stale-testids.sh`) fires on every `git commit` globally via `~/.claude/settings.json`. It extracts all `data-testid` values from `e2e/` specs and verifies each exists in source components. Stale ids = commit blocked.
+
+**Manual check before committing after any component removal:**
+```bash
+grep -rl 'data-testid="OLD-TESTID"' apps/web/e2e/   # monorepo
+grep -rl 'data-testid="OLD-TESTID"' e2e/              # flat project
+```
+
+**OMS work enforcement:** The inline QA validator description in `~/.claude/skills/oms-work/SKILL.md` requires this grep check for any task that removes or replaces a component — stale specs that would fail CI = FAIL.
+
+**New projects:** The global pre-commit hook auto-detects `e2e/`, `apps/web/e2e/`, `src/e2e/`, `tests/e2e/` — no per-project configuration needed.
+
 ## E2E User Inputs — Always Realistic, Always Non-Technical
 All E2E test inputs must read like a real end user typed them — never placeholder text, never developer shorthand.
 

@@ -6,6 +6,7 @@ Shorthand for `/oms exec`. C-suite selects the next milestone and produces FEATU
 ```
 /oms-exec                        # C-suite picks next milestone automatically
 /oms-exec [milestone name]       # force a specific milestone
+/oms-exec retro                  # retrospective mode — no new milestone needed; C-suite reviews failure patterns + milestone history, re-orients product-direction.ctx.md
 ```
 
 ## Auto-selection behavior

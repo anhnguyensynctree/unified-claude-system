@@ -62,6 +62,53 @@ def _rate_limit_reset_iso() -> str:
     return (_dt2.datetime.now(_dt2.timezone.utc) + _dt2.timedelta(hours=5)).isoformat()
 
 
+def _update_budget(cost_usd: float) -> None:
+    """Add task cost to current session + week spend in oms-budget.json."""
+    import datetime as _dt
+    if cost_usd <= 0:
+        return
+    try:
+        data: dict = json.loads(BUDGET_FILE.read_text()) if BUDGET_FILE.exists() else {}
+        now = _dt.datetime.now(_dt.timezone.utc)
+
+        # Reset week if 7+ days elapsed
+        week_start_raw = data.get('current_week_start', '')
+        if week_start_raw:
+            ws = _dt.datetime.fromisoformat(week_start_raw)
+            if ws.tzinfo is None:
+                ws = ws.replace(tzinfo=_dt.timezone.utc)
+            if (now - ws).days >= 7:
+                data['current_week_start'] = now.isoformat()
+                data['current_week_spend_usd'] = 0.0
+        else:
+            data['current_week_start'] = now.isoformat()
+            data['current_week_spend_usd'] = 0.0
+
+        # Reset session if window expired
+        session_start_raw = data.get('current_session_start', '')
+        window_h = data.get('session_window_hours', 5)
+        if session_start_raw:
+            ss = _dt.datetime.fromisoformat(session_start_raw)
+            if ss.tzinfo is None:
+                ss = ss.replace(tzinfo=_dt.timezone.utc)
+            if (now - ss) > _dt.timedelta(hours=window_h):
+                data['current_session_start'] = now.isoformat()
+                data['current_session_spend_usd'] = 0.0
+        else:
+            data['current_session_start'] = now.isoformat()
+            data['current_session_spend_usd'] = 0.0
+
+        data['current_week_spend_usd'] = round(data.get('current_week_spend_usd', 0) + cost_usd, 6)
+        data['current_session_spend_usd'] = round(data.get('current_session_spend_usd', 0) + cost_usd, 6)
+        data['last_updated'] = now.isoformat()
+
+        tmp = str(BUDGET_FILE) + '.tmp'
+        Path(tmp).write_text(json.dumps(data, indent=2))
+        Path(tmp).replace(BUDGET_FILE)
+    except Exception as exc:
+        print(f'[oms-work] failed to update budget: {exc}', file=sys.stderr)
+
+
 def write_task_metrics(
     queue_path: Path,
     project_path: Path,
@@ -69,12 +116,25 @@ def write_task_metrics(
     cost_usd: float,
     validator_log: list[tuple[str, bool, bool]],  # (name, first_pass, final_pass)
     passed: bool,
+    *,
+    slug: str = '',
+    title: str = '',
+    milestone: str = '',
+    task_type: str = '',
+    fail_at: str | None = None,
+    notes: str = '',
+    validator_details: dict[str, str] | None = None,  # name → full reason string
 ) -> None:
     """
-    Write cost + quality metrics into the task block in cleared-queue.md
-    and append a record to <project>/.claude/oms-costs.json.
+    Write cost + quality metrics into:
+      - cleared-queue.md (compact inline fields)
+      - <project>/.claude/oms-costs.json (project array)
+      - <project>/.claude/oms-metrics.json (same schema as SKILL path)
+      - ~/.claude/oms-costs/SLUG-TASK-NNN.json (individual file, SKILL-compatible)
+      - ~/.claude/oms-budget.json (session + week spend)
 
     validator_log entries: (validator_name, passed_first_attempt, passed_final)
+    validator_details: full reason strings per validator (optional)
     """
     import datetime as _dt
 
@@ -93,7 +153,17 @@ def write_task_metrics(
     validator_str = ' '.join(parts) if parts else 'none'
     first_pass_str = 'yes' if first_pass_all else 'no'
 
-    # Update cleared-queue.md — append metrics fields to the task block
+    # Build validator dict (full reasons) — matches SKILL path format
+    vdict: dict[str, str] = {}
+    if validator_details:
+        vdict = validator_details
+    else:
+        for name, first_ok, final_ok in validator_log:
+            vdict[name] = 'PASS' if final_ok else 'FAIL'
+
+    now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat() + 'Z'
+
+    # 1. Update cleared-queue.md — compact inline fields
     def replacer(m: re.Match) -> str:
         block = m.group(0)
         for field, value in [
@@ -116,7 +186,7 @@ def write_task_metrics(
     except Exception as exc:
         print(f'[oms-work] failed to write metrics to queue: {exc}', file=sys.stderr)
 
-    # Append to per-project oms-costs.json
+    # 2. Append to per-project oms-costs.json (legacy array format)
     costs_file = project_path / '.claude' / 'oms-costs.json'
     try:
         records: list = []
@@ -128,11 +198,62 @@ def write_task_metrics(
             'passed': passed,
             'first_pass': first_pass_all,
             'validators': validator_str,
-            'ts': _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            'ts': now_iso,
         })
         costs_file.write_text(json.dumps(records, indent=2))
     except Exception as exc:
         print(f'[oms-work] failed to write oms-costs.json: {exc}', file=sys.stderr)
+
+    # 3. Write individual file — SKILL-compatible schema
+    if slug:
+        ind_dir = Path.home() / '.claude' / 'oms-costs'
+        ind_dir.mkdir(exist_ok=True)
+        ind_file = ind_dir / f'{slug}-{task_id}.json'
+        try:
+            ind_file.write_text(json.dumps({
+                'task_id': task_id,
+                'slug': slug,
+                'title': title,
+                'type': task_type,
+                'milestone': milestone,
+                'date': now_iso,
+                'passed': passed,
+                'fail_at': fail_at,
+                'validators': vdict,
+                'cost_usd': round(cost_usd, 6),
+                'total_usd': round(cost_usd, 6),
+                'first_pass': first_pass_all,
+                'notes': notes,
+            }, indent=2))
+        except Exception as exc:
+            print(f'[oms-work] failed to write individual cost file: {exc}', file=sys.stderr)
+
+    # 4. Append to oms-metrics.json — same schema as SKILL path
+    metrics_file = project_path / '.claude' / 'oms-metrics.json'
+    try:
+        rows: list = []
+        if metrics_file.exists():
+            rows = json.loads(metrics_file.read_text())
+        rows.append({
+            'task_id': task_id,
+            'slug': slug,
+            'title': title,
+            'date': now_iso,
+            'passed': passed,
+            'fail_at': fail_at,
+            'cost_usd': round(cost_usd, 6),
+            'validators': vdict,
+            'milestone': milestone,
+            'type': task_type,
+            'first_pass': first_pass_all,
+            'notes': notes,
+        })
+        metrics_file.write_text(json.dumps(rows, indent=2))
+    except Exception as exc:
+        print(f'[oms-work] failed to write oms-metrics.json: {exc}', file=sys.stderr)
+
+    # 5. Update budget
+    _update_budget(cost_usd)
 
 
 def _write_pending_resume(slug: str, channel_id: str) -> None:
@@ -386,8 +507,12 @@ def run_claude(prompt: str, cwd: Path, model: str, allow_writes: bool = False) -
     args = [str(CLAUDE), '--print', '--output-format', 'json', '--model', model]
     if allow_writes:
         args.append('--dangerously-skip-permissions')
+    # Unset CLAUDECODE + related vars — prevents subprocess claude blocking for interactive input
+    # when oms-work.py is invoked from within a Claude Code session
+    env = {k: v for k, v in __import__('os').environ.items()
+           if k not in ('CLAUDECODE', 'CLAUDE_CODE', 'ANTHROPIC_CLAUDE_CODE')}
     # Prompt via stdin — avoids ARG_MAX limits and shell-escaping bugs in generated code
-    r = subprocess.run(args, input=prompt, capture_output=True, text=True, cwd=cwd, timeout=600)
+    r = subprocess.run(args, input=prompt, capture_output=True, text=True, cwd=cwd, timeout=600, env=env)
     if r.returncode != 0:
         print(f'[oms-work] claude exit {r.returncode}: {r.stderr[:200]}', file=sys.stderr)
         return '', r.returncode, r.stderr, 0.0
@@ -495,6 +620,9 @@ def execute_task(task: dict, project_path: Path,
     task_cost = 0.0
     # validator_log: (name, passed_first_attempt, passed_final)
     validator_log: list[tuple[str, bool, bool]] = []
+    validator_details: dict[str, str] = {}  # name → full reason string
+    task_notes = ''
+    task_fail_at: str | None = None
     try:
         model, is_external = resolve_model(task)
         print(f'[oms-work]   model: {model} ({"external" if is_external else "subscription"})', flush=True)
@@ -516,6 +644,7 @@ def execute_task(task: dict, project_path: Path,
             return False, notes
 
         summary = work_out[:300].replace('\n', ' ').strip()
+        task_notes = summary
         print(f'[oms-work]   exec: {summary[:120]}', flush=True)
 
         if task['type'] != 'research':
@@ -523,10 +652,16 @@ def execute_task(task: dict, project_path: Path,
                                 capture_output=True, text=True, cwd=wt)
             if not gs.stdout.strip():
                 remove_worktree(project_path, task['id'])
-                notes = 'CTO-STOP: hallucination — no files changed in worktree'
+                task_notes = 'CTO-STOP: hallucination — no files changed in worktree'
+                task_fail_at = 'hallucination'
+                write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log,
+                                   passed=False, slug=slug, title=task['title'],
+                                   milestone=task['milestone'], task_type=task['type'],
+                                   fail_at=task_fail_at, notes=task_notes,
+                                   validator_details=validator_details)
                 discord.notify_task(channel_id, threads_file, task['milestone'],
-                                    task['id'], task['title'], False, notes)
-                return False, notes
+                                    task['id'], task['title'], False, task_notes)
+                return False, task_notes
 
         research_retried = False
         for validator in task['validation']:
@@ -539,7 +674,7 @@ def execute_task(task: dict, project_path: Path,
                         and task.get('model_hint') == 'qwen36' and not research_retried):
                     print('[oms-work]   research quality insufficient — retrying with sonnet', flush=True)
                     research_retried = True
-                    work_out, code, _retry_err, retry_cost = run_claude(
+                    work_out, code, _, retry_cost = run_claude(
                         exec_prompt(task, wt), wt, 'claude-sonnet-4-6', allow_writes=True)
                     task_cost += retry_cost
                     if code == 0:
@@ -549,14 +684,22 @@ def execute_task(task: dict, project_path: Path,
                         print(f'[oms-work]   {"✓" if passed else "✗"} {validator} (sonnet retry): {reason[:100]}', flush=True)
                 if not passed:
                     validator_log.append((validator, False, False))
+                    validator_details[validator] = reason
+                    task_fail_at = validator
+                    task_notes = f'FAIL ({validator}): {reason[:200]}'
                     log_spec_failure(task, validator, reason)
-                    write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log, passed=False)
+                    write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log,
+                                       passed=False, slug=slug, title=task['title'],
+                                       milestone=task['milestone'], task_type=task['type'],
+                                       fail_at=task_fail_at, notes=task_notes,
+                                       validator_details=validator_details)
                     stop_type = 'CTO-STOP' if validator == 'cto' else 'FAIL'
                     notes = f'{stop_type} ({validator}): {reason[:200]} | branch: {branch}'
                     discord.notify_task(channel_id, threads_file, task['milestone'],
                                         task['id'], task['title'], False, notes)
                     return False, notes
             validator_log.append((validator, first_pass, passed))
+            validator_details[validator] = reason
 
         for cmd in task['verify']:
             vr = subprocess.run(cmd, shell=True, capture_output=True, text=True,
@@ -564,8 +707,14 @@ def execute_task(task: dict, project_path: Path,
             print(f'[oms-work]   {"✓" if vr.returncode == 0 else "✗"} verify `{cmd[:60]}`', flush=True)
             if vr.returncode != 0:
                 output = (vr.stdout + vr.stderr)[-300:].strip()
-                write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log, passed=False)
-                notes = f'FAIL (verify `{cmd}`): {output} | branch: {branch}'
+                task_fail_at = f'verify:{cmd[:60]}'
+                task_notes = f'FAIL (verify `{cmd}`): {output}'
+                write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log,
+                                   passed=False, slug=slug, title=task['title'],
+                                   milestone=task['milestone'], task_type=task['type'],
+                                   fail_at=task_fail_at, notes=task_notes,
+                                   validator_details=validator_details)
+                notes = f'{task_notes} | branch: {branch}'
                 discord.notify_task(channel_id, threads_file, task['milestone'],
                                     task['id'], task['title'], False, notes)
                 return False, notes
@@ -573,7 +722,12 @@ def execute_task(task: dict, project_path: Path,
         commit_worktree(wt, task['id'], task['title'])
         remove_worktree(project_path, task['id'])
 
-        write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log, passed=True)
+        task_notes = summary
+        write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log,
+                           passed=True, slug=slug, title=task['title'],
+                           milestone=task['milestone'], task_type=task['type'],
+                           fail_at=None, notes=task_notes,
+                           validator_details=validator_details)
         _, merge_notes = merge_to_main(project_path, branch, task['id'], task['title'])
         notes = f'{summary[:180]} | {merge_notes} | cost: ${task_cost:.4f}'
         print(f'[oms-work]   cost: ${task_cost:.4f}', flush=True)
@@ -584,8 +738,14 @@ def execute_task(task: dict, project_path: Path,
 
     except Exception as e:
         remove_worktree(project_path, task['id'])
-        write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log, passed=False)
-        notes = f'CTO-STOP: exception — {e}'
+        task_fail_at = 'exception'
+        task_notes = f'CTO-STOP: exception — {e}'
+        write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log,
+                           passed=False, slug=slug, title=task['title'],
+                           milestone=task['milestone'], task_type=task['type'],
+                           fail_at=task_fail_at, notes=task_notes,
+                           validator_details=validator_details)
+        notes = task_notes
         discord.notify_task(channel_id, threads_file, task['milestone'],
                             task['id'], task['title'], False, notes)
         return False, notes
@@ -594,18 +754,34 @@ def execute_task(task: dict, project_path: Path,
 # ── Milestone gate ───────────────────────────────────────────────────────────
 
 def detect_e2e_cmd(project_path: Path) -> str | None:
-    """Return the E2E test command if playwright is configured in this project."""
-    has_config = (
-        (project_path / 'playwright.config.ts').exists() or
-        (project_path / 'playwright.config.js').exists()
-    )
-    if not has_config:
-        return None
-    if (project_path / 'pnpm-lock.yaml').exists():
-        return 'pnpm exec playwright test'
-    if (project_path / 'bun.lockb').exists():
-        return 'bunx playwright test'
-    return 'npx playwright test'
+    """Return the E2E test command if playwright is configured in this project.
+    Deprecated: use detect_e2e() which also returns the correct cwd."""
+    cmd, _ = detect_e2e(project_path)
+    return cmd
+
+
+def detect_e2e(project_path: Path) -> tuple[str, Path] | tuple[None, None]:
+    """Return (e2e_cmd, cwd) where cwd is the directory containing playwright.config.ts.
+    Searches project root first, then common monorepo sub-packages (apps/*/,  packages/*/).
+    Returns (None, None) if playwright is not configured anywhere."""
+    candidates: list[Path] = [project_path]
+    # Monorepo sub-packages — check apps/* and packages/*
+    for subdir in ('apps', 'packages'):
+        parent = project_path / subdir
+        if parent.is_dir():
+            candidates.extend(sorted(parent.iterdir()))
+
+    for cwd in candidates:
+        if not cwd.is_dir():
+            continue
+        if (cwd / 'playwright.config.ts').exists() or (cwd / 'playwright.config.js').exists():
+            # Determine package manager from lock file (check cwd then root)
+            if (cwd / 'pnpm-lock.yaml').exists() or (project_path / 'pnpm-lock.yaml').exists():
+                return 'pnpm exec playwright test', cwd
+            if (cwd / 'bun.lockb').exists() or (project_path / 'bun.lockb').exists():
+                return 'bunx playwright test', cwd
+            return 'npx playwright test', cwd
+    return None, None
 
 
 
@@ -649,29 +825,41 @@ def run_milestone_gate(done_tasks: list[dict], project_path: Path,
                 verify_cmds.append(cmd)
                 seen.add(cmd)
 
-    e2e_cmd = detect_e2e_cmd(project_path)
+    e2e_cmd, e2e_cwd = detect_e2e(project_path)
+    # e2e_cwd is the directory containing playwright.config.ts (may be a sub-package like apps/web/)
+    # Fall back to project_path if not detected (keeps verify_cmds running correctly)
+    e2e_cwd = e2e_cwd or project_path
 
-    # If no playwright + UI tasks exist → queue a setup task so it doesn't silently skip forever
+    # Hard-fail if E2E is not found for a project with UI artifacts.
+    # Previously this silently queued a setup task and continued — that masked the M3 gate being
+    # a no-op (detect_e2e_cmd only looked at repo root; playwright.config.ts was in apps/web/).
     if not e2e_cmd:
         ui_tasks = [t for t in done_tasks
                     if any(ext in ' '.join(t.get('artifacts', []))
                            for ext in ('.tsx', '.jsx', '.html', '.css', 'page.', 'route.'))]
         if ui_tasks:
-            _queue_e2e_setup_task(project_path, milestone=next(iter(milestones), 'current'))
-            msg = '⚠️ **E2E not configured** — setup task added to queue. Run `/e2e` or process queue.'
+            # HARD FAIL — milestone gate must not pass without E2E on a UI project
+            msg = ('⛔ **Milestone gate BLOCKED** — playwright not found.\n'
+                   'E2E is required for UI milestones. Check that `playwright.config.ts` exists '
+                   'under the project root or a sub-package (apps/*, packages/*).\n'
+                   'Fix: ensure playwright is installed and `detect_e2e()` can locate the config.')
             thread_id = discord.get_or_create_thread(channel_id, threads_file,
                                                      next(iter(milestones), 'current'))
             if thread_id:
                 discord.post_to_thread(thread_id, msg)
-            print('[oms-work] ⚠ playwright not configured — E2E setup task queued', flush=True)
+            print('[oms-work] ⛔ BLOCKED — playwright not found; milestone gate cannot pass without E2E',
+                  flush=True)
+            return False  # gate fails — no milestone credit without E2E
 
     if not verify_cmds and not e2e_cmd:
-        print('[oms-work] Milestone gate: no verify commands or E2E — skip', flush=True)
+        print('[oms-work] Milestone gate: no verify commands or E2E — skip (non-UI milestone)', flush=True)
         return True
 
     milestone = next(iter(milestones)) if len(milestones) == 1 else 'multi-milestone'
     total = len(verify_cmds) + (1 if e2e_cmd else 0)
     print(f'\n[oms-work] ── Milestone gate ({total} check(s) on main) ──', flush=True)
+    if e2e_cmd:
+        print(f'[oms-work]   E2E cwd: {e2e_cwd}', flush=True)
 
     failures: list[str] = []
 
@@ -689,15 +877,16 @@ def run_milestone_gate(done_tasks: list[dict], project_path: Path,
     e2e_ok = True
     if e2e_cmd:
         # Clear browse per-task screenshots before E2E runs — only Playwright output should remain
-        shots_dir = project_path / 'qa' / 'screenshots'
+        # Use e2e_cwd so we clear the correct qa/screenshots/ (may be apps/web/qa/screenshots/)
+        shots_dir = e2e_cwd / 'qa' / 'screenshots'
         if shots_dir.exists():
             for f in shots_dir.glob('*.png'):
                 f.unlink(missing_ok=True)
-            print('[oms-work]   cleared qa/screenshots/ (browse task screenshots)', flush=True)
+            print(f'[oms-work]   cleared {shots_dir.relative_to(project_path)} (browse task screenshots)', flush=True)
 
         print(f'[oms-work]   running E2E suite: {e2e_cmd}', flush=True)
         er = subprocess.run(e2e_cmd, shell=True, capture_output=True, text=True,
-                            cwd=project_path, timeout=600)
+                            cwd=e2e_cwd, timeout=600)
         e2e_ok = er.returncode == 0
         print(f'[oms-work]   {"✓" if e2e_ok else "✗"} E2E suite', flush=True)
         if not e2e_ok:
@@ -720,15 +909,16 @@ def run_milestone_gate(done_tasks: list[dict], project_path: Path,
 
     # Archive + post Playwright screenshots to milestone thread
     if thread_id and e2e_cmd:
-        screenshots = _collect_media(project_path, passed)
+        screenshots = _collect_media(e2e_cwd, passed)
         if screenshots:
-            # Archive to qa/milestones/[milestone]/ as permanent record
-            archive_dir = project_path / 'qa' / 'milestones' / milestone.replace(' ', '-').lower()
+            # Archive to qa/milestones/[milestone]/ under e2e_cwd (sub-package) as permanent record
+            archive_dir = e2e_cwd / 'qa' / 'milestones' / milestone.replace(' ', '-').lower()
             archive_dir.mkdir(parents=True, exist_ok=True)
             for shot in screenshots:
                 dest = archive_dir / shot.name
                 dest.write_bytes(shot.read_bytes())
-            print(f'[oms-work]   archived {len(screenshots)} screenshot(s) → qa/milestones/{milestone}', flush=True)
+            rel = archive_dir.relative_to(project_path)
+            print(f'[oms-work]   archived {len(screenshots)} screenshot(s) → {rel}', flush=True)
 
             # Post all to Discord (batched — no cap)
             label = '🖼 Visual QA' if passed else '⚠️ E2E failure screenshots'

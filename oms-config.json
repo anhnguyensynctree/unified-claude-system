@@ -73,8 +73,17 @@
       "mobile": null
     },
     "signaturevn": {
-      "path": null,
+      "path": "/Users/Lewis/code/personal/signaturevn",
       "channel_id": "1489139291270676551",
+      "active": true,
+      "auto_start": true,
+      "deploy": "vercel",
+      "mobile": null,
+      "github": "anhnguyensynctree/signaturevn"
+    },
+    "base-trade": {
+      "path": "/Users/Lewis/code/personal/base_trade",
+      "channel_id": "1489856084142198864",
       "active": true,
       "auto_start": true,
       "deploy": null,
