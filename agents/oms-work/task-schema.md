@@ -71,6 +71,8 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 
 ## Task Queued Format (written by Task Elaboration Agent after /oms <feature>)
 
+**REQUIRED FIELDS** — All fields below must be present and non-empty. Validated and auto-synced by `~/.claude/hooks/schema-sync-hook.sh`.
+
 ```
 ## TASK-NNN — [title]
 - **Status:** queued
@@ -224,7 +226,14 @@ If any rule fails: elaboration agent splits into two tasks with `Depends`.
 
 ## Queue Gate — Enforced Before Promoting draft → queued
 
-All validations below are BLOCKING — write is blocked if any fail.
+All validations below are BLOCKING (exit 2) — write is blocked if any fail.
+
+**Three layers of validation (all fire automatically on Edit/Write):**
+1. **Schema validation** — required fields, format compliance
+2. **Schema sync** — REQUIRED_FIELDS auto-synced from task-schema.md ← NOW BLOCKING
+3. **Model-hint validation** — all queued tasks have correct Model-hint
+
+If any validation fails, fix and try saving again.
 
 - [ ] Spec uses SHALL — one correct interpretation, no ambiguity
 - [ ] Spec makes no forward reference to unknown research output
@@ -243,31 +252,44 @@ All validations below are BLOCKING — write is blocked if any fail.
 
 ---
 
-## Model-Hint Enforcement — Blocking Validation
+## Validation Hooks — All Blocking
 
-All OMS queued tasks route through the LLM router — **Model-hint is mandatory**.
+### 1. Schema Validation (validate-queue-hook.sh)
+Validates queue against this schema on every Edit/Write to `cleared-queue.md`:
+- All REQUIRED_FIELDS present
+- Field format compliance (SHALL language, GIVEN/WHEN/THEN, etc.)
+- No oversized tasks (>4 files)
+- Cross-milestone dependencies valid
 
-**Validation Hook:** `~/.claude/hooks/validate-model-hint.sh`
+**Blocks write (exit 2) if violations found.**
 
-Fires on every Edit/Write to `cleared-queue.md`. Blocks the write if:
+### 2. Schema Sync (schema-sync-hook.sh) — **NOW BLOCKING**
+Auto-syncs REQUIRED_FIELDS in `validate-queue.py` when `task-schema.md` is edited:
+- Parses "Task Queued Format" section from this file
+- Extracts required field list (excludes Status, Script-*, omit fields)
+- Auto-updates `validate-queue.py` if mismatch detected
+- **Blocks write (exit 2) if schema validation fails**
+
+**Behavior:**
+```
+Edit task-schema.md, add new required field
+    ↓
+[schema-sync] added fields: New-Field
+[schema-sync] validate-queue.py updated (17 required fields)
+    ↓
+✓ Write succeeds
+validate-queue.py now includes New-Field in REQUIRED_FIELDS
+```
+
+This ensures both files stay in sync automatically — no manual updates needed.
+
+### 3. Model-Hint Enforcement (validate-model-hint.sh)
+Validates all queued tasks have correct Model-hint on every Edit/Write to `cleared-queue.md`:
 1. **Missing Model-hint** on any queued task
 2. **Wrong Model-hint** — doesn't match auto-derived value based on Type + File-count + flags
 3. **Contradictory flags** — impl+large-context, speed-critical+large-context+≥4 files
 
-**Behavior:**
-```
-Task queued, Model-hint missing or wrong
-    ↓
-[model-hint] BLOCKED: Model-hint violations in cleared-queue.md:
-  TASK-NNN: Missing Model-hint → suggest qwen-coder
-[model-hint] Fix all suggestions above before queuing.
-    ↓
-Write blocked (exit 2) — task cannot be saved
-```
-
-**How to fix:**
-- Add the suggested Model-hint to the task
-- Or update task characteristics (Type, File-count, flags) to match desired model
+**Blocks write (exit 2) if violations found.**
 
 **Auto-derivation rules:** See §Model-hint derivation (line 183–200).
 
