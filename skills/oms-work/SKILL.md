@@ -72,18 +72,32 @@ d.notify_task(proj['channel_id'], tf, 'MILESTONE', 'TASK-ID', 'TITLE', None, 'ru
 ```
 Replace MILESTONE, TASK-ID, TITLE with actual values. Use `get_or_create_thread` + `post_to_thread` for the `▶ TASK-ID — title \`running\`` message.
 
-**Model routing per task** — read `Model-hint` from the task block:
+**Model routing per task** — read `Model-hint` and `Type` from the task block.
 
-- `Model-hint: sonnet` → Agent tool with `model: "sonnet"`
+**IMPORTANT: Prefer `!work` from Discord over `/oms-work` in REPL.** Discord runs `oms-work.py` which routes all free models via `llm-route.sh` natively. The REPL skill path below is a fallback only.
+
+**Route 1 — Bash → llm-route.sh (ALL task types with free model hints):**
+Both impl and research tasks use Bash → llm-route.sh when Model-hint is a free model:
+```bash
+printf '%s' "<full exec prompt>" | ~/.claude/bin/llm-route.sh <model-hint>
+```
+- Free model hints: `qwen-coder`, `qwen`, `llama`, `gpt-oss`, `nemotron`, `gemma`, `stepfun`
+- llm-route.sh handles fallback chains automatically (model unavailable → next in chain)
+- For impl tasks: llm-route.sh generates code → you write the files using Edit/Write tools → run tests
+- For research tasks: capture stdout as task output directly
+- If exit code non-zero or empty output → retry once with next model in chain, then fall back to Agent tool with `model: "haiku"`
+
+**Route 2 — Agent tool (subscription models only):**
+- `Model-hint: sonnet` → Agent tool with `model: "sonnet"` (gate tasks, infra-critical)
 - `Model-hint: haiku` → Agent tool with `model: "haiku"`
-- `Model-hint: missing` → Agent tool with `model: "sonnet"` (safe default)
-- `Model-hint: qwen` or `Model-hint: qwen36` → **Bash tool**, not Agent tool:
-  ```bash
-  printf '%s' "<full exec prompt>" | ~/.claude/bin/llm-route.sh qwen
-  # or qwen36 for research tasks
-  ```
-  Capture stdout as the task output. If exit code non-zero or output empty → retry once, then fall back to Agent tool with `model: "haiku"`.
-- If CRO validation fails on `qwen36` research task → re-run via Agent tool with `model: "sonnet"`
+- `Model-hint: missing` → use Bash → `llm-route.sh qwen` (defensive — validation should prevent this)
+
+**Route 3 — Validation (pass/fail judges):**
+- All validators: Bash → `llm-route.sh gemma` first (fastest free, ~70s)
+- Fallback to subscription haiku only if gemma fails or returns empty output
+
+**CRO research failure retry:**
+- Retry with `llm-route.sh qwen` (free, 1M context). If qwen also fails → escalate to sonnet as last resort.
 
 **Optional task flags** — check before routing:
 

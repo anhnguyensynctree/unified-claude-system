@@ -13,7 +13,9 @@ Pass → auto-merge to main + remove worktree.
 Fail → leave worktree open for review + notify Discord.
 Always posts final task status to Discord (CLI or Discord trigger).
 """
+from __future__ import annotations
 import json
+import os
 import re
 import subprocess
 import sys
@@ -504,7 +506,7 @@ def merge_to_main(project_path: Path, branch: str, task_id: str, title: str) -> 
 
 def run_claude(prompt: str, cwd: Path, model: str, allow_writes: bool = False) -> tuple[str, int, str, float]:
     """Returns (content, returncode, stderr, cost_usd). stderr non-empty only on failure."""
-    args = [str(CLAUDE), '--print', '--output-format', 'json', '--model', model]
+    args = [str(CLAUDE), '--print', '--bare', '--output-format', 'json', '--model', model]
     if allow_writes:
         args.append('--dangerously-skip-permissions')
     # Unset CLAUDECODE + related vars — prevents subprocess claude blocking for interactive input
@@ -525,6 +527,9 @@ def run_claude(prompt: str, cwd: Path, model: str, allow_writes: bool = False) -
 
 
 LLM_ROUTE = Path.home() / '.claude' / 'bin' / 'llm-route.sh'
+LITELLM_PORT = 4000
+LITELLM_URL = f'http://localhost:{LITELLM_PORT}'
+LITELLM_KEY = 'sk-litellm-local-dev'
 
 MODEL_MAP: dict[str | None, str] = {
     'haiku':  'claude-haiku-4-5-20251001',
@@ -532,27 +537,164 @@ MODEL_MAP: dict[str | None, str] = {
     'opus':   'claude-opus-4-6',
 }
 
+# All models routable via LiteLLM proxy (free OpenRouter tier)
+EXTERNAL_MODELS: set[str] = {
+    'qwen', 'qwen36', 'qwen-coder',
+    'llama', 'gpt-oss', 'nemotron', 'gemma', 'stepfun',
+}
+
+# Map short hint names to LiteLLM model IDs
+LITELLM_MODEL_MAP: dict[str, str] = {
+    'qwen':       'qwen-3.6-plus',
+    'qwen36':     'qwen-3.6-plus',
+    'qwen-coder': 'qwen-3-coder',
+    'llama':      'llama-3.3-70b',
+    'gpt-oss':    'gpt-oss-120b',
+    'nemotron':   'nemotron-3-super',
+    'gemma':      'gemma-3-27b',
+    'stepfun':    'stepfun-3.5',
+}
+
+# Fallback chains when primary model is rate-limited or unavailable
+LITELLM_FALLBACKS: dict[str, list[str]] = {
+    'qwen-3.6-plus':   ['qwen-3-coder', 'gpt-oss-120b', 'stepfun-3.5'],
+    'qwen-3-coder':    ['qwen-3.6-plus', 'llama-3.3-70b', 'stepfun-3.5'],
+    'llama-3.3-70b':   ['gpt-oss-120b', 'nemotron-3-super', 'gemma-3-27b'],
+    'gpt-oss-120b':    ['nemotron-3-super', 'llama-3.3-70b', 'qwen-3.6-plus'],
+    'gemma-3-27b':     ['llama-3.3-70b', 'stepfun-3.5'],
+    'nemotron-3-super': ['gpt-oss-120b', 'llama-3.3-70b'],
+    'stepfun-3.5':     ['qwen-3.6-plus', 'llama-3.3-70b'],
+}
+
+
+LITELLM_CONFIG = Path.home() / '.claude' / 'config' / 'llm-router.yaml'
+LITELLM_PID_FILE = Path('/tmp/litellm-proxy.pid')
+LITELLM_LOG = Path('/tmp/litellm-proxy.log')
+OPENROUTER_KEY_FILE = Path.home() / '.config' / 'openrouter' / 'key'
+
+
+def _litellm_health() -> bool:
+    """Quick health check — is LiteLLM responding?"""
+    import urllib.request
+    try:
+        req = urllib.request.Request(f'{LITELLM_URL}/health',
+                                     headers={'Authorization': f'Bearer {LITELLM_KEY}'})
+        urllib.request.urlopen(req, timeout=3)
+        return True
+    except Exception:
+        return False
+
+
+def _ensure_litellm() -> bool:
+    """Ensure LiteLLM proxy is running. Start it if not."""
+    if _litellm_health():
+        return True
+
+    # Check if PID file exists and process is alive
+    if LITELLM_PID_FILE.exists():
+        try:
+            pid = int(LITELLM_PID_FILE.read_text().strip())
+            os.kill(pid, 0)  # check if alive
+            # Process exists but not responding — give it a moment
+            import time
+            time.sleep(2)
+            if _litellm_health():
+                return True
+        except (ValueError, ProcessLookupError, OSError):
+            pass  # stale PID file
+
+    # Start LiteLLM proxy
+    if not LITELLM_CONFIG.exists():
+        print('[oms-work] LiteLLM config not found — cannot start proxy', file=sys.stderr)
+        return False
+
+    env = dict(os.environ)
+    if OPENROUTER_KEY_FILE.exists():
+        env['OPENROUTER_API_KEY'] = OPENROUTER_KEY_FILE.read_text().strip()
+
+    print('[oms-work] Starting LiteLLM proxy...', flush=True)
+    with open(LITELLM_LOG, 'w') as log_f:
+        proc = subprocess.Popen(
+            ['litellm', '--config', str(LITELLM_CONFIG), '--port', str(LITELLM_PORT)],
+            stdout=log_f, stderr=log_f, env=env,
+            start_new_session=True,  # detach from parent
+        )
+    LITELLM_PID_FILE.write_text(str(proc.pid))
+
+    # Wait for proxy to be ready (max 15s)
+    import time
+    for _ in range(30):
+        time.sleep(0.5)
+        if _litellm_health():
+            print('[oms-work] LiteLLM proxy ready', flush=True)
+            return True
+
+    print('[oms-work] LiteLLM failed to start after 15s', file=sys.stderr)
+    return False
+
+
+def _call_litellm(model_id: str, prompt: str, timeout_s: int = 360) -> tuple[str, int]:
+    """Call LiteLLM proxy directly via HTTP. Returns (content, returncode)."""
+    import urllib.request
+    payload = json.dumps({
+        'model': model_id,
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_tokens': 16000,
+    }).encode()
+    req = urllib.request.Request(
+        f'{LITELLM_URL}/chat/completions',
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {LITELLM_KEY}',
+            'Content-Type': 'application/json',
+        },
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=timeout_s)
+        data = json.loads(resp.read())
+        content = (data.get('choices', [{}])[0].get('message', {}).get('content', '') or '').strip()
+        if not content:
+            return '', 1
+        return content, 0
+    except Exception as e:
+        print(f'[oms-work] LiteLLM call failed ({model_id}): {e}', file=sys.stderr)
+        return '', 1
+
 
 def run_llm_route(model: str, prompt: str, cwd: Path) -> tuple[str, int]:
-    """Route to any LLM via llm-route.sh. Prompt passed via stdin — no arg/escaping limits."""
-    r = subprocess.run(
-        [str(LLM_ROUTE), model],
-        input=prompt,
-        capture_output=True, text=True, cwd=cwd, timeout=600,
-    )
-    if r.returncode != 0:
-        print(f'[oms-work] llm-route exit {r.returncode}: {r.stderr[:200]}', file=sys.stderr)
-    return r.stdout.strip(), r.returncode
+    """Route to free LLM via LiteLLM proxy (direct HTTP, no claude -p overhead).
+    Falls back through chain if primary model fails."""
+    model_id = LITELLM_MODEL_MAP.get(model, model)
+    chain = [model_id] + LITELLM_FALLBACKS.get(model_id, [])
+
+    if not _ensure_litellm():
+        print('[oms-work] LiteLLM proxy not available — falling back to llm-route.sh', file=sys.stderr)
+        r = subprocess.run(
+            [str(LLM_ROUTE), model], input=prompt,
+            capture_output=True, text=True, cwd=cwd, timeout=600,
+        )
+        return r.stdout.strip(), r.returncode
+
+    for i, mid in enumerate(chain):
+        print(f'[oms-work]   trying {mid} ({"primary" if i == 0 else "fallback " + str(i)})', flush=True)
+        content, rc = _call_litellm(mid, prompt)
+        if rc == 0 and content.strip():
+            return content, 0
+        print(f'[oms-work]   {mid} failed — {"trying next" if i < len(chain) - 1 else "all exhausted"}', flush=True)
+
+    return '', 1
 
 
 def resolve_model(task: dict) -> tuple[str, bool]:
     """Return (model_or_route, is_external) based on Model-hint field."""
     hint = task.get('model_hint')
-    if hint in ('qwen', 'qwen36'):
+    if hint in EXTERNAL_MODELS:
         return hint, True
     if hint in MODEL_MAP:
         return MODEL_MAP[hint], False
-    return MODEL_MAP['sonnet'], False
+    # Defensive only — validation hook should catch missing hints before execution
+    print(f'[oms-work]   WARN: missing Model-hint, defaulting to qwen (free)', flush=True)
+    return 'qwen', True
 
 
 # ── Execution + validation ────────────────────────────────────────────────────
@@ -589,7 +731,8 @@ def exec_prompt(task: dict, wt: Path) -> str:
 
 
 def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[bool, str, float]:
-    """Returns (passed, reason, cost_usd)."""
+    """Returns (passed, reason, cost_usd).
+    Tries free model (gemma — fastest) first; falls back to subscription haiku."""
     role = VALIDATOR_ROLE.get(validator.lower(),
                                f'Validate as {validator}: confirm all scenarios are met.')
     scenarios = '\n'.join(f'- {s}' for s in task['scenarios'])
@@ -598,7 +741,14 @@ def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[
     prompt = (f"Task ({task['id']}): {task['spec']}\n\nScenarios:\n{scenarios}{artifact_section}\n\n"
               f"Work summary: {summary}\n\nYour role: {role}\n\n"
               "Output EXACTLY: PASS — [reason]  OR  FAIL — [reason]. Nothing else.")
-    out, _, _err, cost = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
+    # Try free model first (gemma = fastest free, ~70s)
+    out, rc = run_llm_route('gemma', prompt, cwd)
+    if rc == 0 and out.strip():
+        print(f'[oms-work]   validator {validator} via gemma (free)', flush=True)
+        return out.strip().upper().startswith('PASS'), out.strip(), 0.0
+    # Fallback to subscription haiku
+    print(f'[oms-work]   validator {validator} gemma failed — falling back to haiku', flush=True)
+    out, rc, _err, cost = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
     return out.strip().upper().startswith('PASS'), out.strip(), cost
 
 
@@ -632,6 +782,12 @@ def execute_task(task: dict, project_path: Path,
         else:
             work_out, code, run_stderr, exec_cost = run_claude(exec_prompt(task, wt), wt, model, allow_writes=True)
             task_cost += exec_cost
+            # Rate-limited on subscription → fall back to llm-route.sh (free tier)
+            if code != 0 and _is_rate_limited(run_stderr):
+                print(f'[oms-work]   subscription rate-limited — falling back to llm-route {model} (free)', flush=True)
+                fallback_model = 'sonnet' if 'sonnet' in model else 'haiku' if 'haiku' in model else 'qwen'
+                work_out, code = run_llm_route(fallback_model, exec_prompt(task, wt), wt)
+                run_stderr = ''
         if code != 0:
             remove_worktree(project_path, task['id'])
             if slug and _is_rate_limited(run_stderr):
@@ -671,11 +827,17 @@ def execute_task(task: dict, project_path: Path,
             print(f'[oms-work]   {"✓" if passed else "✗"} {validator}: {reason[:100]}', flush=True)
             if not passed:
                 if (validator == 'cro' and task['type'] == 'research'
-                        and task.get('model_hint') == 'qwen36' and not research_retried):
-                    print('[oms-work]   research quality insufficient — retrying with sonnet', flush=True)
+                        and not research_retried):
                     research_retried = True
-                    work_out, code, _, retry_cost = run_claude(
-                        exec_prompt(task, wt), wt, 'claude-sonnet-4-6', allow_writes=True)
+                    # Try stronger free model (qwen — 1M ctx, deep reasoning) before sonnet
+                    print('[oms-work]   research quality insufficient — retrying with qwen (free)', flush=True)
+                    work_out, code = run_llm_route('qwen', exec_prompt(task, wt), wt)
+                    retry_cost = 0.0
+                    # If free model also fails, escalate to sonnet
+                    if code != 0 or not work_out.strip():
+                        print('[oms-work]   qwen retry failed — escalating to sonnet', flush=True)
+                        work_out, code, _, retry_cost = run_claude(
+                            exec_prompt(task, wt), wt, 'claude-sonnet-4-6', allow_writes=True)
                     task_cost += retry_cost
                     if code == 0:
                         summary = work_out[:300].replace('\n', ' ').strip()

@@ -185,16 +185,24 @@ If any rule fails: elaboration agent splits into two tasks with `Depends`.
 **Model-hint derivation** (auto at elaboration time):
 
 *Code Generation & Implementation:*
-- File-count ≤ 3 + Type: impl + Verify exists → `Model-hint: qwen-coder` (primary for code)
 - File-count ≤ 3 + Type: impl + speed-critical flag → `Model-hint: gemma` (fastest option)
+- File-count ≤ 3 + Type: impl + Verify exists → round-robin across code-capable models:
+  - `qwen-coder` (primary — 480B, specialized for code)
+  - `llama` (secondary — 70B, proven general-purpose, good at code)
+  - `gpt-oss` (tertiary — 120B, strong reasoning)
+  Elaboration agent assigns sequentially within a milestone to spread load across free models.
 - File-count = 4 + Type: impl → MUST split before queuing (violates sizing rules)
 - File-count > 4 → MUST split before queuing (violates sizing rules)
 
 *Analysis & Reasoning:*
-- Type: research + File-count ≤ 3 → `Model-hint: qwen` (best reasoning, 1M context)
-- Type: research + File-count 4-5 → `Model-hint: gpt-oss` (120B, large context)
-- Type: research + large-context flag → `Model-hint: nemotron` (262K context)
 - Type: research + speed-critical flag → `Model-hint: gemma` (fastest, good quality)
+- Type: research + large-context flag → `Model-hint: nemotron` (262K context)
+- Type: research + File-count ≤ 3 → round-robin across reasoning models:
+  - `qwen` (primary — 1M context, best reasoning)
+  - `nemotron` (secondary — 262K context, strong reasoning)
+  - `stepfun` (tertiary — 256K context, medium complexity)
+  Elaboration agent assigns sequentially within a milestone to spread load.
+- Type: research + File-count 4-5 → `Model-hint: gpt-oss` (120B, large context)
 
 *Subscription Routes (Quality Gates):*
 - Type: gate → `Model-hint: sonnet` (always — E2E gate runs on Sonnet for reliability)

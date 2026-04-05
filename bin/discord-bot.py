@@ -28,6 +28,7 @@ LOG_DIR = HOME / ".claude/logs"
 PENDING_DIR = HOME / ".claude/oms-pending"
 PENDING_RESUMES_FILE = HOME / ".claude/oms-pending-resumes.json"
 BUDGET_FILE = HOME / ".claude/oms-budget.json"
+LLM_ROUTE = HOME / ".claude/bin/llm-route.sh"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 PENDING_DIR.mkdir(parents=True, exist_ok=True)
@@ -314,7 +315,7 @@ async def _generate_completion_report(proj_path: str, task_id: str) -> str:
     try:
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--permission-mode", "auto", "-p", prompt,
+            "--print", "--bare", "--permission-mode", "auto", "-p", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
@@ -558,9 +559,9 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
             )
             proc = await asyncio.create_subprocess_exec(
                 str(HOME / ".local/bin/claude"),
-                "--print", "--permission-mode", "auto",
+                "--print", "--bare", "--permission-mode", "auto",
                 "--output-format", "json",
-                "--model", "claude-sonnet-4-6",
+                "--model", "claude-haiku-4-5-20251001",
                 "-p", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -584,17 +585,26 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
                 "You are acting as the OMS assistant helping them refine their project idea. "
                 "Do not run oms-start. Do not write any files. Just answer."
             )
-            proc = await asyncio.create_subprocess_exec(
-                str(HOME / ".local/bin/claude"),
-                "--print", "--permission-mode", "auto",
-                "--model", "claude-haiku-4-5-20251001",
-                "-p", prompt,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(project_path) if project_path.exists() else str(HOME),
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-            response = stdout.decode().strip()
+            qa_cwd = str(project_path) if project_path.exists() else str(HOME)
+            # Try free model first (gemma — fastest)
+            response = ""
+            try:
+                response, rc = await _run_llm_route('gemma', prompt, qa_cwd, timeout=120)
+            except Exception:
+                rc = 1
+            # Fallback to subscription haiku if free model fails
+            if rc != 0 or not response.strip():
+                proc = await asyncio.create_subprocess_exec(
+                    str(HOME / ".local/bin/claude"),
+                    "--print", "--bare", "--permission-mode", "auto",
+                    "--model", "claude-haiku-4-5-20251001",
+                    "-p", prompt,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=qa_cwd,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+                response = stdout.decode().strip()
 
         if response:
             for chunk in split_for_discord(response):
@@ -634,7 +644,7 @@ async def handle_claude_thread_reply(content: str, thread: discord.Thread):
     await thread.send("⏳")
     try:
         proc = await asyncio.create_subprocess_exec(
-            HOME / ".local/bin/claude", "--print", "--permission-mode", "auto", "-p", prompt,
+            HOME / ".local/bin/claude", "--print", "--bare", "--permission-mode", "auto", "-p", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(HOME),
@@ -663,7 +673,7 @@ async def handle_claude_message(message: discord.Message, content: str):
     await thread.send("⏳")
     try:
         proc = await asyncio.create_subprocess_exec(
-            HOME / ".local/bin/claude", "--print", "--permission-mode", "auto", "-p", content,
+            HOME / ".local/bin/claude", "--print", "--bare", "--permission-mode", "auto", "-p", content,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(HOME),
@@ -833,19 +843,51 @@ async def handle_project_message(
             return
         log.info(f"[work] {slug} — started")
         await message.add_reaction("⚙️")
-        proc = await asyncio.create_subprocess_exec(
-            str(HOME / ".local/bin/claude"),
-            "--print", "--output-format", "json",
-            "--permission-mode", "auto",
-            "--model", "claude-sonnet-4-6",
-            "-p", f"/oms-work {slug}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(HOME),
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
-        raw = stdout.decode().strip()
-        err = stderr.decode().strip()
+
+        # Call oms-work.py directly (Python script, not Claude skill)
+        use_fallback = False
+        raw = ""
+        err = ""
+        proc = None
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "python3",
+                str(HOME / ".claude" / "bin" / "oms-work.py"),
+                slug,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(HOME),
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
+            raw = stdout.decode().strip()
+            err = stderr.decode().strip()
+
+            # Check if rate limited — if so, retry with fallback
+            if proc.returncode != 0 and _is_rate_limited(err):
+                use_fallback = True
+        except Exception as e:
+            if "rate limit" in str(e).lower() or "429" in str(e):
+                use_fallback = True
+            else:
+                raise
+
+        # Rate-limited: schedule auto-resume (oms-work.py already falls back to
+        # free models internally — if it still fails, we wait for session reset)
+        if use_fallback:
+            log.info(f"[work] {slug} — rate limited, scheduling auto-resume")
+            reset_iso = _rate_limit_reset_iso()
+            _save_pending_resume(slug, str(channel.id), reset_iso)
+            import datetime as _dt
+            rt = _dt.datetime.fromisoformat(reset_iso).astimezone()
+            await message.reply(
+                f"⏸ Rate limit hit (oms-work.py already tried free models). "
+                f"Auto-resume at `{rt.strftime('%H:%M %Z')}`.",
+                mention_author=False,
+            )
+            if bot.user:
+                await message.remove_reaction("⚙️", bot.user)
+            return
+
         if bot.user:
             await message.remove_reaction("⚙️", bot.user)
 
@@ -865,7 +907,7 @@ async def handle_project_message(
         else:
             log.info(f"[work] {slug} — done (no cost data)")
 
-        if proc.returncode != 0 and err:
+        if proc and proc.returncode != 0 and err:
             if _is_rate_limited(err):
                 reset_iso = _rate_limit_reset_iso()
                 _save_pending_resume(slug, str(channel.id), reset_iso)
@@ -899,7 +941,7 @@ async def handle_thread_qa(
     try:
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--permission-mode", "auto", "-p", prompt,
+            "--print", "--bare", "--permission-mode", "auto", "-p", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=proj_path or str(HOME),
@@ -955,7 +997,7 @@ async def _extract_slug(idea: str) -> str:
     try:
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--model", "claude-haiku-4-5-20251001",
+            "--print", "--bare", "--model", "claude-haiku-4-5-20251001",
             "-p", (
                 "Extract a short project slug (1-3 words, kebab-case, lowercase) "
                 "that best names this product idea. Reply with ONLY the slug — no explanation, "
@@ -1070,7 +1112,7 @@ async def handle_idea(message: discord.Message, content: str):
     try:
         proc = await asyncio.create_subprocess_exec(
             str(HOME / ".local/bin/claude"),
-            "--print", "--permission-mode", "auto",
+            "--print", "--bare", "--permission-mode", "auto",
             "--output-format", "json",
             "--model", "claude-sonnet-4-6",
             "-p", prompt,
@@ -1128,6 +1170,21 @@ _RATE_LIMIT_PATTERNS = (
     "rate limit", "rate_limit", "usage limit", "claude max", "overloaded",
     "429", "529", "exceeded", "quota",
 )
+
+
+async def _run_llm_route(model: str, prompt: str, cwd: str | Path, timeout: int = 180) -> tuple[str, int]:
+    """Run llm-route.sh async. Returns (stdout, returncode)."""
+    proc = await asyncio.create_subprocess_exec(
+        str(LLM_ROUTE), model,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=str(cwd),
+    )
+    stdout, _ = await asyncio.wait_for(
+        proc.communicate(input=prompt.encode()), timeout=timeout
+    )
+    return stdout.decode().strip(), proc.returncode or 0
 
 
 def _is_rate_limited(err: str) -> bool:
@@ -1224,11 +1281,9 @@ async def poll_pending_resumes():
                     continue
                 log.info(f"[work] {slug} — auto-resume started")
                 proc = await asyncio.create_subprocess_exec(
-                    str(HOME / ".local/bin/claude"),
-                    "--print", "--output-format", "json",
-                    "--permission-mode", "auto",
-                    "--model", "claude-sonnet-4-6",
-                    "-p", f"/oms-work {slug}",
+                    "python3",
+                    str(HOME / ".claude" / "bin" / "oms-work.py"),
+                    slug,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=str(HOME),
