@@ -934,13 +934,15 @@ def validate_step(validator: str, task: dict, summary: str, cwd: Path,
               f"Your role: {role}\n"
               "Review the ACTUAL CODE above against each scenario. Check for correctness, completeness, and quality.\n\n"
               "Output EXACTLY: PASS — [reason]  OR  FAIL — [reason]. Nothing else.")
-    # Try free model first (gemma = fastest free, ~70s)
-    out, rc = run_llm_route('gemma', prompt, cwd)
-    if rc == 0 and out.strip():
-        print(f'[oms-work]   validator {validator} via gemma (free)', flush=True)
-        return out.strip().upper().startswith('PASS'), out.strip(), 0.0
-    # Fallback to subscription haiku
-    print(f'[oms-work]   validator {validator} gemma failed — falling back to haiku', flush=True)
+    # Try free models first (gemma fastest, then stepfun, then qwen)
+    # Fallback chain avoids single-model rate limit bottleneck
+    for free_model in ('gemma', 'stepfun', 'llama'):
+        out, rc = run_llm_route(free_model, prompt, cwd)
+        if rc == 0 and out.strip():
+            print(f'[oms-work]   validator {validator} via {free_model} (free)', flush=True)
+            return out.strip().upper().startswith('PASS'), out.strip(), 0.0
+    # All free models failed — fallback to subscription haiku
+    print(f'[oms-work]   validator {validator} all free failed — falling back to haiku', flush=True)
     out, rc, _err, cost = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
     return out.strip().upper().startswith('PASS'), out.strip(), cost
 
@@ -1723,6 +1725,50 @@ def detect_e2e(project_path: Path) -> tuple[str, Path] | tuple[None, None]:
 
 
 
+def _auto_queue_gate_fix(queue_path: Path, done_tasks: list[dict],
+                         channel_id: str, threads_file: Path) -> None:
+    """Auto-create a fix task when milestone gate fails.
+    Instead of manual debugging, queue a new task that references the failures."""
+    milestone = done_tasks[0].get('milestone', 'current') if done_tasks else 'current'
+    # Find next available task ID
+    text = queue_path.read_text(errors='replace')
+    existing_ids = re.findall(r'TASK-(\d+)', text)
+    next_num = max((int(n) for n in existing_ids), default=0) + 1
+    fix_id = f'TASK-{next_num:03d}'
+
+    fix_task = (
+        f'\n\n## {fix_id} — Fix milestone gate failures\n'
+        f'- **Status:** queued\n'
+        f'- **Feature:** gate-fix\n'
+        f'- **Milestone:** {milestone}\n'
+        f'- **Department:** qa\n'
+        f'- **Type:** impl\n'
+        f'- **Infra-critical:** false\n'
+        f'- **Spec:** The system SHALL pass all Verify commands and E2E tests on the main branch. '
+        f'Fix any test failures, type errors, or lint issues introduced by tasks in this milestone.\n'
+        f'- **Scenarios:** GIVEN the main branch after milestone merge '
+        f'WHEN all Verify commands are run THEN exit code 0 for every command '
+        f'| GIVEN the E2E suite WHEN playwright test runs THEN all specs pass\n'
+        f'- **Artifacts:** (files identified by test failures)\n'
+        f'- **Produces:** passing test suite on main\n'
+        f'- **Verify:** (same verify commands that failed at gate)\n'
+        f'- **Context:** none\n'
+        f'- **Activated:** qa-engineer\n'
+        f'- **Validation:** dev → qa → cto\n'
+        f'- **Depends:** none\n'
+        f'- **File-count:** 3\n'
+        f'- **Model-hint:** qwen-coder\n'
+    )
+    with open(queue_path, 'a') as f:
+        f.write(fix_task)
+    print(f'[oms-work] Auto-queued {fix_id} — fix milestone gate failures', flush=True)
+
+    if channel_id:
+        milestone_str = milestone if milestone else 'current'
+        discord.notify_task(channel_id, threads_file, milestone_str,
+                            fix_id, 'Fix milestone gate failures', False, 'queued (auto-created)')
+
+
 def _queue_e2e_setup_task(project_path: Path, milestone: str) -> None:
     """Append a playwright E2E setup task to cleared-queue.md if not already present."""
     queue_path = project_path / '.claude' / 'cleared-queue.md'
@@ -1888,15 +1934,43 @@ def _collect_media(project_path: Path, passed: bool) -> list[Path]:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+TASK_TIMEOUT_S = 1800  # 30 min per task max (TDD = ~8-15 min typical)
+
+
+def _cleanup_stale_worktrees(project_path: Path) -> None:
+    """Remove worktrees from tasks that are done or cto-stop (stale branches left on disk)."""
+    wt_dir = project_path / '.claude' / 'worktrees'
+    if not wt_dir.exists():
+        return
+    cleaned = 0
+    for wt in wt_dir.iterdir():
+        if wt.is_dir() and wt.name.startswith('task-'):
+            # Check if corresponding task is still in-progress
+            # If not, the worktree is stale
+            age_hours = (import_time() - wt.stat().st_mtime) / 3600
+            if age_hours > 24:  # older than 24h = definitely stale
+                subprocess.run(['git', 'worktree', 'remove', '--force', str(wt)],
+                               capture_output=True, cwd=project_path)
+                cleaned += 1
+    if cleaned:
+        print(f'[oms-work] Cleaned {cleaned} stale worktree(s)', flush=True)
+
+
+def import_time() -> float:
+    import time
+    return time.time()
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print('Usage: oms-work.py <project-slug> [--all] [--dry-run] [TASK-NNN]', file=sys.stderr)
         sys.exit(1)
 
     slug      = sys.argv[1]
-    run_all   = '--all' in sys.argv
-    dry_run   = '--dry-run' in sys.argv
+    # Default to --all when called without specific task (Discord always runs all ready tasks)
     target_id = next((a for a in sys.argv[2:] if a.startswith('TASK-')), None)
+    run_all   = '--all' in sys.argv or (not target_id and '--dry-run' not in sys.argv)
+    dry_run   = '--dry-run' in sys.argv
 
     cfg  = json.loads(CONFIG.read_text())
     proj = cfg.get('projects', {}).get(slug)
@@ -1913,6 +1987,9 @@ def main() -> None:
         queue_path.write_text(TEMPLATE.read_text())
         print(f'[oms-work] Created queue at {queue_path}')
 
+    # Clean up stale worktrees from previous failed runs
+    _cleanup_stale_worktrees(project_path)
+
     results: list[tuple[str, str, bool, dict]] = []
 
     while True:
@@ -1928,7 +2005,26 @@ def main() -> None:
             break
 
         update_status(queue_path, task['id'], 'in-progress')
-        passed, notes = execute_task(task, project_path, channel_id, threads_file, queue_path, dry_run, slug=slug)
+        # Per-task timeout to prevent queue stalls
+        import signal
+
+        class _TaskTimeout(Exception):
+            pass
+
+        def _timeout_handler(_sig: int, _frame: object) -> None:
+            raise _TaskTimeout()
+
+        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(TASK_TIMEOUT_S)
+        try:
+            passed, notes = execute_task(task, project_path, channel_id, threads_file, queue_path, dry_run, slug=slug)
+        except _TaskTimeout:
+            passed = False
+            notes = f'TIMEOUT: task exceeded {TASK_TIMEOUT_S}s limit'
+            print(f'[oms-work] ⚠ {task["id"]} timed out after {TASK_TIMEOUT_S}s', flush=True)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
         final = 'done' if passed else 'cto-stop'
         update_status(queue_path, task['id'], final, notes)
         results.append((task['id'], task['title'], passed, task))
@@ -1944,6 +2040,9 @@ def main() -> None:
     gate_passed = True
     if run_all and done_tk:
         gate_passed = run_milestone_gate(done_tk, project_path, channel_id, threads_file)
+        # Auto-create fix task if gate fails (instead of manual debugging)
+        if not gate_passed:
+            _auto_queue_gate_fix(queue_path, done_tk, channel_id, threads_file)
 
     lines = ['## OMS Work']
     for i, t in done_r:
