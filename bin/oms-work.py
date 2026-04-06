@@ -869,6 +869,219 @@ def _extract_and_write_files(output: str, wt: Path, artifacts: list[str]) -> int
     return written
 
 
+# ── Browse daemon integration ────────────────────────────────────────────────
+
+BROWSE_DIR = Path.home() / '.claude' / 'skills' / 'browse'
+BROWSE_STATE = BROWSE_DIR / '.state.json'
+BUN = Path.home() / '.bun' / 'bin' / 'bun'
+
+
+def _ensure_browse() -> tuple[int | None, str | None]:
+    """Ensure browse daemon is running. Returns (port, token) or (None, None)."""
+    import urllib.request
+
+    def _read_state() -> tuple[int | None, str | None]:
+        if not BROWSE_STATE.exists():
+            return None, None
+        try:
+            s = json.loads(BROWSE_STATE.read_text())
+            return s.get('port'), s.get('token')
+        except Exception:
+            return None, None
+
+    def _health(port: int) -> bool:
+        try:
+            urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=2)
+            return True
+        except Exception:
+            return False
+
+    port, token = _read_state()
+    if port and token and _health(port):
+        return port, token
+
+    # Start daemon
+    if not BUN.exists() or not (BROWSE_DIR / 'server.ts').exists():
+        print('[oms-work] browse daemon not available (bun or server.ts missing)', file=sys.stderr)
+        return None, None
+
+    print('[oms-work] Starting browse daemon...', flush=True)
+    log_f = open(BROWSE_DIR / '.daemon.log', 'w')
+    subprocess.Popen(
+        [str(BUN), 'run', str(BROWSE_DIR / 'server.ts')],
+        stdout=log_f, stderr=log_f,
+        start_new_session=True,
+    )
+
+    import time
+    for _ in range(20):  # max 10s
+        time.sleep(0.5)
+        port, token = _read_state()
+        if port and token and _health(port):
+            print(f'[oms-work] Browse daemon ready on port {port}', flush=True)
+            return port, token
+
+    print('[oms-work] Browse daemon failed to start', file=sys.stderr)
+    return None, None
+
+
+def _browse_command(port: int, token: str, commands: list[str]) -> dict:
+    """Send batch commands to browse daemon. Returns response dict."""
+    import urllib.request
+    payload = json.dumps({'commands': commands}).encode()
+    req = urllib.request.Request(
+        f'http://127.0.0.1:{port}/command',
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+        },
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+        return json.loads(resp.read())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def _is_ui_task(task: dict) -> bool:
+    """Check if task involves UI that needs visual verification."""
+    ui_exts = ('.tsx', '.jsx', '.html', '.css', '.vue', '.svelte')
+    ui_patterns = ('page.', 'route.', 'layout.', 'component')
+    arts = ' '.join(task.get('artifacts', []))
+    return any(ext in arts for ext in ui_exts) or any(p in arts for p in ui_patterns)
+
+
+def _derive_routes(artifacts: list[str]) -> list[str]:
+    """Derive URL routes from artifact file paths.
+    e.g. app/(app)/dashboard/page.tsx → /dashboard
+         app/page.tsx → /
+         app/privacy/page.tsx → /privacy
+    """
+    routes: list[str] = []
+    for art in artifacts:
+        if 'page.' not in art and 'route.' not in art:
+            continue
+        # Strip app/ prefix and file name
+        parts = Path(art).parts
+        # Remove 'app' prefix
+        if parts and parts[0] == 'app':
+            parts = parts[1:]
+        # Remove route groups like (app)
+        parts = [p for p in parts if not (p.startswith('(') and p.endswith(')'))]
+        # Remove file name
+        if parts:
+            parts = parts[:-1]
+        route = '/' + '/'.join(parts) if parts else '/'
+        if route not in routes:
+            routes.append(route)
+    return routes or ['/']
+
+
+def _run_browse_check(task: dict, wt: Path, project_path: Path) -> tuple[bool, list[str]]:
+    """Run visual verification via browse daemon. Returns (passed, issues)."""
+    _port, _token = _ensure_browse()
+    if not _port or not _token:
+        return True, []  # skip if daemon unavailable — don't block task
+    port: int = _port
+    token: str = _token
+
+    issues: list[str] = []
+    routes = _derive_routes(task.get('artifacts', []))
+
+    # Detect dev server port (check if something is running on 3000)
+    import urllib.request
+    dev_url = 'http://localhost:3000'
+    dev_running = False
+    try:
+        urllib.request.urlopen(dev_url, timeout=2)
+        dev_running = True
+    except Exception:
+        pass
+
+    if not dev_running:
+        # Try to start dev server
+        pkg_json = project_path / 'package.json'
+        if pkg_json.exists():
+            print('[oms-work]   starting dev server for browse check...', flush=True)
+            dev_proc = subprocess.Popen(
+                ['pnpm', 'dev'], cwd=project_path,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            import time
+            for _ in range(20):  # wait max 10s for dev server
+                time.sleep(0.5)
+                try:
+                    urllib.request.urlopen(dev_url, timeout=1)
+                    dev_running = True
+                    break
+                except Exception:
+                    continue
+            if not dev_running:
+                dev_proc.terminate()
+                return True, []  # skip if dev server won't start
+        else:
+            return True, []  # no package.json = not a web project
+
+    # Save evidence dir
+    evidence_dir = project_path / 'qa' / 'evidence' / task['id'].lower()
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    for route in routes:
+        url = f'{dev_url}{route}'
+        print(f'[oms-work]   browse: {url}', flush=True)
+
+        # Desktop viewport
+        resp = _browse_command(port, token, [
+            f'go {url}',
+            'screenshot',
+            'console-errors',
+            'network-errors',
+        ])
+
+        if not resp.get('ok'):
+            issues.append(f'{route}: browse failed — {resp.get("error", "unknown")}')
+            continue
+
+        # Check console errors
+        console_errs = resp.get('new_console_errors', [])
+        real_errors = [e for e in console_errs if e.get('type') == 'error']
+        if real_errors:
+            issues.append(f'{route}: {len(real_errors)} console error(s): {real_errors[0].get("text", "")[:100]}')
+
+        # Check network errors
+        network_errs = resp.get('new_network_errors', [])
+        if network_errs:
+            issues.append(f'{route}: {len(network_errs)} network error(s): {network_errs[0].get("url", "")[:80]}')
+
+        # Save screenshot
+        shot_path = resp.get('screenshot')
+        if shot_path and Path(shot_path).exists():
+            dest = evidence_dir / f'{route.strip("/").replace("/", "-") or "root"}-desktop.png'
+            dest.write_bytes(Path(shot_path).read_bytes())
+
+        # Mobile viewport check
+        resp_mobile = _browse_command(port, token, [
+            'viewport 375 812',
+            'screenshot',
+        ])
+        if resp_mobile.get('ok') and resp_mobile.get('screenshot'):
+            shot_m = resp_mobile['screenshot']
+            if Path(shot_m).exists():
+                dest_m = evidence_dir / f'{route.strip("/").replace("/", "-") or "root"}-mobile.png'
+                dest_m.write_bytes(Path(shot_m).read_bytes())
+
+        # Reset viewport
+        _browse_command(port, token, ['viewport 1440 900'])
+
+    if issues:
+        for issue in issues:
+            print(f'[oms-work]   browse issue: {issue}', flush=True)
+
+    return len(issues) == 0, issues
+
+
 def _run_quality_checks(wt: Path, artifacts: list[str]) -> tuple[bool, list[str]]:
     """Run quality checks that Claude Code hooks would normally enforce.
     These compensate for --bare and direct file writes bypassing hooks.
@@ -981,63 +1194,116 @@ def execute_task(task: dict, project_path: Path,
     validator_details: dict[str, str] = {}  # name → full reason string
     task_notes = ''
     task_fail_at: str | None = None
+    MAX_RETRIES = 2       # retry with same model
+    MAX_ESCALATIONS = 1   # retry with stronger model
     try:
         model, is_external = resolve_model(task)
         print(f'[oms-work]   model: {model} ({"external" if is_external else "subscription"})', flush=True)
-        if is_external:
-            work_out, code = run_llm_route(model, exec_prompt(task, wt), wt)
+
+        # ── Execution + verification loop (retry on failure) ──
+        error_feedback = ''
+        work_out = ''
+        exec_passed = False
+        total_attempts = MAX_RETRIES + MAX_ESCALATIONS + 1
+
+        for attempt in range(total_attempts):
+            if attempt > 0:
+                label = f'retry {attempt}' if attempt <= MAX_RETRIES else f'escalation {attempt - MAX_RETRIES}'
+                print(f'[oms-work]   attempt {attempt + 1}/{total_attempts} ({label})', flush=True)
+                # Reset worktree files for clean retry
+                subprocess.run(['git', 'checkout', '.'], cwd=wt, capture_output=True)
+                subprocess.run(['git', 'clean', '-fd'], cwd=wt, capture_output=True)
+
+            # Build prompt (with error feedback on retry)
+            prompt = exec_prompt(task, wt)
+            if error_feedback:
+                prompt += f'\n\n## Previous Attempt Failed\n{error_feedback}\n\nFix ALL issues listed above. Output complete corrected files.'
+
+            # Choose model (escalate on later attempts)
+            current_model = model
+            current_external = is_external
+            if attempt > MAX_RETRIES and is_external:
+                # Escalate to a stronger free model
+                escalation_chain = ['qwen', 'gpt-oss', 'nemotron']
+                for esc in escalation_chain:
+                    if esc != model:
+                        current_model = esc
+                        break
+                print(f'[oms-work]   escalated to {current_model}', flush=True)
+
+            # Execute
             run_stderr = ''
-            # Free models output code as text — extract and write files to worktree
-            if code == 0 and work_out.strip() and task['type'] != 'research':
-                n_written = _extract_and_write_files(work_out, wt, list(task['artifacts']))
-                print(f'[oms-work]   extracted {n_written} files from free model output', flush=True)
-                if n_written > 0:
-                    # Quality checks (replaces Claude Code hooks that --bare skips)
-                    q_ok, q_issues = _run_quality_checks(wt, task['artifacts'])
-                    if not q_ok:
-                        # HARD FAIL — quality issues are blocking, not advisory
-                        remove_worktree(project_path, task['id'])
-                        notes = f'QUALITY-FAIL: {"; ".join(q_issues[:3])}'
-                        print(f'[oms-work]   ✗ quality check failed — task blocked', flush=True)
-                        write_task_metrics(queue_path, project_path, task['id'], task_cost, [],
-                                           passed=False, slug=slug, title=task['title'],
-                                           milestone=task['milestone'], task_type=task['type'],
-                                           fail_at='quality', notes=notes, validator_details={})
-                        discord.notify_task(channel_id, threads_file, task['milestone'],
-                                            task['id'], task['title'], False, notes)
-                        return False, notes
-                    # Stage all new files (after prettier may have reformatted)
-                    subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
-                    # Run Verify commands if defined — HARD FAIL on failure
-                    if task.get('verify'):
-                        v_ok, v_summary = _run_verify_commands(task['verify'], wt)
-                        print(f'[oms-work]   verify: {"PASS" if v_ok else "FAIL"} — {v_summary[:120]}', flush=True)
-                        if not v_ok:
-                            remove_worktree(project_path, task['id'])
-                            notes = f'VERIFY-FAIL: {v_summary[:200]}'
-                            write_task_metrics(queue_path, project_path, task['id'], task_cost, [],
-                                               passed=False, slug=slug, title=task['title'],
-                                               milestone=task['milestone'], task_type=task['type'],
-                                               fail_at='verify', notes=notes, validator_details={})
-                            discord.notify_task(channel_id, threads_file, task['milestone'],
-                                                task['id'], task['title'], False, notes)
-                            return False, notes
-        else:
-            work_out, code, run_stderr, exec_cost = run_claude(exec_prompt(task, wt), wt, model, allow_writes=True)
-            task_cost += exec_cost
-            # Rate-limited on subscription → fall back to llm-route.sh (free tier)
-            if code != 0 and _is_rate_limited(run_stderr):
-                print(f'[oms-work]   subscription rate-limited — falling back to llm-route {model} (free)', flush=True)
-                fallback_model = 'sonnet' if 'sonnet' in model else 'haiku' if 'haiku' in model else 'qwen'
-                work_out, code = run_llm_route(fallback_model, exec_prompt(task, wt), wt)
-                run_stderr = ''
-        if code != 0:
-            remove_worktree(project_path, task['id'])
-            if slug and _is_rate_limited(run_stderr):
-                _write_pending_resume(slug, channel_id)
-                notes = f'RATE-LIMITED: auto-resume scheduled — {task["id"]} will retry when window resets'
+            if current_external:
+                work_out, code = run_llm_route(current_model, prompt, wt)
             else:
-                notes = f'CTO-STOP: claude execution failed (exit {code})'
+                work_out, code, run_stderr, exec_cost = run_claude(prompt, wt, current_model, allow_writes=True)
+                task_cost += exec_cost
+                if code != 0 and _is_rate_limited(run_stderr):
+                    fallback = 'qwen' if 'sonnet' in current_model else 'qwen-coder'
+                    work_out, code = run_llm_route(fallback, prompt, wt)
+                    run_stderr = ''
+
+            if code != 0:
+                if _is_rate_limited(run_stderr) and slug:
+                    _write_pending_resume(slug, channel_id)
+                    remove_worktree(project_path, task['id'])
+                    notes = f'RATE-LIMITED: auto-resume scheduled'
+                    discord.notify_task(channel_id, threads_file, task['milestone'],
+                                        task['id'], task['title'], False, notes)
+                    return False, notes
+                error_feedback = f'LLM execution failed (exit {code})'
+                continue
+
+            # Extract files (free models output text; subscription writes directly)
+            if current_external and task['type'] != 'research' and work_out.strip():
+                n_written = _extract_and_write_files(work_out, wt, list(task['artifacts']))
+                print(f'[oms-work]   extracted {n_written} files', flush=True)
+
+            # Hallucination check
+            if task['type'] != 'research':
+                gs = subprocess.run(['git', 'status', '--porcelain'],
+                                    capture_output=True, text=True, cwd=wt)
+                if not gs.stdout.strip():
+                    error_feedback = 'No files were written to disk. You MUST create all required artifacts.'
+                    continue
+
+            # Quality checks (runs on BOTH free and subscription output)
+            q_ok, q_issues = _run_quality_checks(wt, task['artifacts'])
+            if not q_ok:
+                error_feedback = f'Quality issues: {"; ".join(q_issues)}'
+                print(f'[oms-work]   quality: FAIL — {error_feedback[:120]}', flush=True)
+                continue
+
+            # Stage files (after prettier auto-fix)
+            subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
+
+            # Verify commands (tests, lint, type check)
+            if task.get('verify'):
+                v_ok, v_summary = _run_verify_commands(task['verify'], wt)
+                print(f'[oms-work]   verify: {"PASS" if v_ok else "FAIL"}', flush=True)
+                if not v_ok:
+                    error_feedback = f'Test failures:\n{v_summary}'
+                    continue
+
+            # Browse check (UI tasks only)
+            if _is_ui_task(task):
+                b_ok, b_issues = _run_browse_check(task, wt, project_path)
+                if not b_ok:
+                    error_feedback = f'Visual issues: {"; ".join(b_issues)}'
+                    print(f'[oms-work]   browse: FAIL — {error_feedback[:120]}', flush=True)
+                    continue
+
+            exec_passed = True
+            break
+
+        if not exec_passed:
+            remove_worktree(project_path, task['id'])
+            notes = f'CTO-STOP: failed after {total_attempts} attempts — {error_feedback[:200]}'
+            task_fail_at = 'execution'
+            write_task_metrics(queue_path, project_path, task['id'], task_cost, [],
+                               passed=False, slug=slug, title=task['title'],
+                               milestone=task['milestone'], task_type=task['type'],
+                               fail_at=task_fail_at, notes=notes, validator_details={})
             discord.notify_task(channel_id, threads_file, task['milestone'],
                                 task['id'], task['title'], False, notes)
             return False, notes
@@ -1046,22 +1312,7 @@ def execute_task(task: dict, project_path: Path,
         task_notes = summary
         print(f'[oms-work]   exec: {summary[:120]}', flush=True)
 
-        if task['type'] != 'research':
-            gs = subprocess.run(['git', 'status', '--porcelain'],
-                                capture_output=True, text=True, cwd=wt)
-            if not gs.stdout.strip():
-                remove_worktree(project_path, task['id'])
-                task_notes = 'CTO-STOP: hallucination — no files changed in worktree'
-                task_fail_at = 'hallucination'
-                write_task_metrics(queue_path, project_path, task['id'], task_cost, validator_log,
-                                   passed=False, slug=slug, title=task['title'],
-                                   milestone=task['milestone'], task_type=task['type'],
-                                   fail_at=task_fail_at, notes=task_notes,
-                                   validator_details=validator_details)
-                discord.notify_task(channel_id, threads_file, task['milestone'],
-                                    task['id'], task['title'], False, task_notes)
-                return False, task_notes
-
+        # ── Validation chain ──
         research_retried = False
         for validator in task['validation']:
             passed, reason, val_cost = validate_step(validator, task, summary, wt)
