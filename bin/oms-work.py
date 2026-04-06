@@ -716,11 +716,43 @@ def resolve_model(task: dict) -> tuple[str, bool]:
 
 # ── Execution + validation ────────────────────────────────────────────────────
 
-def exec_prompt(task: dict, wt: Path) -> str:
-    scenarios = '\n'.join(f'- {s}' for s in task['scenarios'])
-    artifacts = '\n'.join(f'- {a}' for a in task['artifacts'])
-    produces  = task['produces']
+TEST_PATTERNS = ('.test.', '.spec.', '__tests__/', 'test_', '/tests/')
 
+QUALITY_RULES = (
+    '\n\n## Code Quality Rules\n'
+    '- Max 300 lines per file, max 50 lines per function\n'
+    '- No console.log / print debugging in production code\n'
+    '- No commented-out code blocks\n'
+    '- camelCase for variables/functions, PascalCase for classes, UPPER_SNAKE for constants\n'
+    '- Comments explain WHY not WHAT\n'
+    '- Always handle errors — no silent swallowing\n'
+    '- Prefer async/await over promise chains\n'
+    '- Group imports: external → internal → relative\n'
+    '- API responses: always { data, error, meta? } shape\n'
+    '- TypeScript: define schemas in Zod first, derive types with z.infer<>\n'
+    '- Python: define schemas in Pydantic first, use .model_validate() at boundaries\n'
+    '- No hardcoded secrets, API keys, or passwords\n'
+)
+
+OUTPUT_FMT = (
+    '\n\n## Output Format\n'
+    'For each file, output:\n'
+    '### path/to/file.ext\n'
+    '```language\n'
+    '<complete file content>\n'
+    '```\n'
+    'Output ALL files completely. No placeholders, no TODO, no truncation.\n'
+)
+
+
+def _split_artifacts(artifacts: list[str]) -> tuple[list[str], list[str]]:
+    """Split artifacts into (test_files, impl_files) by path pattern."""
+    tests = [a for a in artifacts if any(p in a for p in TEST_PATTERNS)]
+    impl = [a for a in artifacts if a not in tests]
+    return tests, impl
+
+
+def _build_ctx_section(task: dict, wt: Path) -> str:
     ctx_blocks: list[str] = []
     for rel in task['context']:
         full = wt / rel
@@ -729,51 +761,79 @@ def exec_prompt(task: dict, wt: Path) -> str:
             ctx_blocks.append(f'### {rel}\n```\n{content}\n```')
         else:
             ctx_blocks.append(f'### {rel}\n(not found — create it)')
-    ctx_section = ('\n\n## Context Files\n\n' + '\n\n'.join(ctx_blocks)) if ctx_blocks else ''
+    return ('\n\n## Context Files\n\n' + '\n\n'.join(ctx_blocks)) if ctx_blocks else ''
 
-    artifact_section = (f'\n\n## Required Artifacts\nYou MUST produce exactly these files:\n{artifacts}'
-                        if artifacts else '')
+
+def _build_base_prompt(task: dict, wt: Path) -> str:
+    """Common prompt parts shared by test_prompt, impl_prompt, and research_prompt."""
+    scenarios = '\n'.join(f'- {s}' for s in task['scenarios'])
+    produces = task['produces']
+    ctx_section = _build_ctx_section(task, wt)
     produces_section = (f'\n\n## Produces (downstream contract)\n{produces}'
                         if produces and produces.lower() != 'none' else '')
-
-    action = ('Write findings to logs/research/{id}.md. '
-              'Include ≥3 evidence-backed findings, each with a testable prediction.'
-              ).format(id=task['id']) if task['type'] == 'research' \
-             else 'Make all required file changes to satisfy every scenario.'
-
-    # Coding rules injected for all models (free and subscription)
-    rules = (
-        '\n\n## Code Quality Rules\n'
-        '- Max 300 lines per file, max 50 lines per function\n'
-        '- No console.log / print debugging in production code\n'
-        '- No commented-out code blocks\n'
-        '- camelCase for variables/functions, PascalCase for classes, UPPER_SNAKE for constants\n'
-        '- Comments explain WHY not WHAT\n'
-        '- Always handle errors — no silent swallowing\n'
-        '- Prefer async/await over promise chains\n'
-        '- Group imports: external → internal → relative\n'
-        '- API responses: always { data, error, meta? } shape\n'
-        '- TypeScript: define schemas in Zod first, derive types with z.infer<>\n'
-        '- Python: define schemas in Pydantic first, use .model_validate() at boundaries\n'
-        '- No hardcoded secrets, API keys, or passwords\n'
-    )
-
-    # Output format hint for free models (they generate text, not tool calls)
-    output_hint = (
-        '\n\n## Output Format\n'
-        'For each file, output:\n'
-        '### path/to/file.ext\n'
-        '```language\n'
-        '<complete file content>\n'
-        '```\n'
-        'Output ALL files completely. No placeholders, no TODO, no truncation.\n'
-    ) if task['type'] != 'research' else ''
-
     return (f"OMS work task ({task['id']}): {task['spec']}\n\n"
             f"## Behavioral Scenarios\n{scenarios}"
-            f"{artifact_section}{produces_section}{ctx_section}"
-            f"{rules}{output_hint}\n\n"
-            f"{action}\n\nOutput a 1–2 sentence summary when complete.")
+            f"{produces_section}{ctx_section}")
+
+
+def test_prompt(task: dict, wt: Path) -> str:
+    """TDD Phase 1: Generate test files ONLY from spec + scenarios."""
+    base = _build_base_prompt(task, wt)
+    test_arts, _ = _split_artifacts(task['artifacts'])
+    art_list = '\n'.join(f'- {a}' for a in test_arts)
+
+    return (f"{base}\n\n"
+            f"## Test Files to Write\n{art_list}\n"
+            f"{QUALITY_RULES}{OUTPUT_FMT}\n\n"
+            "Write ONLY the test files listed above. Do NOT write any implementation code.\n"
+            "Tests must cover ALL behavioral scenarios from the spec.\n"
+            "Each test should assert the expected behavior — tests WILL FAIL until implementation is written.\n"
+            "This is TDD RED phase — tests define the contract.\n\n"
+            "Output a 1-sentence summary of test coverage when complete.")
+
+
+def impl_prompt(task: dict, wt: Path) -> str:
+    """TDD Phase 2: Generate implementation that makes tests pass."""
+    base = _build_base_prompt(task, wt)
+    test_arts, impl_arts = _split_artifacts(task['artifacts'])
+    impl_list = '\n'.join(f'- {a}' for a in impl_arts)
+
+    # Include actual test file contents so model knows exactly what to satisfy
+    test_blocks: list[str] = []
+    for t in test_arts:
+        f = wt / t
+        if f.exists():
+            content = f.read_text(encoding='utf-8', errors='replace')[:4000]
+            test_blocks.append(f'### {t}\n```\n{content}\n```')
+    test_section = '\n\n## Test Files (already written — make these PASS)\n\n' + '\n\n'.join(test_blocks) if test_blocks else ''
+
+    return (f"{base}\n\n"
+            f"## Implementation Files to Write\n{impl_list}\n"
+            f"{test_section}"
+            f"{QUALITY_RULES}{OUTPUT_FMT}\n\n"
+            "Write ONLY the implementation files listed above. Do NOT modify the test files.\n"
+            "Your code MUST make all existing tests pass.\n"
+            "This is TDD GREEN phase — satisfy the test contract.\n\n"
+            "Output a 1-sentence summary when complete.")
+
+
+def exec_prompt(task: dict, wt: Path) -> str:
+    """Fallback single-shot prompt for tasks without test files (scaffold, config, etc.)."""
+    base = _build_base_prompt(task, wt)
+    artifacts = '\n'.join(f'- {a}' for a in task['artifacts'])
+    artifact_section = f'\n\n## Required Artifacts\nYou MUST produce exactly these files:\n{artifacts}' if artifacts else ''
+
+    if task['type'] == 'research':
+        action = ('Write findings to logs/research/{id}.md. '
+                  'Include ≥3 evidence-backed findings under separate ## headings, '
+                  'each with a testable prediction and at least one source/citation.'
+                  ).format(id=task['id'])
+        return f"{base}{artifact_section}{QUALITY_RULES}\n\n{action}\n\nOutput a 1-2 sentence summary when complete."
+
+    return (f"{base}{artifact_section}"
+            f"{QUALITY_RULES}{OUTPUT_FMT}\n\n"
+            f"Make all required file changes to satisfy every scenario.\n\n"
+            f"Output a 1-2 sentence summary when complete.")
 
 
 def validate_step(validator: str, task: dict, summary: str, cwd: Path,
@@ -1124,11 +1184,12 @@ def _run_browse_check(task: dict, wt: Path, project_path: Path) -> tuple[bool, l
     return len(issues) == 0, issues
 
 
-def _run_quality_checks(wt: Path, artifacts: list[str]) -> tuple[bool, list[str]]:
-    """Run quality checks that Claude Code hooks would normally enforce.
-    These compensate for --bare and direct file writes bypassing hooks.
-    Returns (all_passed, list of issues)."""
+def _run_quality_checks(wt: Path, artifacts: list[str], is_test: bool = False) -> tuple[bool, list[str]]:
+    """Run quality checks. Different rules for test vs impl files.
+    Test files: relaxed (500 lines, allow console.log, skip secret check).
+    Impl files: strict (300 lines, no console.log, no secrets)."""
     issues: list[str] = []
+    max_lines = 500 if is_test else 300
 
     for art in artifacts:
         f = wt / art
@@ -1137,41 +1198,40 @@ def _run_quality_checks(wt: Path, artifacts: list[str]) -> tuple[bool, list[str]
         content = f.read_text(encoding='utf-8', errors='replace')
         lines = content.splitlines()
 
-        # Check: file size (max 300 lines)
-        if len(lines) > 300:
-            issues.append(f'{art}: {len(lines)} lines (max 300)')
+        # Check: file size
+        if len(lines) > max_lines:
+            issues.append(f'{art}: {len(lines)} lines (max {max_lines})')
 
-        # Check: console.log / print debugging
-        if f.suffix in ('.ts', '.tsx', '.js', '.jsx'):
+        # Check: console.log — skip for test files (test debugging is OK)
+        if not is_test and f.suffix in ('.ts', '.tsx', '.js', '.jsx'):
             for i, line in enumerate(lines, 1):
                 if 'console.log' in line and not line.strip().startswith('//'):
                     issues.append(f'{art}:{i}: console.log found')
                     break
 
-        # Check: no hardcoded secrets
-        for i, line in enumerate(lines, 1):
-            low = line.lower()
-            if any(p in low for p in ('api_key =', 'secret =', 'password =', 'token =')) \
-                    and not line.strip().startswith('#') and not line.strip().startswith('//') \
-                    and 'env' not in low and 'os.get' not in low and 'process.env' not in low:
-                issues.append(f'{art}:{i}: possible hardcoded secret')
-                break
+        # Check: hardcoded secrets — skip for test files (fixtures may have fake keys)
+        if not is_test:
+            for i, line in enumerate(lines, 1):
+                low = line.lower()
+                if any(p in low for p in ('api_key =', 'secret =', 'password =', 'token =')) \
+                        and not line.strip().startswith('#') and not line.strip().startswith('//') \
+                        and 'env' not in low and 'os.get' not in low and 'process.env' not in low:
+                    issues.append(f'{art}:{i}: possible hardcoded secret')
+                    break
 
-        # Check: prettier / formatting (if prettier available)
+        # Prettier auto-fix (both test and impl)
         if f.suffix in ('.ts', '.tsx', '.js', '.jsx'):
             r = subprocess.run(
                 ['npx', 'prettier', '--check', str(f)],
                 capture_output=True, text=True, cwd=wt, timeout=15,
             )
             if r.returncode != 0:
-                # Auto-fix instead of failing
                 subprocess.run(
                     ['npx', 'prettier', '--write', str(f)],
                     capture_output=True, text=True, cwd=wt, timeout=15,
                 )
 
-        # Check: pyright / type errors — only if project has pyright config
-        # Skip for Python files without config — missing deps cause false positives
+        # Pyright — only if config exists
         if f.suffix == '.py' and (wt / 'pyrightconfig.json').exists():
             r = subprocess.run(
                 ['pyright', str(f)],
@@ -1184,6 +1244,31 @@ def _run_quality_checks(wt: Path, artifacts: list[str]) -> tuple[bool, list[str]
     if issues:
         for issue in issues:
             print(f'[oms-work]   quality: {issue}', flush=True)
+
+    return len(issues) == 0, issues
+
+
+def _verify_research_output(wt: Path, task_id: str) -> tuple[bool, list[str]]:
+    """Verify research task output meets minimum quality standards."""
+    issues: list[str] = []
+    research_file = wt / 'logs' / 'research' / f'{task_id}.md'
+    if not research_file.exists():
+        return False, [f'Research output not found: logs/research/{task_id}.md']
+
+    content = research_file.read_text(encoding='utf-8', errors='replace')
+    lines = [l for l in content.splitlines() if l.strip()]
+
+    if len(lines) < 20:
+        issues.append(f'Research output too short ({len(lines)} lines, minimum 20)')
+
+    headings = [l for l in content.splitlines() if l.startswith('## ')]
+    if len(headings) < 3:
+        issues.append(f'Research output needs ≥3 findings (found {len(headings)} ## headings)')
+
+    # Check for at least one URL/citation
+    has_url = 'http' in content.lower() or 'doi' in content.lower()
+    if not has_url:
+        issues.append('Research output has no URLs or citations')
 
     return len(issues) == 0, issues
 
@@ -1243,30 +1328,32 @@ def execute_task(task: dict, project_path: Path,
         model, is_external = resolve_model(task)
         print(f'[oms-work]   model: {model} ({"external" if is_external else "subscription"})', flush=True)
 
-        # ── Execution + verification loop (retry on failure) ──
+        # ── TDD Execution loop (RED → GREEN → verify → browse) ──
         error_feedback = ''
         work_out = ''
         exec_passed = False
+        tdd_red_result = ''
+        tdd_green_result = ''
         total_attempts = MAX_RETRIES + MAX_ESCALATIONS + 1
+        test_arts, impl_arts = _split_artifacts(task['artifacts'])
+        use_tdd = bool(test_arts) and task['type'] == 'impl'
+
+        if use_tdd:
+            print(f'[oms-work]   TDD mode: {len(test_arts)} test file(s), {len(impl_arts)} impl file(s)', flush=True)
+        else:
+            print(f'[oms-work]   single-shot mode ({"research" if task["type"] == "research" else "no test files"})', flush=True)
 
         for attempt in range(total_attempts):
             if attempt > 0:
                 label = f'retry {attempt}' if attempt <= MAX_RETRIES else f'escalation {attempt - MAX_RETRIES}'
                 print(f'[oms-work]   attempt {attempt + 1}/{total_attempts} ({label})', flush=True)
-                # Reset worktree files for clean retry
                 subprocess.run(['git', 'checkout', '.'], cwd=wt, capture_output=True)
                 subprocess.run(['git', 'clean', '-fd'], cwd=wt, capture_output=True)
-
-            # Build prompt (with error feedback on retry)
-            prompt = exec_prompt(task, wt)
-            if error_feedback:
-                prompt += f'\n\n## Previous Attempt Failed\n{error_feedback}\n\nFix ALL issues listed above. Output complete corrected files.'
 
             # Choose model (escalate on later attempts)
             current_model = model
             current_external = is_external
             if attempt > MAX_RETRIES and is_external:
-                # Escalate to a stronger free model
                 escalation_chain = ['qwen', 'gpt-oss', 'nemotron']
                 for esc in escalation_chain:
                     if esc != model:
@@ -1274,35 +1361,84 @@ def execute_task(task: dict, project_path: Path,
                         break
                 print(f'[oms-work]   escalated to {current_model}', flush=True)
 
-            # Execute
-            run_stderr = ''
-            if current_external:
-                work_out, code = run_llm_route(current_model, prompt, wt)
+            def _run_model(prompt: str) -> tuple[str, int]:
+                nonlocal task_cost
+                if current_external:
+                    return run_llm_route(current_model, prompt, wt)
+                out, code, stderr, cost = run_claude(prompt, wt, current_model, allow_writes=True)
+                task_cost += cost
+                if code != 0 and _is_rate_limited(stderr):
+                    fb = 'qwen' if 'sonnet' in current_model else 'qwen-coder'
+                    return run_llm_route(fb, prompt, wt)
+                return out, code
+
+            if use_tdd:
+                # ── PHASE 1: RED — generate tests ──
+                print(f'[oms-work]   RED: generating tests...', flush=True)
+                t_prompt = test_prompt(task, wt)
+                if error_feedback:
+                    t_prompt += f'\n\n## Previous Attempt Failed\n{error_feedback}\n\nFix the test files.'
+                test_out, code = _run_model(t_prompt)
+                if code != 0:
+                    error_feedback = f'Test generation failed (exit {code})'
+                    continue
+
+                if current_external and test_out.strip():
+                    n = _extract_and_write_files(test_out, wt, test_arts)
+                    print(f'[oms-work]   RED: extracted {n} test file(s)', flush=True)
+
+                # Quality check on test files (relaxed rules)
+                tq_ok, tq_issues = _run_quality_checks(wt, test_arts, is_test=True)
+                if not tq_ok:
+                    error_feedback = f'Test quality issues: {"; ".join(tq_issues)}'
+                    continue
+
+                # RED verification: tests SHOULD FAIL without implementation
+                if task.get('verify'):
+                    v_ok, v_summary = _run_verify_commands(task['verify'], wt)
+                    if v_ok:
+                        tdd_red_result = 'WARN: tests passed without implementation (may be tautological)'
+                        print(f'[oms-work]   RED: {tdd_red_result}', flush=True)
+                        # Not a hard fail — some tests (e.g. config existence) may legitimately pass
+                    else:
+                        tdd_red_result = f'RED OK: tests fail as expected ({v_summary[:80]})'
+                        print(f'[oms-work]   RED: tests fail as expected ✓', flush=True)
+
+                # ── PHASE 2: GREEN — generate implementation ──
+                print(f'[oms-work]   GREEN: generating implementation...', flush=True)
+                i_prompt = impl_prompt(task, wt)
+                if error_feedback and 'test' not in error_feedback.lower():
+                    i_prompt += f'\n\n## Previous Attempt Failed\n{error_feedback}\n\nFix the implementation.'
+                work_out, code = _run_model(i_prompt)
+                if code != 0:
+                    error_feedback = f'Implementation generation failed (exit {code})'
+                    continue
+
+                if current_external and work_out.strip():
+                    n = _extract_and_write_files(work_out, wt, impl_arts)
+                    print(f'[oms-work]   GREEN: extracted {n} impl file(s)', flush=True)
+
             else:
-                work_out, code, run_stderr, exec_cost = run_claude(prompt, wt, current_model, allow_writes=True)
-                task_cost += exec_cost
-                if code != 0 and _is_rate_limited(run_stderr):
-                    fallback = 'qwen' if 'sonnet' in current_model else 'qwen-coder'
-                    work_out, code = run_llm_route(fallback, prompt, wt)
-                    run_stderr = ''
+                # ── Single-shot mode (research, scaffold, no-test tasks) ──
+                prompt = exec_prompt(task, wt)
+                if error_feedback:
+                    prompt += f'\n\n## Previous Attempt Failed\n{error_feedback}\n\nFix ALL issues.'
+                work_out, code = _run_model(prompt)
+                if code != 0:
+                    if _is_rate_limited('') and slug:
+                        _write_pending_resume(slug, channel_id)
+                        remove_worktree(project_path, task['id'])
+                        return False, 'RATE-LIMITED: auto-resume scheduled'
+                    error_feedback = f'LLM execution failed (exit {code})'
+                    continue
 
-            if code != 0:
-                if _is_rate_limited(run_stderr) and slug:
-                    _write_pending_resume(slug, channel_id)
-                    remove_worktree(project_path, task['id'])
-                    notes = f'RATE-LIMITED: auto-resume scheduled'
-                    discord.notify_task(channel_id, threads_file, task['milestone'],
-                                        task['id'], task['title'], False, notes)
-                    return False, notes
-                error_feedback = f'LLM execution failed (exit {code})'
-                continue
+                if current_external and task['type'] != 'research' and work_out.strip():
+                    n = _extract_and_write_files(work_out, wt, list(task['artifacts']))
+                    print(f'[oms-work]   extracted {n} files', flush=True)
 
-            # Extract files (free models output text; subscription writes directly)
-            if current_external and task['type'] != 'research' and work_out.strip():
-                n_written = _extract_and_write_files(work_out, wt, list(task['artifacts']))
-                print(f'[oms-work]   extracted {n_written} files', flush=True)
+            # ── Common checks (both TDD and single-shot) ──
 
-            # Hallucination check
+            # Hallucination check (skip for research)
             if task['type'] != 'research':
                 gs = subprocess.run(['git', 'status', '--porcelain'],
                                     capture_output=True, text=True, cwd=wt)
@@ -1310,25 +1446,36 @@ def execute_task(task: dict, project_path: Path,
                     error_feedback = 'No files were written to disk. You MUST create all required artifacts.'
                     continue
 
-            # Quality checks (runs on BOTH free and subscription output)
-            q_ok, q_issues = _run_quality_checks(wt, task['artifacts'])
+            # Quality checks on impl files (strict rules)
+            check_arts = impl_arts if use_tdd else task['artifacts']
+            q_ok, q_issues = _run_quality_checks(wt, check_arts, is_test=False)
             if not q_ok:
                 error_feedback = f'Quality issues: {"; ".join(q_issues)}'
                 print(f'[oms-work]   quality: FAIL — {error_feedback[:120]}', flush=True)
                 continue
 
-            # Stage files (after prettier auto-fix)
-            subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
-
-            # Verify commands (tests, lint, type check)
-            if task.get('verify'):
-                v_ok, v_summary = _run_verify_commands(task['verify'], wt)
-                print(f'[oms-work]   verify: {"PASS" if v_ok else "FAIL"}', flush=True)
-                if not v_ok:
-                    error_feedback = f'Test failures:\n{v_summary}'
+            # Research output verification
+            if task['type'] == 'research':
+                r_ok, r_issues = _verify_research_output(wt, task['id'])
+                if not r_ok:
+                    error_feedback = f'Research quality: {"; ".join(r_issues)}'
+                    print(f'[oms-work]   research quality: FAIL — {error_feedback[:120]}', flush=True)
                     continue
 
-            # Browse check (UI tasks only)
+            # Stage files
+            subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
+
+            # GREEN verification: tests MUST PASS with implementation
+            if task.get('verify'):
+                v_ok, v_summary = _run_verify_commands(task['verify'], wt)
+                print(f'[oms-work]   {"GREEN" if use_tdd else "verify"}: {"PASS" if v_ok else "FAIL"}', flush=True)
+                if not v_ok:
+                    error_feedback = f'Test failures:\n{v_summary}'
+                    tdd_green_result = f'GREEN FAIL: {v_summary[:100]}'
+                    continue
+                tdd_green_result = 'GREEN OK: all tests pass'
+
+            # Browse check (UI tasks)
             if _is_ui_task(task):
                 b_ok, b_issues = _run_browse_check(task, wt, project_path)
                 if not b_ok:
@@ -1353,10 +1500,15 @@ def execute_task(task: dict, project_path: Path,
 
         summary = work_out[:300].replace('\n', ' ').strip()
         task_notes = summary
-        # Track last verify/quality results for validators
-        last_verify = 'PASS' if not error_feedback else error_feedback[:200]
+        # Track results for validators
+        tdd_info = ''
+        if use_tdd:
+            tdd_info = f'TDD: {tdd_red_result} | {tdd_green_result}'
+        last_verify = tdd_green_result if use_tdd else 'PASS'
         last_quality = 'PASS (all checks passed)'
         print(f'[oms-work]   exec: {summary[:120]}', flush=True)
+        if tdd_info:
+            print(f'[oms-work]   {tdd_info}', flush=True)
 
         # ── Validation chain ──
         research_retried = False

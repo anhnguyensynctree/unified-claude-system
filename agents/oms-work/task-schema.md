@@ -83,7 +83,7 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 - **Infra-critical:** true | false
 - **Spec:** The system SHALL [verb] [object] so that [outcome].
 - **Scenarios:** GIVEN [precondition] WHEN [trigger] THEN [outcome] | GIVEN ...
-- **Artifacts:** [src/path/file.ts — exports: foo, bar] | [src/path/other.ts — exists with real impl]
+- **Artifacts:** [src/path/file.ts — exports: foo, bar] | [tests/path/file.test.ts] — **list test files AND implementation files; oms-work.py auto-detects tests by path pattern (.test., .spec., __tests__/, test_) and runs TDD (RED → GREEN)**
 - **Produces:** [interface/export/file downstream tasks depend on] | none
 - **Verify:** [npm test src/path] | [npm run lint] — **REQUIRED for impl tasks, must include real test execution (not just ls/echo)**
 - **Context:** [path/to/file.ts, path/to/other.md]
