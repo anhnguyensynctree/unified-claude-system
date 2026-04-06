@@ -1728,15 +1728,24 @@ def detect_e2e(project_path: Path) -> tuple[str, Path] | tuple[None, None]:
 
 
 def _auto_queue_gate_fix(queue_path: Path, done_tasks: list[dict],
-                         channel_id: str, threads_file: Path) -> None:
+                         channel_id: str, threads_file: Path,
+                         failures: list[str] | None = None,
+                         verify_cmds: list[str] | None = None) -> None:
     """Auto-create a fix task when milestone gate fails.
-    Instead of manual debugging, queue a new task that references the failures."""
+    Includes actual failure details so the LLM knows exactly what to fix."""
     milestone = done_tasks[0].get('milestone', 'current') if done_tasks else 'current'
-    # Find next available task ID
     text = queue_path.read_text(errors='replace')
     existing_ids = re.findall(r'TASK-(\d+)', text)
     next_num = max((int(n) for n in existing_ids), default=0) + 1
     fix_id = f'TASK-{next_num:03d}'
+
+    # Build failure context for the spec
+    failure_details = ''
+    if failures:
+        failure_details = ' Failures: ' + ' | '.join(f[:150] for f in failures[:5])
+
+    # Use the actual verify commands that failed
+    verify_str = ' | '.join(verify_cmds[:5]) if verify_cmds else 'run all project tests'
 
     fix_task = (
         f'\n\n## {fix_id} — Fix milestone gate failures\n'
@@ -1747,13 +1756,13 @@ def _auto_queue_gate_fix(queue_path: Path, done_tasks: list[dict],
         f'- **Type:** impl\n'
         f'- **Infra-critical:** false\n'
         f'- **Spec:** The system SHALL pass all Verify commands and E2E tests on the main branch. '
-        f'Fix any test failures, type errors, or lint issues introduced by tasks in this milestone.\n'
+        f'Fix the specific failures from the milestone gate.{failure_details}\n'
         f'- **Scenarios:** GIVEN the main branch after milestone merge '
         f'WHEN all Verify commands are run THEN exit code 0 for every command '
         f'| GIVEN the E2E suite WHEN playwright test runs THEN all specs pass\n'
-        f'- **Artifacts:** (files identified by test failures)\n'
+        f'- **Artifacts:** (files identified by test failures) | tests/gate-fix.test.ts\n'
         f'- **Produces:** passing test suite on main\n'
-        f'- **Verify:** (same verify commands that failed at gate)\n'
+        f'- **Verify:** {verify_str}\n'
         f'- **Context:** none\n'
         f'- **Activated:** qa-engineer\n'
         f'- **Validation:** dev → qa → cto\n'
@@ -1797,7 +1806,7 @@ def _queue_e2e_setup_task(project_path: Path, milestone: str) -> None:
 
 
 def run_milestone_gate(done_tasks: list[dict], project_path: Path,
-                       channel_id: str, threads_file: Path) -> bool:
+                       channel_id: str, threads_file: Path) -> tuple[bool, list[str], list[str]]:
     """Run all Verify commands + full E2E suite on main. Called after --all completes."""
     verify_cmds: list[str] = []
     seen: set[str] = set()
@@ -1834,11 +1843,11 @@ def run_milestone_gate(done_tasks: list[dict], project_path: Path,
                 discord.post_to_thread(thread_id, msg)
             print('[oms-work] ⛔ BLOCKED — playwright not found; milestone gate cannot pass without E2E',
                   flush=True)
-            return False  # gate fails — no milestone credit without E2E
+            return False, ['playwright not found — E2E required for UI milestone'], verify_cmds
 
     if not verify_cmds and not e2e_cmd:
         print('[oms-work] Milestone gate: no verify commands or E2E — skip (non-UI milestone)', flush=True)
-        return True
+        return True, [], []
 
     milestone = next(iter(milestones)) if len(milestones) == 1 else 'multi-milestone'
     total = len(verify_cmds) + (1 if e2e_cmd else 0)
@@ -1914,7 +1923,7 @@ def run_milestone_gate(done_tasks: list[dict], project_path: Path,
         for f in failures:
             print(f'[oms-work]   {f[:160]}', flush=True)
 
-    return passed
+    return passed, failures, verify_cmds
 
 
 def _collect_media(project_path: Path, passed: bool) -> list[Path]:
@@ -2041,10 +2050,11 @@ def main() -> None:
     # Milestone gate — run all Verify commands on main after --all completes
     gate_passed = True
     if run_all and done_tk:
-        gate_passed = run_milestone_gate(done_tk, project_path, channel_id, threads_file)
-        # Auto-create fix task if gate fails (instead of manual debugging)
+        gate_passed, gate_failures, gate_verify_cmds = run_milestone_gate(
+            done_tk, project_path, channel_id, threads_file)
         if not gate_passed:
-            _auto_queue_gate_fix(queue_path, done_tk, channel_id, threads_file)
+            _auto_queue_gate_fix(queue_path, done_tk, channel_id, threads_file,
+                                 gate_failures, gate_verify_cmds)
 
     lines = ['## OMS Work']
     for i, t in done_r:
