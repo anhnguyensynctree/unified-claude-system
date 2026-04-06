@@ -776,16 +776,41 @@ def exec_prompt(task: dict, wt: Path) -> str:
             f"{action}\n\nOutput a 1–2 sentence summary when complete.")
 
 
-def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[bool, str, float]:
+def validate_step(validator: str, task: dict, summary: str, cwd: Path,
+                   verify_result: str = '', quality_result: str = '') -> tuple[bool, str, float]:
     """Returns (passed, reason, cost_usd).
+    Includes actual file contents so validator judges real code, not just summary.
     Tries free model (gemma — fastest) first; falls back to subscription haiku."""
     role = VALIDATOR_ROLE.get(validator.lower(),
                                f'Validate as {validator}: confirm all scenarios are met.')
     scenarios = '\n'.join(f'- {s}' for s in task['scenarios'])
     artifacts = '\n'.join(f'- {a}' for a in task['artifacts'])
     artifact_section = f'\n\nRequired artifacts:\n{artifacts}' if artifacts else ''
+
+    # Include actual generated code (capped at 8K total to fit in context)
+    code_sections: list[str] = []
+    total_chars = 0
+    for art in task.get('artifacts', []):
+        f = cwd / art
+        if f.exists() and total_chars < 8000:
+            content = f.read_text(encoding='utf-8', errors='replace')
+            cap = min(len(content), 8000 - total_chars)
+            code_sections.append(f'### {art}\n```\n{content[:cap]}\n```')
+            total_chars += cap
+    code_block = '\n\n'.join(code_sections) if code_sections else '(no files found)'
+
+    # Include deterministic check results
+    checks = ''
+    if verify_result:
+        checks += f'\nVerify commands: {verify_result}'
+    if quality_result:
+        checks += f'\nQuality checks: {quality_result}'
+
     prompt = (f"Task ({task['id']}): {task['spec']}\n\nScenarios:\n{scenarios}{artifact_section}\n\n"
-              f"Work summary: {summary}\n\nYour role: {role}\n\n"
+              f"## Generated Code\n{code_block}\n\n"
+              f"Work summary: {summary}{checks}\n\n"
+              f"Your role: {role}\n"
+              "Review the ACTUAL CODE above against each scenario. Check for correctness, completeness, and quality.\n\n"
               "Output EXACTLY: PASS — [reason]  OR  FAIL — [reason]. Nothing else.")
     # Try free model first (gemma = fastest free, ~70s)
     out, rc = run_llm_route('gemma', prompt, cwd)
@@ -1328,12 +1353,17 @@ def execute_task(task: dict, project_path: Path,
 
         summary = work_out[:300].replace('\n', ' ').strip()
         task_notes = summary
+        # Track last verify/quality results for validators
+        last_verify = 'PASS' if not error_feedback else error_feedback[:200]
+        last_quality = 'PASS (all checks passed)'
         print(f'[oms-work]   exec: {summary[:120]}', flush=True)
 
         # ── Validation chain ──
         research_retried = False
         for validator in task['validation']:
-            passed, reason, val_cost = validate_step(validator, task, summary, wt)
+            passed, reason, val_cost = validate_step(
+                validator, task, summary, wt,
+                verify_result=last_verify, quality_result=last_quality)
             task_cost += val_cost
             first_pass = passed
             print(f'[oms-work]   {"✓" if passed else "✗"} {validator}: {reason[:100]}', flush=True)
@@ -1353,7 +1383,9 @@ def execute_task(task: dict, project_path: Path,
                     task_cost += retry_cost
                     if code == 0:
                         summary = work_out[:300].replace('\n', ' ').strip()
-                        passed, reason, val_cost = validate_step(validator, task, summary, wt)
+                        passed, reason, val_cost = validate_step(
+                            validator, task, summary, wt,
+                            verify_result=last_verify, quality_result=last_quality)
                         task_cost += val_cost
                         print(f'[oms-work]   {"✓" if passed else "✗"} {validator} (sonnet retry): {reason[:100]}', flush=True)
                 if not passed:

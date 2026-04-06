@@ -85,7 +85,7 @@ Draft tasks are elaborated into queued tasks by the Task Elaboration Agent.
 - **Scenarios:** GIVEN [precondition] WHEN [trigger] THEN [outcome] | GIVEN ...
 - **Artifacts:** [src/path/file.ts — exports: foo, bar] | [src/path/other.ts — exists with real impl]
 - **Produces:** [interface/export/file downstream tasks depend on] | none
-- **Verify:** [npm test src/path] | [npm run lint]
+- **Verify:** [npm test src/path] | [npm run lint] — **REQUIRED for impl tasks, must include real test execution (not just ls/echo)**
 - **Context:** [path/to/file.ts, path/to/other.md]
 - **Activated:** [agent, agent, ...]
 - **Validation:** [agent → agent → agent]
@@ -147,13 +147,26 @@ Gate tasks are not authored through the OMS feature discussion. They are auto-ap
 
 **Produces** — downstream contract. Feeds into dependent tasks' `Context:` verbatim. Write `none` if nothing consumed downstream.
 
-**Verify** — shell commands, deterministic pass/fail. Pipe-separated. Test/build commands MUST be wrapped in ctx-exec — this fires in both interactive Claude and claude -p subprocesses (LLM router + Anthropic). The PreToolUse hook blocks unwrapped commands with exit 2.
-```
-# Correct — always wrap test/build/lint/tsc in ctx-exec:
-~/.claude/bin/ctx-exec "failing tests" pnpm test lib/path/file.test.ts
-~/.claude/bin/ctx-exec "type error" npx tsc --noEmit
-~/.claude/bin/ctx-exec "lint error" pnpm run lint
-```
+**Verify** — shell commands, deterministic pass/fail. Pipe-separated. oms-work.py runs these locally in the worktree via `_run_verify_commands()`. They are the primary quality gate — if tests fail, the LLM retries with error feedback.
+
+**Minimum Verify standards per task type:**
+
+| Task type | Minimum Verify commands |
+|---|---|
+| impl (TypeScript) | `pnpm test <spec>` + `npx tsc --noEmit` |
+| impl (Python) | `pytest <test_file> -v` |
+| impl (UI page/component) | test command + `ls <artifact>` for each file |
+| research | `ls logs/research/<task-id>.md` + `wc -l logs/research/<task-id>.md` (minimum 20 lines) |
+| gate | `pnpm exec playwright test` |
+
+**Weak Verify commands that are NOT sufficient alone:**
+- `ls` (only checks file exists, not content)
+- `echo` (no verification)
+- `cat` (prints but doesn't validate)
+
+Every impl task MUST have at least one test execution command (pytest, vitest, jest, pnpm test) in Verify. The elaboration agent is responsible for writing appropriate test Verify commands. If a task has no test framework available, Verify must include a smoke check that validates the output (e.g., `python -c "from module import func; assert func(input) == expected"`).
+
+**Note:** oms-work.py runs Verify directly (no ctx-exec needed — it's local subprocess, not Claude Code tool). The ctx-exec wrapper is only needed in interactive REPL sessions.
 
 **Milestone** — exact name from `product-direction.ctx.md`. Never invented.
 
