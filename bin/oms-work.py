@@ -934,17 +934,19 @@ def validate_step(validator: str, task: dict, summary: str, cwd: Path,
               f"Your role: {role}\n"
               "Review the ACTUAL CODE above against each scenario. Check for correctness, completeness, and quality.\n\n"
               "Output EXACTLY: PASS — [reason]  OR  FAIL — [reason]. Nothing else.")
-    # Try free models first (gemma fastest, then stepfun, then qwen)
-    # Fallback chain avoids single-model rate limit bottleneck
+    # Haiku first (fastest ~10s, subscription), free models as fallback
+    out, rc, _err, cost = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
+    if rc == 0 and out.strip():
+        print(f'[oms-work]   validator {validator} via haiku', flush=True)
+        return out.strip().upper().startswith('PASS'), out.strip(), cost
+    # Haiku rate-limited — fall back to free models
     for free_model in ('gemma', 'stepfun', 'llama'):
         out, rc = run_llm_route(free_model, prompt, cwd)
         if rc == 0 and out.strip():
-            print(f'[oms-work]   validator {validator} via {free_model} (free)', flush=True)
+            print(f'[oms-work]   validator {validator} via {free_model} (free fallback)', flush=True)
             return out.strip().upper().startswith('PASS'), out.strip(), 0.0
-    # All free models failed — fallback to subscription haiku
-    print(f'[oms-work]   validator {validator} all free failed — falling back to haiku', flush=True)
-    out, rc, _err, cost = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
-    return out.strip().upper().startswith('PASS'), out.strip(), cost
+    print(f'[oms-work]   validator {validator} all models failed', flush=True)
+    return False, 'FAIL — all validator models unavailable', 0.0
 
 
 def _extract_and_write_files(output: str, wt: Path, artifacts: list[str]) -> int:
