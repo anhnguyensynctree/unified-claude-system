@@ -724,9 +724,38 @@ def exec_prompt(task: dict, wt: Path) -> str:
               ).format(id=task['id']) if task['type'] == 'research' \
              else 'Make all required file changes to satisfy every scenario.'
 
+    # Coding rules injected for all models (free and subscription)
+    rules = (
+        '\n\n## Code Quality Rules\n'
+        '- Max 300 lines per file, max 50 lines per function\n'
+        '- No console.log / print debugging in production code\n'
+        '- No commented-out code blocks\n'
+        '- camelCase for variables/functions, PascalCase for classes, UPPER_SNAKE for constants\n'
+        '- Comments explain WHY not WHAT\n'
+        '- Always handle errors — no silent swallowing\n'
+        '- Prefer async/await over promise chains\n'
+        '- Group imports: external → internal → relative\n'
+        '- API responses: always { data, error, meta? } shape\n'
+        '- TypeScript: define schemas in Zod first, derive types with z.infer<>\n'
+        '- Python: define schemas in Pydantic first, use .model_validate() at boundaries\n'
+        '- No hardcoded secrets, API keys, or passwords\n'
+    )
+
+    # Output format hint for free models (they generate text, not tool calls)
+    output_hint = (
+        '\n\n## Output Format\n'
+        'For each file, output:\n'
+        '### path/to/file.ext\n'
+        '```language\n'
+        '<complete file content>\n'
+        '```\n'
+        'Output ALL files completely. No placeholders, no TODO, no truncation.\n'
+    ) if task['type'] != 'research' else ''
+
     return (f"OMS work task ({task['id']}): {task['spec']}\n\n"
             f"## Behavioral Scenarios\n{scenarios}"
-            f"{artifact_section}{produces_section}{ctx_section}\n\n"
+            f"{artifact_section}{produces_section}{ctx_section}"
+            f"{rules}{output_hint}\n\n"
             f"{action}\n\nOutput a 1–2 sentence summary when complete.")
 
 
@@ -750,6 +779,122 @@ def validate_step(validator: str, task: dict, summary: str, cwd: Path) -> tuple[
     print(f'[oms-work]   validator {validator} gemma failed — falling back to haiku', flush=True)
     out, rc, _err, cost = run_claude(prompt, cwd, model='claude-haiku-4-5-20251001')
     return out.strip().upper().startswith('PASS'), out.strip(), cost
+
+
+def _extract_and_write_files(output: str, wt: Path, artifacts: list[str]) -> int:
+    """Parse code blocks from LLM output and write to worktree.
+    Returns number of files written. Supports formats:
+      ### path/to/file.py\n```lang\n...\n```
+      **path/to/file.py**\n```lang\n...\n```
+      ```lang path/to/file.py\n...\n```
+    """
+    written = 0
+    remaining_arts = list(artifacts)
+
+    # Split output into sections by heading or bold markers
+    # Look for lines that contain a file path before a code block
+    lines = output.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        path_str = ''
+
+        # Pattern: ### path/to/file.ext or ## path/to/file.ext
+        m = re.match(r'^#{1,4}\s+(.+?)$', line)
+        if m:
+            candidate = m.group(1).strip().strip('`').strip('*').strip()
+            if '.' in candidate and '/' in candidate:
+                path_str = candidate
+
+        # Pattern: **path/to/file.ext**
+        if not path_str:
+            m = re.match(r'^\*\*(.+?)\*\*', line)
+            if m:
+                candidate = m.group(1).strip()
+                if '.' in candidate and '/' in candidate:
+                    path_str = candidate
+
+        # Pattern: ```lang path/to/file.ext
+        if not path_str:
+            m = re.match(r'^```\w*\s+(.+?)$', line)
+            if m:
+                candidate = m.group(1).strip()
+                if '.' in candidate:
+                    path_str = candidate
+
+        if path_str:
+            # Find the next code fence
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith('```'):
+                j += 1
+            if j < len(lines) and lines[j].startswith('```'):
+                # Collect content until closing fence
+                k = j + 1
+                code_lines: list[str] = []
+                while k < len(lines) and not lines[k].startswith('```'):
+                    code_lines.append(lines[k])
+                    k += 1
+                content = '\n'.join(code_lines)
+
+                # Clean path
+                path_str = path_str.lstrip('/').lstrip('./')
+
+                # Match to artifact
+                matched = None
+                for art in remaining_arts:
+                    if path_str == art or Path(path_str).name == Path(art).name:
+                        matched = art
+                        break
+                target = wt / (matched or path_str)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content.strip() + '\n')
+                print(f'[oms-work]   wrote {matched or path_str} ({len(content)} chars)', flush=True)
+                written += 1
+                if matched:
+                    remaining_arts.remove(matched)
+                i = k + 1
+                continue
+        i += 1
+
+    # Fallback: if no heading-based blocks found, try matching fenced blocks to artifacts by order
+    if written == 0 and artifacts:
+        blocks = re.findall(r'```\w*\n(.*?)```', output, re.DOTALL)
+        for block, art in zip(blocks, artifacts):
+            target = wt / art
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(block.strip() + '\n')
+            print(f'[oms-work]   wrote {art} ({len(block)} chars, order-matched)', flush=True)
+            written += 1
+
+    return written
+
+
+def _run_verify_commands(verify_cmds: list[str], cwd: Path) -> tuple[bool, str]:
+    """Run Verify commands locally. Returns (all_passed, summary)."""
+    if not verify_cmds:
+        return True, 'no verify commands'
+    results: list[str] = []
+    all_ok = True
+    for cmd in verify_cmds:
+        print(f'[oms-work]   verify: {cmd}', flush=True)
+        try:
+            r = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, cwd=cwd, timeout=120,
+            )
+            if r.returncode == 0:
+                results.append(f'PASS: {cmd}')
+            else:
+                all_ok = False
+                err = (r.stderr or r.stdout)[:200].strip()
+                results.append(f'FAIL: {cmd} — {err}')
+                print(f'[oms-work]   verify FAIL: {cmd} (exit {r.returncode})', flush=True)
+        except subprocess.TimeoutExpired:
+            results.append(f'TIMEOUT: {cmd}')
+            all_ok = False
+        except Exception as e:
+            results.append(f'ERROR: {cmd} — {e}')
+            all_ok = False
+    return all_ok, '; '.join(results)
 
 
 def execute_task(task: dict, project_path: Path,
@@ -779,6 +924,19 @@ def execute_task(task: dict, project_path: Path,
         if is_external:
             work_out, code = run_llm_route(model, exec_prompt(task, wt), wt)
             run_stderr = ''
+            # Free models output code as text — extract and write files to worktree
+            if code == 0 and work_out.strip() and task['type'] != 'research':
+                n_written = _extract_and_write_files(work_out, wt, list(task['artifacts']))
+                print(f'[oms-work]   extracted {n_written} files from free model output', flush=True)
+                if n_written > 0:
+                    # Stage all new files
+                    subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
+                    # Run Verify commands if defined
+                    if task.get('verify'):
+                        v_ok, v_summary = _run_verify_commands(task['verify'], wt)
+                        print(f'[oms-work]   verify: {"PASS" if v_ok else "FAIL"} — {v_summary[:120]}', flush=True)
+                        if not v_ok:
+                            work_out += f'\n\nVerify FAILED: {v_summary}'
         else:
             work_out, code, run_stderr, exec_cost = run_claude(exec_prompt(task, wt), wt, model, allow_writes=True)
             task_cost += exec_cost

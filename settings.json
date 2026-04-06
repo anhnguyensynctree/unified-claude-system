@@ -17,7 +17,6 @@
       "Agent"
     ]
   },
-  "model": "haiku",
   "hooks": {
     "PreToolUse": [
       {
@@ -25,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -qE '(npm|pnpm|yarn|cargo)' && echo '[Hook] Long-running process detected — consider using run_in_background or a separate terminal' >&2 || true"
+            "command": "CMD=$(jq -r '.tool_input.command'); echo \"$CMD\" | grep -qE '(npm (install|ci|run)|pnpm (install|run)|yarn (install|add)|cargo (build|test))' || exit 0; echo \"$CMD\" | grep -qE '(run_in_background|ctx-exec|--help|--version)' && exit 0; echo '[⛔ BLOCKED] Long-running command — use run_in_background:true param or wrap with ctx-exec' >&2; exit 2"
           }
         ]
       },
@@ -43,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -q 'git push' && echo '[Hook] Review your diff before pushing. Run /review-pr first.' >&2 || true"
+            "command": "CMD=$(jq -r '.tool_input.command'); echo \"$CMD\" | head -1 | grep -qE '^git push|&& git push|; git push|\\| git push' || exit 0; echo '[BLOCKED] git push requires review first. Run /review-pr before pushing.' >&2; exit 2"
           }
         ]
       },
@@ -99,7 +98,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); echo \"$FILE\" | grep -qE '\\.md$' || exit 0; [ -f \"$FILE\" ] || exit 0; LINES=$(grep -c '[^[:space:]]' \"$FILE\" 2>/dev/null || echo 0); HAS_HEADING=$(grep -c '^#' \"$FILE\" 2>/dev/null || echo 0); HAS_PLACEHOLDER=$(grep -cE '^\\[|^TODO|^\\.\\.\\.' \"$FILE\" 2>/dev/null || echo 0); [ \"$HAS_HEADING\" -eq 0 ] && echo '[Hook] .md missing heading — add a # title' >&2; [ \"$LINES\" -lt 5 ] && echo \"[Hook] .md too sparse ($LINES lines) — every .md must justify its token cost\" >&2; [ \"$HAS_PLACEHOLDER\" -gt 0 ] && echo '[Hook] .md has unfilled placeholders — complete or remove them' >&2; true"
+            "command": "~/.claude/hooks/block-sparse-md.sh"
           }
         ]
       },
@@ -117,7 +116,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r '.tool_input.file_path'); [ -f \"$FILE\" ] && grep -n 'console\\.log' \"$FILE\" && echo '[Hook] console.log found — remove before committing' >&2 || true"
+            "command": "~/.claude/hooks/block-console-log.sh"
           }
         ]
       },
@@ -135,7 +134,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -q 'grep -r' && echo '[Hook] Prefer mgrep over grep -r for ~50% token reduction' >&2 || true"
+            "command": "~/.claude/hooks/block-grep-r.sh"
           }
         ]
       },
