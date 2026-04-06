@@ -272,13 +272,21 @@ def _write_pending_resume(slug: str, channel_id: str) -> None:
         print(f'[oms-work] failed to write pending resume: {exc}', file=sys.stderr)
 
 VALIDATOR_ROLE: dict[str, str] = {
-    'dev':        'Review for correctness, completeness, and code quality against acceptance criteria.',
-    'qa':         'Test each acceptance criterion. Identify any failing cases or edge cases.',
-    'em':         'Final approval: spec met, all criteria passed, ready to merge.',
-    'researcher': 'Evaluate methodology soundness and finding completeness.',
-    'cro':        'Validate findings are rigorous, aligned with research question, and actionable.',
-    'cpo':        'Confirm output creates clear product direction or actionable roadmap items.',
-    'cto':        'Review for architectural soundness. Name any blocking technical risk.',
+    'dev':        ('Review the ACTUAL CODE for: correctness (does it do what the spec says?), '
+                   'completeness (all scenarios covered?), quality (naming, error handling, no shortcuts). '
+                   'Check test coverage: are all 5 categories present (happy path, error, empty, auth edge, input edge)?'),
+    'qa':         ('Test each scenario against the code. For each GIVEN/WHEN/THEN: does the code satisfy it? '
+                   'Check edge cases the spec might have missed. Verify error handling paths exist.'),
+    'em':         ('Final approval gate. Spec fully met? All scenarios covered? Tests meaningful (not tautological)? '
+                   'Code quality acceptable for merge? No TODO/placeholder/skeleton code?'),
+    'researcher': ('Evaluate research output: ≥3 findings with separate headings? Each has source/citation? '
+                   'Predictions are testable? Methodology sound? Distinguishes consensus vs controversy?'),
+    'cro':        ('Are findings rigorous enough to act on? Evidence quality sufficient? '
+                   'Predictions specific and measurable? Would you make a business decision based on this?'),
+    'cpo':        ('Does output create clear product direction? Are recommendations actionable? '
+                   'Trade-offs explicitly stated? Decision matrix present if comparing options?'),
+    'cto':        ('Review for architectural soundness. Any blocking technical risk? '
+                   'Dependencies reasonable? Performance implications? Security concerns?'),
 }
 
 SPEC_FAILURE_SIGNALS = [
@@ -786,9 +794,24 @@ def test_prompt(task: dict, wt: Path) -> str:
             f"## Test Files to Write\n{art_list}\n"
             f"{QUALITY_RULES}{OUTPUT_FMT}\n\n"
             "Write ONLY the test files listed above. Do NOT write any implementation code.\n"
-            "Tests must cover ALL behavioral scenarios from the spec.\n"
-            "Each test should assert the expected behavior — tests WILL FAIL until implementation is written.\n"
-            "This is TDD RED phase — tests define the contract.\n\n"
+            "Tests must cover ALL behavioral scenarios from the spec.\n\n"
+            "## Test Quality Requirements\n"
+            "Structure tests into these 5 categories (use test.describe blocks or equivalent):\n"
+            "1. **Happy path** — normal successful flow from each scenario\n"
+            "2. **Error states** — invalid input, missing data, API failures\n"
+            "3. **Empty state** — no data, empty collections, null values\n"
+            "4. **Auth/permission edge** — unauthorized access, expired sessions (if applicable)\n"
+            "5. **Input edge** — boundary values, long strings, special characters\n\n"
+            "If a category does not apply, add a comment: // N/A (category): reason\n\n"
+            "## Test Best Practices\n"
+            "- Test names describe behavior: it('returns null when unauthenticated')\n"
+            "- One assertion concept per test\n"
+            "- Use realistic test data — not 'foo', 'bar', 'test123'\n"
+            "- Mock external dependencies (APIs, databases) — never mock the unit under test\n"
+            "- Test the PUBLIC interface, not implementation details\n"
+            "- For Python: use pytest with descriptive function names (test_fetch_ticker_returns_cached_dataframe)\n"
+            "- For TypeScript: use describe/it blocks grouped by category\n\n"
+            "This is TDD RED phase — tests define the contract. Tests WILL FAIL until implementation is written.\n\n"
             "Output a 1-sentence summary of test coverage when complete.")
 
 
@@ -817,18 +840,45 @@ def impl_prompt(task: dict, wt: Path) -> str:
             "Output a 1-sentence summary when complete.")
 
 
+def research_prompt(task: dict, wt: Path) -> str:
+    """Research task prompt — enforces structured analysis with citations."""
+    base = _build_base_prompt(task, wt)
+    return (f"{base}\n\n"
+            f"## Research Output Requirements\n"
+            f"Write findings to `logs/research/{task['id']}.md`.\n\n"
+            "## Structure (mandatory)\n"
+            "```markdown\n"
+            f"# {task['id']} — Research Findings\n\n"
+            "## Finding 1: [title]\n"
+            "**Evidence:** [what you found, with source URL or reference]\n"
+            "**Prediction:** [testable claim that follows from this finding]\n"
+            "**Confidence:** [high/medium/low] — [why]\n\n"
+            "## Finding 2: [title]\n"
+            "... (repeat for each finding)\n\n"
+            "## Synthesis\n"
+            "[How findings connect. What they mean for the project. Recommended action.]\n"
+            "```\n\n"
+            "## Research Quality Rules\n"
+            "- Minimum 3 findings, each under a separate ## heading\n"
+            "- Every finding must have at least one source URL or citation\n"
+            "- Every finding must include a testable prediction\n"
+            "- Distinguish between what the field agrees on vs where it conflicts\n"
+            "- Flag assumptions and limitations explicitly\n"
+            "- Be specific — no vague conclusions like 'further research needed'\n"
+            "- Prioritize primary sources (docs, papers, official repos) over blog posts\n"
+            "- If comparing options: use a decision matrix with weighted criteria\n\n"
+            f"{OUTPUT_FMT}\n\n"
+            "Output a 1-sentence summary of key findings when complete.")
+
+
 def exec_prompt(task: dict, wt: Path) -> str:
-    """Fallback single-shot prompt for tasks without test files (scaffold, config, etc.)."""
+    """Single-shot prompt for tasks without test files (scaffold, config, etc.)."""
+    if task['type'] == 'research':
+        return research_prompt(task, wt)
+
     base = _build_base_prompt(task, wt)
     artifacts = '\n'.join(f'- {a}' for a in task['artifacts'])
     artifact_section = f'\n\n## Required Artifacts\nYou MUST produce exactly these files:\n{artifacts}' if artifacts else ''
-
-    if task['type'] == 'research':
-        action = ('Write findings to logs/research/{id}.md. '
-                  'Include ≥3 evidence-backed findings under separate ## headings, '
-                  'each with a testable prediction and at least one source/citation.'
-                  ).format(id=task['id'])
-        return f"{base}{artifact_section}{QUALITY_RULES}\n\n{action}\n\nOutput a 1-2 sentence summary when complete."
 
     return (f"{base}{artifact_section}"
             f"{QUALITY_RULES}{OUTPUT_FMT}\n\n"
@@ -1338,10 +1388,16 @@ def execute_task(task: dict, project_path: Path,
         test_arts, impl_arts = _split_artifacts(task['artifacts'])
         use_tdd = bool(test_arts) and task['type'] == 'impl'
 
+        # Impl tasks without test files = elaboration failure
+        if task['type'] == 'impl' and not test_arts:
+            print(f'[oms-work]   WARN: impl task has no test files in Artifacts — running single-shot (lower quality)', flush=True)
+
         if use_tdd:
             print(f'[oms-work]   TDD mode: {len(test_arts)} test file(s), {len(impl_arts)} impl file(s)', flush=True)
+        elif task['type'] == 'research':
+            print(f'[oms-work]   research mode', flush=True)
         else:
-            print(f'[oms-work]   single-shot mode ({"research" if task["type"] == "research" else "no test files"})', flush=True)
+            print(f'[oms-work]   single-shot mode (no test files)', flush=True)
 
         for attempt in range(total_attempts):
             if attempt > 0:
