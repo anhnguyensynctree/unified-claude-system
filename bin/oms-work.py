@@ -235,7 +235,8 @@ def write_task_metrics(
     try:
         rows: list = []
         if metrics_file.exists():
-            rows = json.loads(metrics_file.read_text())
+            data = json.loads(metrics_file.read_text())
+            rows = data if isinstance(data, list) else []
         rows.append({
             'task_id': task_id,
             'slug': slug,
@@ -1128,8 +1129,9 @@ def _run_quality_checks(wt: Path, artifacts: list[str]) -> tuple[bool, list[str]
                     capture_output=True, text=True, cwd=wt, timeout=15,
                 )
 
-        # Check: pyright / type errors (if .py and pyright available)
-        if f.suffix == '.py':
+        # Check: pyright / type errors — only if project has pyright config
+        # Skip for Python files without config — missing deps cause false positives
+        if f.suffix == '.py' and (wt / 'pyrightconfig.json').exists():
             r = subprocess.run(
                 ['pyright', str(f)],
                 capture_output=True, text=True, cwd=wt, timeout=30,

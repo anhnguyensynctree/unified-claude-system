@@ -1,216 +1,25 @@
 # oms-work — Execute Cleared Task Queue
 
-Runs pre-cleared tasks from `[project]/.claude/cleared-queue.md`.
-No CEO gate. Each task runs in an isolated git worktree. Validation chain runs per task.
-One stop: `cto-stop` (branch left open, surfaces next daily session).
+**Use `!work` in Discord.** The REPL is not the execution path.
 
-Schema: `~/.claude/agents/oms-work/task-schema.md`
-Background trigger: send `/work` in any project Discord channel.
+All task execution runs through `oms-work.py` via Discord's `!work` command. This ensures:
+- Free model routing via LiteLLM (zero subscription cost)
+- Self-correcting retry loop (max 4 attempts with error feedback)
+- Quality checks, Verify commands, browse visual verification
+- Validator chain (gemma, free)
+- Cost tracking, Discord notifications, worktree isolation
 
----
+## If you need to run from terminal
 
-## Step 0 — Identify project
-
-If `$ARGUMENTS` names a project slug, use it.
-If run from inside a project directory (has `.claude/cleared-queue.md`), use that project.
-If ambiguous, list projects from `~/.claude/oms-config.json` and ask.
-
-Read `channel_id` for this project from `~/.claude/oms-config.json` — used for Discord notifications throughout.
-
----
-
-## Step 1 — Read queue
-
-Read `[project]/.claude/cleared-queue.md`. Parse all tasks.
-
-If the file does not exist:
-```
-No cleared queue found for [project]. Run the daily /oms session first to generate tasks.
-```
-
-Compute:
-- **ready**: status=queued AND all Depends are done
-- **blocked**: status=queued AND at least one Depends not yet done
-- **done**: status=done
-- **cto-stop**: status=cto-stop
-
-Show a status table:
-```
-TASK-001  Add JWT refresh rotation    queued     ready      dev → qa → em
-TASK-002  Research drop-off patterns  queued     ready      researcher → cro → cpo
-TASK-003  Implement re-engagement     queued     blocked    TASK-002
-```
-
-If no ready tasks: report status and exit.
-
----
-
-## Step 2 — Execute ready tasks
-
-Group ready tasks into:
-- **Independent**: no shared context files (can run in parallel)
-- **Chains**: tasks where one depends on another already-ready task
-
-For independent tasks: use Agent tool, one subagent per task, all launched in the same message.
-For chains: run in dependency order (N-1 completes before N starts).
-
-**Before launching each task** — post running signal to Discord:
 ```bash
-python3 -c "
-import sys; sys.path.insert(0, '$HOME/.claude/bin')
-import oms_discord as d, json
-from pathlib import Path
-cfg = json.loads(Path('$HOME/.claude/oms-config.json').read_text())
-proj = list(cfg['projects'].values())[0]  # replaced per task
-tf = Path(proj['path']) / '.claude/oms-work-threads.json'
-d.notify_task(proj['channel_id'], tf, 'MILESTONE', 'TASK-ID', 'TITLE', None, 'running')
-"
-```
-Replace MILESTONE, TASK-ID, TITLE with actual values. Use `get_or_create_thread` + `post_to_thread` for the `▶ TASK-ID — title \`running\`` message.
+# Single task
+python3 ~/.claude/bin/oms-work.py <slug> TASK-NNN
 
-Each subagent receives this prompt:
+# All ready tasks
+python3 ~/.claude/bin/oms-work.py <slug> --all
 
-```
-OMS work task ([task-id]): [spec]
-
-Acceptance criteria:
-- [criterion]
-- [criterion]
-
-Context files: [comma-separated paths]
-
-Instructions:
-1. Read context files.
-2. Complete the task fully. For impl: make all file changes. For research: write findings to logs/research/[task-id].md.
-3. Run package installs if the task requires them. Do NOT re-run builds or installs to verify — make your changes, run installs once if needed, then stop.
-4. Run validation chain: [agent → agent → agent]
-   For each validator, use their role below to assess the output:
-   - dev: correctness, completeness, code quality
-   - qa: each acceptance criterion — pass or fail?
-   - em: final approval — spec met, ready to merge?
-   - researcher: methodology sound, findings complete?
-   - cro: findings rigorous and actionable?
-   - cpo: output creates clear product direction?
-   - cto: architectural soundness, no blocking technical risk?
-5. Output for each validator: "[validator]: PASS" or "[validator]: FAIL — [reason]"
-6. Final line: "DONE — [1 sentence summary]" or "CTO-STOP — [validator]: [reason]"
+# Dry run
+python3 ~/.claude/bin/oms-work.py <slug> --dry-run
 ```
 
----
-
-## Step 3 — Process results
-
-After each subagent returns:
-
-**If DONE**:
-- Commit all changes in the worktree: `git add -A && git commit -m "oms-work: TASK-NNN — title"`
-- Remove the worktree (branch stays for merge): `git worktree remove --force .claude/worktrees/TASK-NNN`
-- Update `cleared-queue.md`: Status: done, Notes: branch name
-- Post to Discord: `✓ TASK-NNN — title \`done\``
-
-**If CTO-STOP**:
-- Leave the worktree open — CTO or CEO reviews the branch directly
-- Update `cleared-queue.md`: Status: cto-stop, Notes: stop reason + branch name
-- Do NOT merge. Do NOT delete the worktree.
-- Post to Discord: `⚑ TASK-NNN — title \`cto-stop\` — [reason]`
-
-For Discord posts use:
-```bash
-python3 -c "
-import sys; sys.path.insert(0, '$HOME/.claude/bin')
-import oms_discord as d, json
-from pathlib import Path
-cfg = json.loads(Path('$HOME/.claude/oms-config.json').read_text())
-proj = cfg['projects']['SLUG']
-tf = Path(proj['path']) / '.claude/oms-work-threads.json'
-d.notify_task(proj['channel_id'], tf, 'MILESTONE', 'TASK-ID', 'TITLE', PASSED, 'NOTES')
-"
-```
-
-After a task completes (done), check if any blocked tasks are now unblocked.
-If yes: run them immediately (they become the next wave of parallel agents).
-
----
-
-## Step 4 — Final report
-
-```
-## OMS Work — [project]
-
-Completed:
-  ✓ TASK-001 — Add JWT refresh rotation — all validators passed
-  ✓ TASK-002 — Research drop-off patterns — researcher → cro → cpo passed
-
-Stopped:
-  ⚑ TASK-003 — Implement re-engagement — CTO-STOP: conflicts with pending session store refactor
-
-Blocked (unmet deps):
-  ○ TASK-004 — depends on TASK-003
-
-Next daily session: resolve TASK-003 (CTO-STOP) before requeueing.
-```
-
-If everything passed: "Queue clear — all tasks done."
-
----
-
-## Step 5 — CEO Executive Brief
-
-After all tasks complete, invoke the Executive Briefing Agent:
-
-**1. Write the briefing file** — write `[project]/.claude/oms-briefing.md` using the schema at `~/.claude/agents/executive-briefing-agent/briefing-schema.md`.
-Populate from: completed/stopped task list, `cleared-queue.md` state, `product-direction.ctx.md`, any CTO-stop reasons.
-
-**2. Invoke the agent** — load `~/.claude/agents/executive-briefing-agent/persona.md` + `executive-briefing-agent/lessons.md`.
-The agent reads `oms-briefing.md` and outputs the executive brief to the CEO (terminal).
-
-**3. Post to milestone thread** — extract TL;DR bullets and What Was Done items from the brief, post both to the milestone thread (same thread where task statuses appeared):
-```bash
-python3 -c "
-import sys; sys.path.insert(0, '$HOME/.claude/bin')
-import oms_discord as d, json
-from pathlib import Path
-cfg = json.loads(Path('$HOME/.claude/oms-config.json').read_text())
-proj = cfg['projects']['SLUG']
-tf = Path(proj['path']) / '.claude/oms-work-threads.json'
-d.post_brief_to_thread(
-    proj['channel_id'], tf, 'MILESTONE',
-    ['TLDR_LINE_1', 'TLDR_LINE_2', 'TLDR_LINE_3'],
-    ['ITEM_1 — impact', 'ITEM_2 — impact'],
-)
-"
-```
-
-**4. Append to daily log** — write both sections to `[project]/.claude/oms-daily-log.md`:
-```
-## YYYY-MM-DDTHH:MMZ | oms-work
-• [tl;dr bullet 1]
-• [tl;dr bullet 2]
-• [tl;dr bullet 3 — CEO action or "No decision required"]
-Built: [item 1] — [impact on product/users]
-Built: [item 2] — [impact on product/users]
-```
-
----
-
-## Merge guidance (after /oms-work completes)
-
-Done tasks have committed branches named `oms-work/task-nnn`.
-To merge all done tasks into main:
-```
-git merge oms-work/task-001 oms-work/task-002 ...
-```
-Or review each branch first: `git diff main oms-work/task-001`
-
-CTO-stop branches: do not merge. Resolve at next daily session, re-spec the task, re-queue.
-
----
-
-## Session cleanup
-
-After the final report, run:
-```bash
-touch ~/.claude/.skip-handoff
-```
-
-This signals the session-end hook to skip mem0 extraction — oms-work sessions are execution only.
+Always use the Python script directly — never implement task execution inline via Agent tool.
