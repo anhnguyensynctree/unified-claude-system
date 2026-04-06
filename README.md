@@ -34,7 +34,7 @@ Every Claude Code session starts cold. You re-explain your stack, your conventio
 **This system fixes that.** Drop it into `~/.claude` and Claude becomes a stateful development partner:
 
 - **[OMS v0.6](#oms--one-man-show-v06)** — multi-agent autonomous pipeline: convenes a virtual product team, plans milestones, dispatches parallel agents, validates delivery, posts CEO briefings to Discord — all without manual re-briefing
-- **Cost-tiered agent dispatch** — Haiku for worker tasks, Sonnet for 90% of coding, Opus for architecture — routes to free Qwen via OpenRouter when available
+- **Cost-tiered agent dispatch** — free OpenRouter models (qwen-coder, llama, gpt-oss, gemma, nemotron, stepfun) for 90%+ of task execution and validation; Sonnet only for milestone gates; Opus for architecture decisions. Direct HTTP to LiteLLM proxy — zero subscription cost on non-gate tasks
 - **Persistent memory** — remembers decisions, patterns, and project context across sessions without manual re-briefing
 - **Enforced conventions** — rules load automatically via hooks, not trusted to per-prompt engineering
 - **14 context modes** — Claude shifts persona and priorities based on what you're doing: dev, test, review, security, debug, plan, ui-ux, architecture, devops, refactor, performance, data, docs, research — each loaded on demand, zero token cost until triggered
@@ -245,6 +245,94 @@ OMS produces a decision. `/oms-work` executes it.
 /oms how should we design the question bank to maximize honest self-reflection
 ```
 
+### Execution Pipeline — `!work` (Discord) / `/oms-work`
+
+The primary execution path. Each task in the cleared queue runs through this pipeline:
+
+```
+discord !work → oms-work.py → execute_task()
+
+  ┌─ EXECUTION ───────────────────────────────────────────────┐
+  │ resolve_model() picks free model from task's Model-hint   │
+  │ exec_prompt() injects: spec, scenarios, artifacts,        │
+  │   context files, coding quality rules, output format      │
+  │ run_llm_route() → direct HTTP to LiteLLM → OpenRouter     │
+  │ Cost: $0 (free tier)                                      │
+  └───────────────────────────────────────────────────────────┘
+           │
+  ┌─ FILE EXTRACTION ─────────────────────────────────────────┐
+  │ _extract_and_write_files() parses ### path\n```lang blocks │
+  │ Writes each file to git worktree with correct paths       │
+  │ Matches output to task artifacts for path resolution      │
+  └───────────────────────────────────────────────────────────┘
+           │
+  ┌─ QUALITY CHECKS (replaces Claude Code hooks) ─────────────┐
+  │ _run_quality_checks():                                     │
+  │   • File size ≤ 300 lines                                  │
+  │   • No console.log in TS/JS                                │
+  │   • No hardcoded secrets                                   │
+  │   • Prettier auto-format                                   │
+  │   • Pyright type check                                     │
+  │ Cost: $0 (local)                                           │
+  └────────────────────────────────────────────────────────────┘
+           │
+  ┌─ VERIFY COMMANDS ─────────────────────────────────────────┐
+  │ _run_verify_commands() runs task's Verify field:           │
+  │   pytest, pnpm run lint, tsc --noEmit, etc.               │
+  │ Cost: $0 (local)                                           │
+  └───────────────────────────────────────────────────────────┘
+           │
+  ┌─ VALIDATION (3 judges, free models) ──────────────────────┐
+  │ validate_step('dev')  → gemma (free) → PASS/FAIL          │
+  │ validate_step('qa')   → gemma (free) → PASS/FAIL          │
+  │ validate_step('em')   → gemma (free) → PASS/FAIL          │
+  │ CRO retry: qwen (free) → sonnet (last resort)             │
+  │ Cost: $0 unless gemma down → haiku fallback                │
+  └───────────────────────────────────────────────────────────┘
+           │
+  ┌─ COMMIT + MERGE ──────────────────────────────────────────┐
+  │ git commit in worktree → merge to main → remove worktree  │
+  │ Fail → branch kept for review, Discord notified           │
+  └───────────────────────────────────────────────────────────┘
+           │
+  ┌─ MILESTONE GATE (only step using Sonnet) ─────────────────┐
+  │ Re-runs ALL Verify commands on main                        │
+  │ Full E2E suite (playwright test)                           │
+  │ Screenshot collection → Discord thread                     │
+  │ Cost: Sonnet subscription (once per milestone)             │
+  └───────────────────────────────────────────────────────────┘
+```
+
+**Model routing per task type:**
+
+| Model-hint | Model | Route | When |
+|---|---|---|---|
+| `qwen-coder` | Qwen 3 Coder 480B | LiteLLM (free) | Impl tasks, primary |
+| `llama` | Llama 3.3 70B | LiteLLM (free) | Impl tasks, secondary |
+| `gpt-oss` | GPT-OSS 120B | LiteLLM (free) | Impl tasks, tertiary |
+| `qwen` | Qwen 3.6 Plus 1M | LiteLLM (free) | Research tasks, primary |
+| `nemotron` | Nemotron 3 Super | LiteLLM (free) | Research tasks, secondary |
+| `stepfun` | StepFun 3.5 | LiteLLM (free) | Research tasks, tertiary |
+| `gemma` | Gemma 3 27B | LiteLLM (free) | Validators (fastest ~40s), speed-critical |
+| `sonnet` | Claude Sonnet 4.6 | Subscription | Gate tasks, infra-critical only |
+
+Elaboration agents round-robin impl tasks across qwen-coder/llama/gpt-oss and research across qwen/nemotron/stepfun within each milestone to spread load across free models.
+
+**Fallback chains:** Each model has 2-3 fallbacks. If primary is rate-limited → next in chain → next → shell fallback → subscription haiku (last resort).
+
+**Enforcement architecture:**
+
+| Layer | Where | What | Reliable? |
+|---|---|---|---|
+| CLAUDE.md rules | Injected in exec_prompt | Style, naming, schema-first | Best-effort (LLM may ignore) |
+| Quality checks | `_run_quality_checks()` | File size, secrets, console.log | Deterministic (Python code) |
+| Verify commands | `_run_verify_commands()` | Tests, lint, type check | Deterministic (local bash) |
+| LLM validators | `validate_step()` | Spec compliance, scenario coverage | High (structured PASS/FAIL) |
+| Milestone gate | `run_milestone_gate()` | Full test suite + E2E on main | Deterministic (local bash) |
+| Interactive hooks | `settings.json` | PreToolUse/PostToolUse blocks | Only in Claude Code sessions |
+
+Rules injected in prompts are aspirational. Quality checks and Verify commands are deterministic. The pipeline is designed so that if the LLM ignores a rule, a later deterministic check catches it.
+
 ### Project setup
 
 `/oms-start` ingests any starting material — CLAUDE.md, README, PRD, raw notes — asks which departments are active, runs a short intake questionnaire, and generates the context files OMS needs to route tasks correctly.
@@ -310,18 +398,22 @@ Loaded on demand by CLAUDE.md when the work type changes. Zero token cost until 
 
 Automated behaviors wired to lifecycle events in `settings.json`:
 
-**PreToolUse:**
-- Long-process reminder when npm/pnpm/yarn/cargo/pytest are run
-- Hard blocks (exit 2) creating loose `.md` files outside allowed paths
-- Git push reminder to run `/review-pr` first
+**PreToolUse (all BLOCK — exit 2):**
+- Long-running commands (npm/pnpm/yarn/cargo) → requires `run_in_background` or ctx-exec
+- Loose `.md` files outside allowed paths → blocked
+- `git push` → blocked until `/review-pr` runs
+- `grep -r` → blocked, requires Grep tool or mgrep skill
+- Large output commands (test, lint, build, gh) → requires ctx-exec wrapper
+- Anthropic API key usage → blocked without Super Permission
+- WebFetch / WebSearch → blocked, requires browse fetch
 
-**PostToolUse:**
-- Prettier auto-format on every `.ts/.tsx/.js/.jsx` edit
-- TypeScript check (`tsc --noEmit`) on every `.ts/.tsx` edit
-- Pyright check on every `.py` edit
-- `console.log` warning on every file edit
-- Markdown quality check (heading, line count, no placeholders)
-- mgrep nudge when `grep -r` is used
+**PostToolUse (all BLOCK — exit 2):**
+- `console.log` in TS/JS files → blocks the edit
+- Sparse `.md` files (no heading, <5 lines, placeholders) → blocks the write
+- Prettier auto-format on `.ts/.tsx/.js/.jsx` (auto-fix, not blocking)
+- Pyright check on `.py` edits (advisory)
+- OMS queue schema validation → blocks invalid task writes
+- Model-hint validation → blocks incorrect model assignments
 
 **Stop:**
 - Codemap staleness check — warns if files were added/deleted since last commit
