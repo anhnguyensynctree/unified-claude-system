@@ -869,6 +869,69 @@ def _extract_and_write_files(output: str, wt: Path, artifacts: list[str]) -> int
     return written
 
 
+def _run_quality_checks(wt: Path, artifacts: list[str]) -> tuple[bool, list[str]]:
+    """Run quality checks that Claude Code hooks would normally enforce.
+    These compensate for --bare and direct file writes bypassing hooks.
+    Returns (all_passed, list of issues)."""
+    issues: list[str] = []
+
+    for art in artifacts:
+        f = wt / art
+        if not f.exists():
+            continue
+        content = f.read_text(encoding='utf-8', errors='replace')
+        lines = content.splitlines()
+
+        # Check: file size (max 300 lines)
+        if len(lines) > 300:
+            issues.append(f'{art}: {len(lines)} lines (max 300)')
+
+        # Check: console.log / print debugging
+        if f.suffix in ('.ts', '.tsx', '.js', '.jsx'):
+            for i, line in enumerate(lines, 1):
+                if 'console.log' in line and not line.strip().startswith('//'):
+                    issues.append(f'{art}:{i}: console.log found')
+                    break
+
+        # Check: no hardcoded secrets
+        for i, line in enumerate(lines, 1):
+            low = line.lower()
+            if any(p in low for p in ('api_key =', 'secret =', 'password =', 'token =')) \
+                    and not line.strip().startswith('#') and not line.strip().startswith('//') \
+                    and 'env' not in low and 'os.get' not in low and 'process.env' not in low:
+                issues.append(f'{art}:{i}: possible hardcoded secret')
+                break
+
+        # Check: prettier / formatting (if prettier available)
+        if f.suffix in ('.ts', '.tsx', '.js', '.jsx'):
+            r = subprocess.run(
+                ['npx', 'prettier', '--check', str(f)],
+                capture_output=True, text=True, cwd=wt, timeout=15,
+            )
+            if r.returncode != 0:
+                # Auto-fix instead of failing
+                subprocess.run(
+                    ['npx', 'prettier', '--write', str(f)],
+                    capture_output=True, text=True, cwd=wt, timeout=15,
+                )
+
+        # Check: pyright / type errors (if .py and pyright available)
+        if f.suffix == '.py':
+            r = subprocess.run(
+                ['pyright', str(f)],
+                capture_output=True, text=True, cwd=wt, timeout=30,
+            )
+            errs = [l for l in r.stdout.splitlines() if 'error' in l.lower()]
+            if errs:
+                issues.append(f'{art}: {len(errs)} pyright errors')
+
+    if issues:
+        for issue in issues:
+            print(f'[oms-work]   quality: {issue}', flush=True)
+
+    return len(issues) == 0, issues
+
+
 def _run_verify_commands(verify_cmds: list[str], cwd: Path) -> tuple[bool, str]:
     """Run Verify commands locally. Returns (all_passed, summary)."""
     if not verify_cmds:
@@ -929,7 +992,11 @@ def execute_task(task: dict, project_path: Path,
                 n_written = _extract_and_write_files(work_out, wt, list(task['artifacts']))
                 print(f'[oms-work]   extracted {n_written} files from free model output', flush=True)
                 if n_written > 0:
-                    # Stage all new files
+                    # Quality checks (replaces Claude Code hooks that --bare skips)
+                    q_ok, q_issues = _run_quality_checks(wt, task['artifacts'])
+                    if not q_ok:
+                        work_out += f'\n\nQuality issues: {"; ".join(q_issues)}'
+                    # Stage all new files (after prettier may have reformatted)
                     subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
                     # Run Verify commands if defined
                     if task.get('verify'):
