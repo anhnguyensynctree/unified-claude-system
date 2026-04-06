@@ -1014,19 +1014,29 @@ def _extract_and_write_files(output: str, wt: Path, artifacts: list[str]) -> int
                 # Clean path
                 path_str = path_str.lstrip('/').lstrip('./')
 
-                # Match to artifact
+                # Match to artifact — only write files that match a known artifact
+                path_str = path_str.lstrip('/').lstrip('./')
                 matched = None
                 for art in remaining_arts:
                     if path_str == art or Path(path_str).name == Path(art).name:
                         matched = art
                         break
-                target = wt / (matched or path_str)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(content.strip() + '\n')
-                print(f'[oms-work]   wrote {matched or path_str} ({len(content)} chars)', flush=True)
-                written += 1
                 if matched:
+                    target = wt / matched
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(content.strip() + '\n')
+                    print(f'[oms-work]   wrote {matched} ({len(content)} chars)', flush=True)
+                    written += 1
                     remaining_arts.remove(matched)
+                else:
+                    # Write non-artifact files too (e.g. __init__.py, config files)
+                    # but only if they look like real code, not descriptions
+                    if '.' in path_str and len(content.strip()) > 10:
+                        target = wt / path_str
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(content.strip() + '\n')
+                        print(f'[oms-work]   wrote {path_str} ({len(content)} chars, extra)', flush=True)
+                        written += 1
                 i = k + 1
                 continue
         i += 1

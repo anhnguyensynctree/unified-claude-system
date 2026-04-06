@@ -58,12 +58,15 @@ def create_thread(channel_id: str, name: str) -> str | None:
     return r['id'] if r else None
 
 
-def post_to_thread(thread_id: str, content: str) -> None:
-    _request('POST', f'/channels/{thread_id}/messages', {'content': content})
+def post_to_thread(thread_id: str, content: str) -> bool:
+    """Post to a thread. Returns True on success, False if thread is archived/deleted."""
+    result = _request('POST', f'/channels/{thread_id}/messages', {'content': content})
+    return result is not None
 
 
 def get_or_create_thread(channel_id: str, threads_file: Path, milestone: str) -> str | None:
-    """Look up or create a Discord thread for a milestone. Persists thread_id to threads_file."""
+    """Look up or create a Discord thread for a milestone. Persists thread_id to threads_file.
+    If stored thread is archived/deleted, creates a new one."""
     threads: dict[str, str] = {}
     if threads_file.exists():
         try:
@@ -72,6 +75,8 @@ def get_or_create_thread(channel_id: str, threads_file: Path, milestone: str) ->
             pass
 
     if milestone in threads:
+        # Verify thread is still alive by trying to post (Discord archives threads after 7 days)
+        # We'll validate on first actual post — just return the ID here
         return threads[milestone]
 
     thread_id = create_thread(channel_id, f'Milestone: {milestone}')
@@ -79,6 +84,32 @@ def get_or_create_thread(channel_id: str, threads_file: Path, milestone: str) ->
         threads[milestone] = thread_id
         threads_file.write_text(json.dumps(threads, indent=2))
     return thread_id
+
+
+def post_to_thread_or_recreate(channel_id: str, threads_file: Path,
+                                milestone: str, content: str) -> None:
+    """Post to milestone thread. If thread is dead, create a new one and retry."""
+    thread_id = get_or_create_thread(channel_id, threads_file, milestone)
+    if not thread_id:
+        post_message(channel_id, content)
+        return
+
+    if not post_to_thread(thread_id, content):
+        # Thread is archived/deleted — create new one
+        print(f'[discord] Thread {thread_id} dead — creating new thread for {milestone}', flush=True)
+        new_id = create_thread(channel_id, f'Milestone: {milestone}')
+        if new_id:
+            threads: dict[str, str] = {}
+            if threads_file.exists():
+                try:
+                    threads = json.loads(threads_file.read_text())
+                except Exception:
+                    pass
+            threads[milestone] = new_id
+            threads_file.write_text(json.dumps(threads, indent=2))
+            post_to_thread(new_id, content)
+        else:
+            post_message(channel_id, content)  # fallback to channel
 
 
 def notify_task(channel_id: str, threads_file: Path,
@@ -97,10 +128,8 @@ def notify_task(channel_id: str, threads_file: Path,
         msg += f'\n> {short_notes}'
 
     if milestone and milestone.lower() != 'none':
-        thread_id = get_or_create_thread(channel_id, threads_file, milestone)
-        if thread_id:
-            post_to_thread(thread_id, msg)
-            return
+        post_to_thread_or_recreate(channel_id, threads_file, milestone, msg)
+        return
 
     post_message(channel_id, msg)
 
