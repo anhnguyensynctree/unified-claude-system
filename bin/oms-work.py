@@ -1358,16 +1358,25 @@ def _verify_research_output(wt: Path, task_id: str) -> tuple[bool, list[str]]:
 
 
 def _run_verify_commands(verify_cmds: list[str], cwd: Path) -> tuple[bool, str]:
-    """Run Verify commands locally. Returns (all_passed, summary)."""
+    """Run Verify commands locally with full shell environment. Returns (all_passed, summary)."""
     if not verify_cmds:
         return True, 'no verify commands'
     results: list[str] = []
     all_ok = True
+    # Load user's shell profile so pip/python3/node/pnpm are on PATH
+    shell = os.environ.get('SHELL', '/bin/zsh')
     for cmd in verify_cmds:
+        # Skip natural-language descriptions masquerading as commands
+        if any(w in cmd for w in (' exits ', ' contains ', ' not tracked ', ' loads from ')):
+            print(f'[oms-work]   verify SKIP (not a command): {cmd[:80]}', flush=True)
+            results.append(f'SKIP: {cmd[:60]} (not executable)')
+            continue
         print(f'[oms-work]   verify: {cmd}', flush=True)
+        # Wrap in login shell to get PATH from mise/pyenv/nvm
+        wrapped = f'source ~/.zshrc 2>/dev/null; {cmd}'
         try:
             r = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, cwd=cwd, timeout=120,
+                [shell, '-c', wrapped], capture_output=True, text=True, cwd=cwd, timeout=120,
             )
             if r.returncode == 0:
                 results.append(f'PASS: {cmd}')
