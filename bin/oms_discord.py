@@ -83,13 +83,17 @@ def get_or_create_thread(channel_id: str, threads_file: Path, milestone: str) ->
 
 def notify_task(channel_id: str, threads_file: Path,
                 milestone: str | None, task_id: str, title: str,
-                passed: bool, notes: str) -> None:
-    """Post final task status. Uses milestone thread if milestone is set."""
-    icon = '✓' if passed else '⚑'
-    status = 'done' if passed else 'cto-stop'
+                passed: bool | None, notes: str) -> None:
+    """Post task status. passed=None for running, True for done, False for cto-stop."""
+    if passed is None:
+        icon, status = '▶', 'running'
+    elif passed:
+        icon, status = '✓', 'done'
+    else:
+        icon, status = '⚑', 'cto-stop'
     short_notes = notes[:180] if notes else ''
     msg = f'{icon} **{task_id}** — {title} `{status}`'
-    if short_notes and not passed:
+    if short_notes:
         msg += f'\n> {short_notes}'
 
     if milestone and milestone.lower() != 'none':

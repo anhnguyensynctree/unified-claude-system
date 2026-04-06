@@ -1408,6 +1408,13 @@ def execute_task(task: dict, project_path: Path,
                             task['id'], task['title'], False, notes)
         return False, notes
 
+    # Signal task start in Discord thread
+    model, is_external = resolve_model(task)
+    mode = 'TDD' if _split_artifacts(task['artifacts'])[0] and task['type'] == 'impl' else task['type']
+    discord.notify_task(channel_id, threads_file, task['milestone'],
+                        task['id'], task['title'], None,
+                        f'{model} ({mode})')
+
     wt, branch = create_worktree(project_path, task['id'])
     task_cost = 0.0
     # validator_log: (name, passed_first_attempt, passed_final)
