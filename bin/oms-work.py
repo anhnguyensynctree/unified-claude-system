@@ -995,15 +995,33 @@ def execute_task(task: dict, project_path: Path,
                     # Quality checks (replaces Claude Code hooks that --bare skips)
                     q_ok, q_issues = _run_quality_checks(wt, task['artifacts'])
                     if not q_ok:
-                        work_out += f'\n\nQuality issues: {"; ".join(q_issues)}'
+                        # HARD FAIL — quality issues are blocking, not advisory
+                        remove_worktree(project_path, task['id'])
+                        notes = f'QUALITY-FAIL: {"; ".join(q_issues[:3])}'
+                        print(f'[oms-work]   ✗ quality check failed — task blocked', flush=True)
+                        write_task_metrics(queue_path, project_path, task['id'], task_cost, [],
+                                           passed=False, slug=slug, title=task['title'],
+                                           milestone=task['milestone'], task_type=task['type'],
+                                           fail_at='quality', notes=notes, validator_details={})
+                        discord.notify_task(channel_id, threads_file, task['milestone'],
+                                            task['id'], task['title'], False, notes)
+                        return False, notes
                     # Stage all new files (after prettier may have reformatted)
                     subprocess.run(['git', 'add', '-A'], cwd=wt, capture_output=True)
-                    # Run Verify commands if defined
+                    # Run Verify commands if defined — HARD FAIL on failure
                     if task.get('verify'):
                         v_ok, v_summary = _run_verify_commands(task['verify'], wt)
                         print(f'[oms-work]   verify: {"PASS" if v_ok else "FAIL"} — {v_summary[:120]}', flush=True)
                         if not v_ok:
-                            work_out += f'\n\nVerify FAILED: {v_summary}'
+                            remove_worktree(project_path, task['id'])
+                            notes = f'VERIFY-FAIL: {v_summary[:200]}'
+                            write_task_metrics(queue_path, project_path, task['id'], task_cost, [],
+                                               passed=False, slug=slug, title=task['title'],
+                                               milestone=task['milestone'], task_type=task['type'],
+                                               fail_at='verify', notes=notes, validator_details={})
+                            discord.notify_task(channel_id, threads_file, task['milestone'],
+                                                task['id'], task['title'], False, notes)
+                            return False, notes
         else:
             work_out, code, run_stderr, exec_cost = run_claude(exec_prompt(task, wt), wt, model, allow_writes=True)
             task_cost += exec_cost
