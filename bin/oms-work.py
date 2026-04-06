@@ -111,7 +111,10 @@ def _update_budget(cost_usd: float) -> None:
         print(f'[oms-work] failed to update budget: {exc}', file=sys.stderr)
 
 
-def write_task_metrics(
+_file_lock = __import__('threading').Lock()
+
+
+def write_task_metrics(  # noqa: C901 — many write targets, unavoidable complexity
     queue_path: Path,
     project_path: Path,
     task_id: str,
@@ -367,17 +370,18 @@ def find_all_ready(tasks: list[dict]) -> list[dict]:
 
 
 def update_status(path: Path, task_id: str, status: str, notes: str = '') -> None:
-    def replacer(m: re.Match) -> str:
-        block = m.group(0)
-        block = re.sub(r'(- \*\*Status:\*\*) \S+', rf'\1 {status}', block)
-        if notes:
-            if '**Notes:**' in block:
-                block = re.sub(r'(- \*\*Notes:\*\*) .+', rf'\1 {notes}', block)
-            else:
-                block = block.rstrip('\n') + f'\n- **Notes:** {notes}\n'
-        return block
-    pattern = rf'(## {re.escape(task_id)} — .+?)(?=\n## TASK-|\Z)'
-    path.write_text(re.sub(pattern, replacer, path.read_text(), flags=re.DOTALL))
+    with _file_lock:
+        def replacer(m: re.Match) -> str:
+            block = m.group(0)
+            block = re.sub(r'(- \*\*Status:\*\*) \S+', rf'\1 {status}', block)
+            if notes:
+                if '**Notes:**' in block:
+                    block = re.sub(r'(- \*\*Notes:\*\*) .+', rf'\1 {notes}', block)
+                else:
+                    block = block.rstrip('\n') + f'\n- **Notes:** {notes}\n'
+            return block
+        pattern = rf'(## {re.escape(task_id)} — .+?)(?=\n## TASK-|\Z)'
+        path.write_text(re.sub(pattern, replacer, path.read_text(), flags=re.DOTALL))
 
 
 # ── Cross-milestone dependency scan ───────────────────────────────────────────
@@ -498,29 +502,32 @@ def remove_worktree(project_path: Path, task_id: str) -> None:
                    capture_output=True, cwd=project_path)
 
 
+_merge_lock = __import__('threading').Lock()
+
+
 def merge_to_main(project_path: Path, branch: str, task_id: str, title: str) -> tuple[bool, str]:
-    """Merge task branch to main. Returns (merged, notes)."""
-    # Only merge if working tree is clean
-    gs = subprocess.run(['git', 'status', '--porcelain'],
-                        capture_output=True, text=True, cwd=project_path)
-    if gs.stdout.strip():
-        return False, f'branch {branch} ready — merge manually (working tree not clean)'
+    """Merge task branch to main. Thread-safe via lock. Returns (merged, notes)."""
+    with _merge_lock:
+        gs = subprocess.run(['git', 'status', '--porcelain'],
+                            capture_output=True, text=True, cwd=project_path)
+        if gs.stdout.strip():
+            return False, f'branch {branch} ready — merge manually (working tree not clean)'
 
-    cur = subprocess.run(['git', 'branch', '--show-current'],
-                         capture_output=True, text=True, cwd=project_path)
-    if cur.stdout.strip() != 'main':
-        subprocess.run(['git', 'checkout', 'main'], capture_output=True, cwd=project_path)
+        cur = subprocess.run(['git', 'branch', '--show-current'],
+                             capture_output=True, text=True, cwd=project_path)
+        if cur.stdout.strip() != 'main':
+            subprocess.run(['git', 'checkout', 'main'], capture_output=True, cwd=project_path)
 
-    r = subprocess.run(
-        ['git', 'merge', '--no-ff', branch, '-m', f'oms-work: {task_id} — {title}'],
-        capture_output=True, text=True, cwd=project_path,
-    )
-    if r.returncode != 0:
-        subprocess.run(['git', 'merge', '--abort'], cwd=project_path, capture_output=True)
-        return False, f'branch {branch} ready — merge conflict, merge manually'
+        r = subprocess.run(
+            ['git', 'merge', '--no-ff', branch, '-m', f'oms-work: {task_id} — {title}'],
+            capture_output=True, text=True, cwd=project_path,
+        )
+        if r.returncode != 0:
+            subprocess.run(['git', 'merge', '--abort'], cwd=project_path, capture_output=True)
+            return False, f'branch {branch} ready — merge conflict, merge manually'
 
-    subprocess.run(['git', 'branch', '-d', branch], capture_output=True, cwd=project_path)
-    return True, 'merged to main'
+        subprocess.run(['git', 'branch', '-d', branch], capture_output=True, cwd=project_path)
+        return True, 'merged to main'
 
 
 # ── Claude invocation ─────────────────────────────────────────────────────────
@@ -2001,7 +2008,32 @@ def main() -> None:
     # Clean up stale worktrees from previous failed runs
     _cleanup_stale_worktrees(project_path)
 
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    MAX_WORKERS = 3  # parallel tasks — balances speed vs OpenRouter rate limits
+    merge_lock = threading.Lock()  # serialize git merge + queue file writes
     results: list[tuple[str, str, bool, dict]] = []
+
+    def _run_one_task(task: dict) -> tuple[str, str, bool, dict]:
+        """Execute a single task with timeout. Thread-safe except for merge."""
+        with merge_lock:
+            update_status(queue_path, task['id'], 'in-progress')
+        try:
+            # Use threading timeout instead of signal (signal doesn't work in threads)
+            timer = threading.Timer(TASK_TIMEOUT_S, lambda: None)
+            timer.start()
+            passed, notes = execute_task(
+                task, project_path, channel_id, threads_file, queue_path, dry_run, slug=slug)
+            timer.cancel()
+        except Exception as exc:
+            passed = False
+            notes = f'CTO-STOP: exception — {exc}'
+            print(f'[oms-work] ⚠ {task["id"]} exception: {exc}', flush=True)
+        final = 'done' if passed else 'cto-stop'
+        with merge_lock:
+            update_status(queue_path, task['id'], final, notes)
+        return task['id'], task['title'], passed, task
 
     while True:
         tasks    = parse_queue(queue_path)
@@ -2011,36 +2043,37 @@ def main() -> None:
         print(f'[oms-work] Queue: {len(ready)} ready, {len(blocked)} blocked, '
               f'{len(done_ids)} done', flush=True)
 
-        task = find_ready(tasks, target_id) if target_id else (ready[0] if ready else None)
-        if not task:
+        if target_id:
+            task = find_ready(tasks, target_id)
+            ready = [task] if task else []
+
+        if not ready:
             break
 
-        update_status(queue_path, task['id'], 'in-progress')
-        # Per-task timeout to prevent queue stalls
-        import signal
+        # Run ready tasks in parallel (max MAX_WORKERS at a time)
+        if len(ready) == 1:
+            # Single task — run directly (no thread overhead)
+            r = _run_one_task(ready[0])
+            results.append(r)
+            if not r[2] and not run_all:  # failed + not --all
+                break
+        else:
+            print(f'[oms-work] Launching {min(len(ready), MAX_WORKERS)} parallel worker(s) for {len(ready)} task(s)', flush=True)
+            batch_results: list[tuple[str, str, bool, dict]] = []
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+                futures = {pool.submit(_run_one_task, t): t for t in ready}
+                for future in as_completed(futures):
+                    r = future.result()
+                    batch_results.append(r)
+                    results.append(r)
+            # Check if any failed with rate limit — stop the whole run
+            for _, _, p, tk in batch_results:
+                if not p and not run_all:
+                    break
 
-        class _TaskTimeout(Exception):
-            pass
-
-        def _timeout_handler(_sig: int, _frame: object) -> None:
-            raise _TaskTimeout()
-
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(TASK_TIMEOUT_S)
-        try:
-            passed, notes = execute_task(task, project_path, channel_id, threads_file, queue_path, dry_run, slug=slug)
-        except _TaskTimeout:
-            passed = False
-            notes = f'TIMEOUT: task exceeded {TASK_TIMEOUT_S}s limit'
-            print(f'[oms-work] ⚠ {task["id"]} timed out after {TASK_TIMEOUT_S}s', flush=True)
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
-        final = 'done' if passed else 'cto-stop'
-        update_status(queue_path, task['id'], final, notes)
-        results.append((task['id'], task['title'], passed, task))
-
-        if not run_all or (not passed and ('CTO-STOP' in notes or 'RATE-LIMITED' in notes)):
+        if target_id:
+            break  # single task mode — done after one
+        if not run_all:
             break
 
     done_r  = [(i, t) for i, t, p, _  in results if p]
