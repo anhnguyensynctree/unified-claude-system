@@ -791,6 +791,35 @@ def _build_ctx_section(task: dict, wt: Path) -> str:
     return ('\n\n## Context Files\n\n' + '\n\n'.join(ctx_blocks)) if ctx_blocks else ''
 
 
+def _detect_system_context(wt: Path) -> str:
+    """Detect runtime environment so LLM knows system constraints."""
+    parts: list[str] = []
+    # Python version
+    try:
+        r = subprocess.run(['python3', '--version'], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            parts.append(f'Python: {r.stdout.strip()}')
+    except Exception:
+        pass
+    # Node version
+    try:
+        r = subprocess.run(['node', '--version'], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            parts.append(f'Node: {r.stdout.strip()}')
+    except Exception:
+        pass
+    # Package manager
+    if (wt / 'pnpm-lock.yaml').exists() or (wt.parent / 'pnpm-lock.yaml').exists():
+        parts.append('Package manager: pnpm')
+    elif (wt / 'package-lock.json').exists():
+        parts.append('Package manager: npm')
+    elif (wt / 'requirements.txt').exists() or (wt / 'pyproject.toml').exists():
+        parts.append('Package manager: pip3')
+    # OS
+    parts.append(f'OS: {sys.platform}')
+    return '\n'.join(parts) if parts else ''
+
+
 def _build_base_prompt(task: dict, wt: Path) -> str:
     """Common prompt parts shared by test_prompt, impl_prompt, and research_prompt."""
     scenarios = '\n'.join(f'- {s}' for s in task['scenarios'])
@@ -798,9 +827,11 @@ def _build_base_prompt(task: dict, wt: Path) -> str:
     ctx_section = _build_ctx_section(task, wt)
     produces_section = (f'\n\n## Produces (downstream contract)\n{produces}'
                         if produces and produces.lower() != 'none' else '')
+    sys_ctx = _detect_system_context(wt)
+    sys_section = f'\n\n## System Environment\n{sys_ctx}' if sys_ctx else ''
     return (f"OMS work task ({task['id']}): {task['spec']}\n\n"
             f"## Behavioral Scenarios\n{scenarios}"
-            f"{produces_section}{ctx_section}")
+            f"{produces_section}{ctx_section}{sys_section}")
 
 
 def test_prompt(task: dict, wt: Path) -> str:
