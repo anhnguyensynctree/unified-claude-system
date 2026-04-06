@@ -1382,7 +1382,7 @@ def _run_verify_commands(verify_cmds: list[str], cwd: Path) -> tuple[bool, str]:
                 results.append(f'PASS: {cmd}')
             else:
                 all_ok = False
-                err = (r.stderr or r.stdout)[:200].strip()
+                err = (r.stderr or r.stdout)[:500].strip()
                 results.append(f'FAIL: {cmd} — {err}')
                 print(f'[oms-work]   verify FAIL: {cmd} (exit {r.returncode})', flush=True)
         except subprocess.TimeoutExpired:
