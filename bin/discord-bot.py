@@ -858,7 +858,7 @@ async def handle_project_message(
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(HOME),
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=14400)
             raw = stdout.decode().strip()
             err = stderr.decode().strip()
 
@@ -1289,7 +1289,7 @@ async def poll_pending_resumes():
                     cwd=str(HOME),
                 )
                 try:
-                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=14400)
                 except asyncio.TimeoutError:
                     if ch:
                         await ch.send(f"[{slug}] auto-resume timed out (2h)")

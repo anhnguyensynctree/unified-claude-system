@@ -469,6 +469,18 @@ def create_worktree(project_path: Path, task_id: str) -> tuple[Path, str]:
     if r.returncode != 0:
         subprocess.run(['git', 'worktree', 'add', str(wt), branch],
                        capture_output=True, cwd=project_path)
+
+    # Symlink node_modules / venv from main project to avoid reinstalling
+    for dep_dir in ('node_modules', '.venv', 'venv'):
+        src = project_path / dep_dir
+        dst = wt / dep_dir
+        if src.exists() and not dst.exists():
+            try:
+                dst.symlink_to(src)
+                print(f'[oms-work]   symlinked {dep_dir} → worktree', flush=True)
+            except OSError:
+                pass  # symlink not supported or permission denied
+
     return wt, branch
 
 
@@ -1179,8 +1191,10 @@ def _run_browse_check(task: dict, wt: Path, project_path: Path) -> tuple[bool, l
     # Save evidence dir
     evidence_dir = project_path / 'qa' / 'evidence' / task['id'].lower()
     evidence_dir.mkdir(parents=True, exist_ok=True)
+    started_dev = 'dev_proc' in dir()  # type: ignore[possibly-undefined]
 
-    for route in routes:
+    try:
+      for route in routes:
         url = f'{dev_url}{route}'
         print(f'[oms-work]   browse: {url}', flush=True)
 
@@ -1226,6 +1240,15 @@ def _run_browse_check(task: dict, wt: Path, project_path: Path) -> tuple[bool, l
 
         # Reset viewport
         _browse_command(port, token, ['viewport 1440 900'])
+
+    finally:
+        # Kill dev server if we started it
+        if started_dev:
+            try:
+                dev_proc.terminate()  # type: ignore[possibly-undefined]
+                dev_proc.wait(timeout=5)  # type: ignore[possibly-undefined]
+            except Exception:
+                pass
 
     if issues:
         for issue in issues:
