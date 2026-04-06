@@ -613,10 +613,26 @@ def _ensure_litellm() -> bool:
     if OPENROUTER_KEY_FILE.exists():
         env['OPENROUTER_API_KEY'] = OPENROUTER_KEY_FILE.read_text().strip()
 
-    print('[oms-work] Starting LiteLLM proxy...', flush=True)
+    import shutil
+    litellm_bin = shutil.which('litellm')
+    if not litellm_bin:
+        # Try common locations
+        for candidate in [
+            Path.home() / '.local/share/mise/installs/python/miniforge3-22.11.1-4/bin/litellm',
+            Path.home() / '.local/bin/litellm',
+            Path('/usr/local/bin/litellm'),
+        ]:
+            if candidate.exists():
+                litellm_bin = str(candidate)
+                break
+    if not litellm_bin:
+        print('[oms-work] litellm binary not found', file=sys.stderr)
+        return False
+
+    print(f'[oms-work] Starting LiteLLM proxy ({litellm_bin})...', flush=True)
     with open(LITELLM_LOG, 'w') as log_f:
         proc = subprocess.Popen(
-            ['litellm', '--config', str(LITELLM_CONFIG), '--port', str(LITELLM_PORT)],
+            [litellm_bin, '--config', str(LITELLM_CONFIG), '--port', str(LITELLM_PORT)],
             stdout=log_f, stderr=log_f, env=env,
             start_new_session=True,  # detach from parent
         )
