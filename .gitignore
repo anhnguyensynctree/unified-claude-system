@@ -60,6 +60,13 @@ plugins/
 *-cache.json
 settings.local.json
 
+# Runtime files
+*.pid
+data/
+
+# Local hookify rules (machine-specific, not for shared repo)
+hookify.*.local.md
+
 # Auto-memory and image cache
 memory/
 image-cache/
