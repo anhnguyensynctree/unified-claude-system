@@ -23,8 +23,8 @@ Skip /oms-work when:
 ## What it does
 
 1. Reads cleared-queue.md — identifies ready vs blocked tasks
-2. Launches one subagent per ready task (parallel for independent, serial for chains)
-3. Each subagent: completes the task → runs validation chain → writes quality record
+2. Runs each ready task through unified `_agent_loop()` — LLM proposes WRITE/RUN/DONE actions, oms-work.py executes them in worktree
+3. After agent loop: runs validation chain (haiku first, free fallback) → writes quality record
 4. Commits done tasks to `oms-work/task-nnn` branch; leaves cto-stop branches open
 5. Posts task status to Discord milestone thread
 6. After all tasks: invokes Executive Briefing Agent

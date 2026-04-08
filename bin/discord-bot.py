@@ -10,7 +10,6 @@ Thread = all step updates + blocking questions + observer Q&A.
 import asyncio
 import json
 import logging
-import os
 import re
 import signal
 import sys
@@ -51,6 +50,7 @@ task_threads: dict[str, discord.Thread] = {}
 _first_ready = True  # suppress repeated "bot online" on Discord gateway reconnects
 _config_cache: dict = {}           # cached config — reloaded only when file changes
 _config_mtime: float = 0.0
+_processed_messages: set[int] = set()  # dedup: message IDs already handled
 
 
 def load_config() -> dict:
@@ -127,8 +127,8 @@ async def get_or_create_task_thread(
             if thread.name == thread_name:
                 task_threads[key] = thread
                 return thread
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning(f"Failed to search active threads for {key}: {e}")
 
     # Search archived threads — survives bot restart and thread auto-archive
     try:
@@ -136,8 +136,8 @@ async def get_or_create_task_thread(
             if thread.name == thread_name:
                 task_threads[key] = thread
                 return thread
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning(f"Failed to search archived threads for {key}: {e}")
 
     # Create new: post starter message in main channel, attach thread to it
     label = f" — {description}" if description else ""
@@ -214,64 +214,23 @@ def format_step_update(output: str) -> str:
     return "Step complete"
 
 
-def _read_cost_summary(slug: str, task_id: str) -> dict:
-    """Return cost strings for thread and main channel messages."""
-    import datetime as dt
-    costs_dir = HOME / ".claude/oms-costs"
-    budget_file = HOME / ".claude/oms-budget.json"
+
+def _parse_work_output(raw: str, slug: str, label: str = "work") -> tuple[str, float | None]:
+    """Parse oms-work.py JSON output. Returns (display_text, cost_usd_or_none)."""
+    session_cost: float | None = None
+    output = raw
     try:
-        cost_file = costs_dir / f"{slug}-{task_id}.json"
-        if not cost_file.exists():
-            return {"thread_suffix": "", "main_suffix": ""}
-        cdata = json.loads(cost_file.read_text())
-        task_usd = cdata.get("total_usd", 0)
-
-        session_pct = 0
-        session_remaining = ""
-        weekly_pct = 0
-        weekly_spend = 0.0
-        weekly_limit = 100.0
-
-        if budget_file.exists():
-            b = json.loads(budget_file.read_text())
-            now = dt.datetime.now(dt.timezone.utc)
-
-            # Session window
-            session_limit = b.get("session_limit_usd", 20)
-            session_spend = b.get("current_session_spend_usd", 0)
-            session_start_raw = b.get("current_session_start", "")
-            window_hours = b.get("session_window_hours", 5)
-            if session_start_raw and session_limit > 0:
-                try:
-                    ss = dt.datetime.fromisoformat(session_start_raw)
-                    if ss.tzinfo is None:
-                        ss = ss.replace(tzinfo=dt.timezone.utc)
-                    elapsed = now - ss
-                    if elapsed < dt.timedelta(hours=window_hours):
-                        session_pct = int(session_spend / session_limit * 100)
-                        remaining_secs = int((dt.timedelta(hours=window_hours) - elapsed).total_seconds())
-                        h, m = divmod(remaining_secs // 60, 60)
-                        session_remaining = f"{h}h{m:02d}m left"
-                    else:
-                        session_pct = 0
-                        session_remaining = "window reset"
-                except Exception:
-                    pass
-
-            # Weekly
-            weekly_spend = b.get("current_week_spend_usd", 0)
-            weekly_limit = b.get("weekly_limit_usd", 100)
-            weekly_pct = int(weekly_spend / weekly_limit * 100) if weekly_limit > 0 else 0
-
-        thread_suffix = f"\n> cost: **${task_usd:.2f}** · session `{session_pct}%`"
-        main_suffix = (
-            f"\n> task **${task_usd:.2f}**"
-            f" · session `{session_pct}%` ({session_remaining})"
-            f" · week `{weekly_pct}%` (${weekly_spend:.2f}/${weekly_limit:.0f})"
-        )
-        return {"thread_suffix": thread_suffix, "main_suffix": main_suffix}
-    except Exception:
-        return {"thread_suffix": "", "main_suffix": ""}
+        parsed = json.loads(raw)
+        session_cost = parsed.get("total_cost_usd")
+        output = parsed.get("result", "") or parsed.get("content", "") or raw
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    if session_cost is not None:
+        _record_work_session_cost(slug, session_cost)
+        log.info(f"[{label}] {slug} — done, cost ${session_cost:.4f}")
+    else:
+        log.info(f"[{label}] {slug} — done (no cost data)")
+    return output, session_cost
 
 
 def _unblock_ceo_gate(proj: dict, slug: str = "") -> None:
@@ -295,35 +254,6 @@ def _unblock_ceo_gate(proj: dict, slug: str = "") -> None:
     except Exception:
         pass
 
-
-
-
-async def _generate_completion_report(proj_path: str, task_id: str) -> str:
-    """CEO-level milestone report from task log. Read-only, no lock needed."""
-    prompt = (
-        f"Read logs/tasks/{task_id}.md and write a CEO milestone report.\n\n"
-        "Format exactly:\n"
-        "**Completed:** [task title — one line]\n\n"
-        "**Key decisions:**\n"
-        "- [specific product-level decision 1]\n"
-        "- [specific product-level decision 2]\n"
-        "- [add more as needed]\n\n"
-        "**Product impact:** [2-3 sentences — what this enables for users or the business]\n\n"
-        "**Tradeoffs accepted:** [1-2 sentences — what was constrained or deferred and why]\n\n"
-        "Output only the report. No preamble, no checkpoint status."
-    )
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            str(HOME / ".local/bin/claude"),
-            "--print", "--bare", "--permission-mode", "auto", "-p", prompt,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=proj_path or str(HOME),
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-        return stdout.decode().strip()
-    except Exception:
-        return ""
 
 
 
@@ -478,51 +408,14 @@ def _budget_summary() -> str:
         return f"Could not read budget: {e}"
 
 
-async def _collect_idea_thread_history(thread: discord.Thread) -> tuple[str, str]:
-    """
-    Collect the full thread conversation and the original idea text.
-    Returns (idea_text, full_conversation_markdown).
-    """
-    idea_text = ""
-    try:
-        parent = thread.parent
-        if isinstance(parent, discord.TextChannel):
-            starter = await parent.fetch_message(thread.id)
-            idea_text = starter.content if starter else ""
-    except Exception:
-        pass
-    if not idea_text:
-        idea_text = thread.name.removeprefix("idea: ").removeprefix("oms-start: ")
-
-    lines = []
-    if idea_text:
-        lines.append(f"## Original Idea\n{idea_text}")
-    lines.append("\n## Discussion")
-    async for msg in thread.history(limit=200, oldest_first=True):
-        if not msg.content or msg.content in ("⏳",):
-            continue
-        role = "User" if not msg.author.bot else "Assistant"
-        lines.append(f"\n**{role}:** {msg.content}")
-
-    return idea_text, "\n".join(lines)
-
-
-async def _write_idea_to_disk(slug: str, project_path: Path, conversation: str):
-    """Write full thread conversation to IDEA.md so oms-start reads rich context."""
-    idea_body = f"# {slug}\n\n{conversation}\n"
-    (project_path / "IDEA.md").write_text(idea_body)
-    (project_path / "README.md").write_text(idea_body)
-
 
 async def handle_idea_thread_reply(message: discord.Message, content: str, thread: discord.Thread, known_slug: str = "", known_path: str = ""):
     """
-    Ideas thread handler. Two modes:
-    - /oms-start trigger: collect full thread history → write to IDEA.md → run oms-start skill
-    - Normal reply: answer Q&A AND update IDEA.md with latest conversation (so context is never lost)
+    Ideas thread handler — Q&A only.
+    Appends each reply to IDEA.md so oms-start (REPL) gets full context.
+    Answers questions using gemma (free) with haiku fallback.
     """
-    is_oms_start = content.strip().lower().startswith("/oms-start") or content.strip().lower() == "oms-start"
-
-    # Prefer known_slug/known_path passed from project thread routing; fall back to thread name
+    # Resolve slug + path
     if known_slug and known_path:
         slug = known_slug
         project_path = Path(known_path)
@@ -531,98 +424,76 @@ async def handle_idea_thread_reply(message: discord.Message, content: str, threa
         slug = slug.replace(" ", "-").lower()
         project_path = HOME / "code" / "personal" / slug
 
-    # Collect full thread history
-    _, conversation = await _collect_idea_thread_history(thread)
-
-    # Always write to disk so the project files stay in sync with the discussion
+    # Append this message to IDEA.md (keeps full discussion for oms-start)
     if project_path.exists():
-        await _write_idea_to_disk(slug, project_path, conversation)
+        idea_file = project_path / "IDEA.md"
+        try:
+            existing = idea_file.read_text() if idea_file.exists() else f"# {slug}\n"
+            idea_file.write_text(existing.rstrip() + f"\n\n## Discussion\n**User:** {content}\n")
+        except Exception as e:
+            log.error(f"[idea] failed to append to IDEA.md: {e}")
+
+    # Build Q&A prompt with thread context
+    history_lines = []
+    async for msg in thread.history(limit=50, oldest_first=True):
+        if msg.author.bot and msg.content in ("⏳",):
+            continue
+        role = "Assistant" if msg.author.bot else "User"
+        history_lines.append(f"{role}: {msg.content}")
+    conversation = "\n".join(history_lines)
+
+    prompt = (
+        f"Project: {slug}\n\n"
+        f"Thread conversation:\n{conversation}\n\n"
+        f"User just said: {content}\n\n"
+        "Answer directly and concisely. Help refine the project idea. "
+        "Do not run oms-start. Do not write files."
+    )
+    qa_cwd = str(project_path) if project_path.exists() else str(HOME)
 
     await message.add_reaction("⏳")
     try:
-        if is_oms_start:
-            # Full oms-start re-run with all thread context written to disk
-            if not project_path.exists():
-                project_path.mkdir(parents=True, exist_ok=True)
-                (project_path / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
-                await _write_idea_to_disk(slug, project_path, conversation)
-
-            prompt = (
-                "AUTONOMOUS BOT MODE. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
-                f"/oms-start\n\n"
-                f"ARGUMENTS:\n"
-                f"Project: {slug}\n"
-                f"Directory: {project_path}\n"
-                f"Update: re-run with full thread discussion already written to IDEA.md and README.md. "
-                f"Read those files — they contain the original idea plus the full discussion transcript. "
-                f"Update all ctx files with the richer context.\n"
-            )
+        response = ""
+        try:
+            response, rc = await _run_llm_route('gemma', prompt, qa_cwd, timeout=120)
+        except Exception as e:
+            log.error(f"[idea-qa] gemma failed: {e}")
+            rc = 1
+        if rc != 0 or not response.strip():
+            log.info(f"[idea-qa] gemma failed (rc={rc}), falling back to haiku")
             proc = await asyncio.create_subprocess_exec(
                 str(HOME / ".local/bin/claude"),
                 "--print", "--bare", "--permission-mode", "auto",
-                "--output-format", "json",
                 "--model", "claude-haiku-4-5-20251001",
                 "-p", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(project_path),
+                cwd=qa_cwd,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
-            try:
-                data = json.loads(stdout.decode())
-                response = data.get("result", "").strip()
-            except Exception:
-                response = stdout.decode().strip()
-        else:
-            # Q&A mode — answer the question in context of the full conversation
-            prompt = (
-                "AUTONOMOUS BOT MODE.\n\n"
-                f"Project: {slug}\n"
-                f"Directory: {project_path}\n\n"
-                f"Full thread conversation so far:\n{conversation}\n\n"
-                f"User just said: {content}\n\n"
-                "Answer the user's question directly and concisely. "
-                "You are acting as the OMS assistant helping them refine their project idea. "
-                "Do not run oms-start. Do not write any files. Just answer."
-            )
-            qa_cwd = str(project_path) if project_path.exists() else str(HOME)
-            # Try free model first (gemma — fastest)
-            response = ""
-            try:
-                response, rc = await _run_llm_route('gemma', prompt, qa_cwd, timeout=120)
-            except Exception:
-                rc = 1
-            # Fallback to subscription haiku if free model fails
-            if rc != 0 or not response.strip():
-                proc = await asyncio.create_subprocess_exec(
-                    str(HOME / ".local/bin/claude"),
-                    "--print", "--bare", "--permission-mode", "auto",
-                    "--model", "claude-haiku-4-5-20251001",
-                    "-p", prompt,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=qa_cwd,
-                )
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-                response = stdout.decode().strip()
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+            response = stdout.decode().strip()
 
         if response:
             for chunk in split_for_discord(response):
                 await thread.send(chunk)
+        else:
+            await thread.send("_(no response — try again)_")
         if bot.user:
             await message.remove_reaction("⏳", bot.user)
     except asyncio.TimeoutError:
+        log.error(f"[idea-qa] timed out for {slug}")
         await thread.send("⏱️ Timed out — reply again to continue")
         if bot.user:
             await message.remove_reaction("⏳", bot.user)
     except Exception as e:
+        log.error(f"[idea-qa] error for {slug}: {e}")
         await thread.send(f"❌ {e}")
         if bot.user:
             await message.remove_reaction("⏳", bot.user)
 
 
 async def handle_claude_thread_reply(content: str, thread: discord.Thread):
-    """Continue a #claude conversation thread with full history as context."""
+    """Continue a #claude conversation thread with full history. Uses free models first."""
     if not content:
         return
 
@@ -643,17 +514,25 @@ async def handle_claude_thread_reply(content: str, thread: discord.Thread):
 
     await thread.send("⏳")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            HOME / ".local/bin/claude", "--print", "--bare", "--permission-mode", "auto", "-p", prompt,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(HOME),
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
-        response = stdout.decode().strip() or "_(no response)_"
+        response, rc = await _run_llm_route('gemma', prompt, str(HOME), timeout=120)
+        if rc != 0 or not response.strip():
+            log.info(f"[claude-qa] gemma failed (rc={rc}), falling back to haiku")
+            proc = await asyncio.create_subprocess_exec(
+                str(HOME / ".local/bin/claude"),
+                "--print", "--bare", "--permission-mode", "auto",
+                "--model", "claude-haiku-4-5-20251001",
+                "-p", prompt,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(HOME),
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            response = stdout.decode().strip()
+        response = response or "_(no response)_"
     except asyncio.TimeoutError:
         response = "⏱️ Timed out (5min)"
     except Exception as e:
+        log.error(f"[claude-qa] thread reply error: {e}")
         response = f"❌ Error: {e}"
 
     for chunk in split_for_discord(response):
@@ -661,7 +540,7 @@ async def handle_claude_thread_reply(content: str, thread: discord.Thread):
 
 
 async def handle_claude_message(message: discord.Message, content: str):
-    """Direct Claude access from #claude channel. Replies in thread."""
+    """Direct Claude access from #claude channel. Uses free models first."""
     if not content:
         return
     # /budget shortcut — no Claude needed
@@ -672,14 +551,21 @@ async def handle_claude_message(message: discord.Message, content: str):
     thread = await message.create_thread(name=content[:80])
     await thread.send("⏳")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            HOME / ".local/bin/claude", "--print", "--bare", "--permission-mode", "auto", "-p", content,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(HOME),
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
-        response = stdout.decode().strip() or "_(no response)_"
+        response, rc = await _run_llm_route('gemma', content, str(HOME), timeout=120)
+        if rc != 0 or not response.strip():
+            log.info(f"[claude-qa] gemma failed (rc={rc}), falling back to haiku")
+            proc = await asyncio.create_subprocess_exec(
+                str(HOME / ".local/bin/claude"),
+                "--print", "--bare", "--permission-mode", "auto",
+                "--model", "claude-haiku-4-5-20251001",
+                "-p", content,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(HOME),
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            response = stdout.decode().strip()
+        response = response or "_(no response)_"
     except asyncio.TimeoutError:
         response = "⏱️ Timed out (5min)"
     except Exception as e:
@@ -724,6 +610,14 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
+    # Dedup: Discord gateway can deliver the same message twice on reconnect
+    if message.id in _processed_messages:
+        return
+    _processed_messages.add(message.id)
+    # Keep set bounded — only track last 500 messages
+    if len(_processed_messages) > 500:
+        _processed_messages.clear()
+
     channel = message.channel
     content = message.content.strip()
 
@@ -743,10 +637,6 @@ async def on_message(message: discord.Message):
         result = get_project_by_thread(config, channel)
         if result:
             slug, proj = result
-            # /oms-start in a project thread → re-run oms-start with full thread history
-            if content.strip().lower().startswith("/oms-start") or content.strip().lower() == "oms-start":
-                await handle_idea_thread_reply(message, content, channel, known_slug=slug, known_path=proj.get("path") or "")
-                return
             await handle_thread_message(message, slug, proj, content, channel)
             return
         await bot.process_commands(message)
@@ -795,11 +685,6 @@ async def handle_thread_message(
         await thread.send("Got it — re-run `/work` to resume OMS.")
         return
 
-    # Undo command
-    if content.lower().startswith("undo "):
-        await handle_undo(message, slug, content, reply_target=thread)
-        return
-
     # /oms <task> in a thread → start a new OMS task (same as main channel)
     if content.lower().startswith("/oms") or content.lower().startswith("!oms"):
         if channel:
@@ -825,11 +710,6 @@ async def handle_project_message(
         _unblock_ceo_gate(proj, slug)
         await message.add_reaction("✅")
         await message.reply("Got it — run `/work` to resume.", mention_author=False)
-        return
-
-    # Undo command
-    if content.lower().startswith("undo "):
-        await handle_undo(message, slug, content, reply_target=message)
         return
 
     # !work — run cleared-queue tasks for this project via skill
@@ -891,21 +771,7 @@ async def handle_project_message(
         if bot.user:
             await message.remove_reaction("⚙️", bot.user)
 
-        # Extract cost + text from JSON output
-        session_cost: float | None = None
-        output = raw
-        try:
-            parsed = json.loads(raw)
-            session_cost = parsed.get("total_cost_usd")
-            output = parsed.get("result", "") or parsed.get("content", "") or raw
-        except (json.JSONDecodeError, AttributeError):
-            pass
-
-        if session_cost is not None:
-            _record_work_session_cost(slug, session_cost)
-            log.info(f"[work] {slug} — done, cost ${session_cost:.4f}")
-        else:
-            log.info(f"[work] {slug} — done (no cost data)")
+        output, _ = _parse_work_output(raw, slug, "work")
 
         if proc and proc.returncode != 0 and err:
             if _is_rate_limited(err):
@@ -931,23 +797,37 @@ async def handle_project_message(
 async def handle_thread_qa(
     message: discord.Message, proj: dict, content: str
 ):
-    """CEO observer Q&A — direct claude call, no lock/dispatcher needed (read-only)."""
+    """CEO observer Q&A — uses free models first, Haiku fallback. Read-only."""
     proj_path = proj.get("path", "")
     prompt = (
         f"CEO observer question (do NOT run OMS steps, do NOT modify files): {content}\n\n"
         "Read the relevant task logs in logs/tasks/ and answer directly. No preamble."
     )
+    qa_cwd = proj_path or str(HOME)
     await message.add_reaction("💬")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            str(HOME / ".local/bin/claude"),
-            "--print", "--bare", "--permission-mode", "auto", "-p", prompt,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=proj_path or str(HOME),
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-        response = stdout.decode().strip() or "_(no response)_"
+        # Try free model first (gemma — fast Q&A)
+        response = ""
+        rc = 1
+        try:
+            response, rc = await _run_llm_route('gemma', prompt, qa_cwd, timeout=120)
+        except Exception as e:
+            log.error(f"[thread-qa] gemma failed: {e}")
+        # Fallback to subscription haiku if free model fails
+        if rc != 0 or not response.strip():
+            log.info(f"[thread-qa] gemma failed (rc={rc}), falling back to haiku")
+            proc = await asyncio.create_subprocess_exec(
+                str(HOME / ".local/bin/claude"),
+                "--print", "--bare", "--permission-mode", "auto",
+                "--model", "claude-haiku-4-5-20251001",
+                "-p", prompt,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=qa_cwd,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+            response = stdout.decode().strip()
+        response = response or "_(no response)_"
     except asyncio.TimeoutError:
         response = "⏱️ Timed out (2min)"
     except Exception as e:
@@ -961,207 +841,64 @@ async def handle_thread_qa(
         pass
 
 
-async def handle_undo(
-    message: discord.Message,
-    slug: str,
-    content: str,
-    reply_target: discord.Thread | discord.Message,
-):
-    """Handle 'undo [agent] [change-id]' from CEO."""
-    parts = content.split()
-    if len(parts) < 3:
-        await message.reply(
-            "Format: `undo [agent] [change-id]` or `undo [agent] C`",
-            mention_author=False,
-        )
-        return
-    agent = parts[1]
-    change = " ".join(parts[2:])
-    prompt = (
-        f"CEO undo request: revert change '{change}' for agent '{agent}'. "
-        "Read the agent's lessons.md, find the most recent matching entry, "
-        "remove only that entry, and confirm what was removed."
-    )
-    await message.reply("Undo not supported — dispatcher removed. Edit lessons.md manually.", mention_author=False)
 
-
-async def _extract_slug(idea: str) -> str:
-    """Extract a short kebab-case project slug from idea text. Uses Haiku for quality naming."""
-    # Fast heuristic: explicit name
-    m = re.search(r'\b(?:called|named)\s+["\']?([\w-]+)["\']?', idea, re.IGNORECASE)
-    if m:
-        slug = m.group(1).lower()
-        return re.sub(r'[^a-z0-9]+', '-', slug).strip('-')
-
-    # Haiku extraction — best quality, ~$0.001
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            str(HOME / ".local/bin/claude"),
-            "--print", "--bare", "--model", "claude-haiku-4-5-20251001",
-            "-p", (
-                "Extract a short project slug (1-3 words, kebab-case, lowercase) "
-                "that best names this product idea. Reply with ONLY the slug — no explanation, "
-                "no punctuation, no quotes.\n\nIdea: " + idea[:400]
-            ),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-        slug = stdout.decode().strip().lower()
-        slug = re.sub(r'[^a-z0-9]+', '-', slug).strip('-')
-        if slug and 2 <= len(slug) <= 30:
-            return slug
-    except Exception:
-        pass
-
-    # Fallback: first meaningful noun
-    skip = {
-        "the", "this", "that", "with", "for", "and", "app", "new", "idea",
-        "project", "build", "make", "create", "want", "like", "need", "use",
-        "have", "just", "also", "give", "some", "what", "from", "they", "them",
-        "about", "only", "already", "into", "more", "than", "when", "will",
-        "been", "very", "really", "such", "even", "then", "here", "there",
-    }
-    for w in re.findall(r'\b[a-z][a-z0-9]{2,}\b', idea.lower()):
-        if w not in skip:
-            return w
+def _extract_slug(idea: str) -> str:
+    """Extract project slug from first line of idea text. No LLM call — pure text."""
+    # Use first line (or first sentence before a period/newline)
+    first_line = idea.strip().split('\n')[0].strip()
+    # Remove markdown headers
+    first_line = re.sub(r'^#+\s*', '', first_line)
+    # Take up to first 5 words for the slug
+    words = re.findall(r'[a-zA-Z0-9]+', first_line)[:5]
+    if words:
+        slug = '-'.join(w.lower() for w in words)
+        return slug[:40]  # cap at 40 chars
     return f"project-{int(datetime.now(timezone.utc).timestamp())}"
 
-
-async def _register_project(
-    guild: discord.Guild, slug: str, path: Path
-) -> discord.TextChannel:
-    """Find or create #{slug} channel and register project in oms-config. Idempotent."""
-    channel = discord.utils.get(guild.text_channels, name=slug)
-    if channel is None:
-        channel = await guild.create_text_channel(slug)
-        log.info(f"Created Discord channel #{slug}")
-
-    path.mkdir(parents=True, exist_ok=True)
-
-    cfg = load_config()
-    existing = cfg.get("projects", {}).get(slug)
-    if not existing:
-        cfg.setdefault("projects", {})[slug] = {
-            "path": str(path),
-            "channel_id": str(channel.id),
-            "active": True,
-            "auto_start": True,
-            "deploy": None,
-            "mobile": None,
-        }
-        changed = True
-    else:
-        changed = False
-        # Backfill path/channel_id if registered by discord-create-channel.py with nulls
-        if not existing.get("path"):
-            existing["path"] = str(path)
-            changed = True
-        if not existing.get("channel_id"):
-            existing["channel_id"] = str(channel.id)
-            changed = True
-    if changed:
-        tmp = str(CONFIG_FILE) + ".tmp"
-        Path(tmp).write_text(json.dumps(cfg, indent=2))
-        Path(tmp).replace(CONFIG_FILE)
-        global _config_mtime
-        _config_mtime = 0.0  # Invalidate cache
-        log.info(f"Registered project {slug} at {path}")
-
-    return channel
 
 
 async def handle_idea(message: discord.Message, content: str):
     """
-    New idea in #ideas:
-    1. Extract slug (Haiku)
-    2. Create project dir + write IDEA.md and README.md to disk
-    3. Run oms-start via short /oms-start skill trigger (reads files from disk)
-    4. Create Discord channel + register project
-    5. Post 1 summary message in new channel + open a thread for discussion
+    New idea in #ideas — capture only:
+    1. Extract slug from first line (no LLM call)
+    2. Create project dir + write IDEA.md to disk
+    3. Reply in thread confirming capture + REPL instructions
     """
     if not message.guild:
         return
     await message.add_reaction("⏳")
 
-    # Step 1 — slug + project path
-    slug = await _extract_slug(content)
-    project_path = HOME / "code" / "personal" / slug
-    project_path.mkdir(parents=True, exist_ok=True)
-
-    # Step 2 — write full idea to disk + pre-create .claude/agents/ so the model never
-    # needs to create new directories (eliminates "I need write access" cautionary output)
-    idea_body = f"# {slug}\n\n{content}\n"
-    (project_path / "IDEA.md").write_text(idea_body)
-    (project_path / "README.md").write_text(idea_body)
-    (project_path / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
-
-    # Step 3 — invoke oms-start skill with bot-mode prefix
-    # Short prefix tells the model it's in autonomous mode BEFORE it loads the skill.
-    # The skill does all the real work (ctx files, departments, hierarchy, etc.)
-    prompt = (
-        "AUTONOMOUS BOT MODE. Auto mode active — follow allow list, skip prompts for pre-approved tools.\n\n"
-        f"/oms-start\n\n"
-        f"ARGUMENTS:\n"
-        f"Project: {slug}\n"
-        f"Directory: {project_path}\n"
-        f"Idea: (read README.md and IDEA.md already written to the project directory)\n"
-    )
-    output = ""
-    timed_out = False
     try:
-        proc = await asyncio.create_subprocess_exec(
-            str(HOME / ".local/bin/claude"),
-            "--print", "--bare", "--permission-mode", "auto",
-            "--output-format", "json",
-            "--model", "claude-sonnet-4-6",
-            "-p", prompt,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(project_path),
+        slug = _extract_slug(content)
+        project_path = HOME / "code" / "personal" / slug
+        project_path.mkdir(parents=True, exist_ok=True)
+        (project_path / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+
+        idea_body = f"# {slug}\n\n{content}\n"
+        (project_path / "IDEA.md").write_text(idea_body)
+        (project_path / "README.md").write_text(idea_body)
+
+        # Create thread for follow-up discussion
+        thread = await message.create_thread(
+            name=f"idea: {slug}",
+            auto_archive_duration=10080,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
-        try:
-            data = json.loads(stdout.decode())
-            output = data.get("result", "").strip()
-        except Exception:
-            output = stdout.decode().strip()
-    except asyncio.TimeoutError:
-        timed_out = True
-    except Exception as e:
-        output = f"❌ oms-start error: {e}"
+        await thread.send(
+            f"Captured idea as `{slug}/`\n"
+            f"Path: `{project_path}`\n\n"
+            f"Run `/oms-start` in Claude Code REPL to initialize the project.\n"
+            f"Reply here to refine the idea — your messages will be appended to IDEA.md."
+        )
 
-    # Step 4 — create Discord channel + register project (after oms-start)
-    try:
-        channel = await _register_project(message.guild, slug, project_path)
-    except Exception as e:
-        await message.reply(f"❌ Could not create channel for `{slug}`: {e}", mention_author=False)
         if bot.user:
             await message.remove_reaction("⏳", bot.user)
-        return
-
-    # Step 5 — post 1 summary message + thread for discussion
-    if timed_out:
-        summary = f"⏱️ `{slug}` oms-start timed out — run `/oms-start` in Claude Code to finish setup."
-    elif output:
-        summary = output
-    else:
-        summary = f"✅ `{slug}` initialized — run `/oms <task>` to start."
-
-    chunks = split_for_discord(summary)
-    first_msg = await channel.send(chunks[0])
-    for chunk in chunks[1:]:
-        await channel.send(chunk)
-
-    # Thread for oms-start Q&A / follow-up
-    await first_msg.create_thread(
-        name=f"oms-start: {slug}",
-        auto_archive_duration=10080,  # 7 days
-    )
-
-    if bot.user:
-        await message.remove_reaction("⏳", bot.user)
-    await message.add_reaction("✅")
+        await message.add_reaction("✅")
+        log.info(f"[idea] captured: {slug} at {project_path}")
+    except Exception as e:
+        log.error(f"[idea] failed to capture idea: {e}")
+        await message.reply(f"Failed to capture idea: {e}", mention_author=False)
+        if bot.user:
+            await message.remove_reaction("⏳", bot.user)
 
 
 # --- Rate-limit retry helpers ---
@@ -1296,19 +1033,7 @@ async def poll_pending_resumes():
                     continue
                 raw = stdout.decode().strip()
                 err = stderr.decode().strip()
-                session_cost: float | None = None
-                output = raw
-                try:
-                    parsed = json.loads(raw)
-                    session_cost = parsed.get("total_cost_usd")
-                    output = parsed.get("result", "") or parsed.get("content", "") or raw
-                except (json.JSONDecodeError, AttributeError):
-                    pass
-                if session_cost is not None:
-                    _record_work_session_cost(slug, session_cost)
-                    log.info(f"[work] {slug} — auto-resume done, cost ${session_cost:.4f}")
-                else:
-                    log.info(f"[work] {slug} — auto-resume done (no cost data)")
+                output, _ = _parse_work_output(raw, slug, "auto-resume")
                 if proc.returncode != 0 and err:
                     if _is_rate_limited(err):
                         # Still rate limited — reschedule
@@ -1412,8 +1137,14 @@ async def setup_hook():
     bot.loop.create_task(poll_brief())
 
 
+_shutdown_fired = False
+
 async def _post_offline():
-    """Post offline notice then close bot."""
+    """Post offline notice then close bot. Runs at most once."""
+    global _shutdown_fired
+    if _shutdown_fired:
+        return
+    _shutdown_fired = True
     updates_id = config.get("updates_channel_id") if config else None
     if updates_id:
         ch = _get_text_channel(updates_id)
@@ -1426,17 +1157,34 @@ async def _post_offline():
 
 
 def _handle_shutdown(sig, frame):  # pyright: ignore[reportUnusedParameter]
+    if _shutdown_fired:
+        return
     log.info(f"Received signal {sig} — shutting down")
     loop = asyncio.get_event_loop()
     loop.create_task(_post_offline())
 
 
 # --- Entry point ---
+PID_FILE = HOME / ".claude/discord-bot.pid"
+
 if __name__ == "__main__":
     if not TOKEN_FILE.exists():
         log.error("Discord token not found at ~/.config/discord/token")
         log.error("Run /init-oms in Claude Code to set up.")
         sys.exit(1)
+
+    # Kill any existing bot process before starting
+    if PID_FILE.exists():
+        try:
+            old_pid = int(PID_FILE.read_text().strip())
+            import os as _os
+            _os.kill(old_pid, signal.SIGTERM)
+            log.info(f"Killed previous bot (pid {old_pid})")
+            import time; time.sleep(2)  # wait for old bot to disconnect
+        except (ProcessLookupError, ValueError):
+            pass
+
+    PID_FILE.write_text(str(__import__('os').getpid()))
 
     token = TOKEN_FILE.read_text().strip()
     log.info("Starting OMS Discord bot...")
@@ -1444,4 +1192,7 @@ if __name__ == "__main__":
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, _handle_shutdown)
 
-    bot.run(token)
+    try:
+        bot.run(token)
+    finally:
+        PID_FILE.unlink(missing_ok=True)

@@ -236,20 +236,52 @@ Router outputs `tier: 0|1|2|3` using Cynefin classification. Every feature is pu
 
 ---
 
+## Model Routing — Hook-Enforced
+
+**Source of truth:** `~/.claude/oms-config.json` → `model_overrides`
+**Enforcement:** `enforce-oms-model.sh` PreToolUse hook — blocks Agent calls with wrong or missing `model` param (exit 2).
+
+The hook detects OMS agent roles by keyword matching in the prompt and validates the `model` parameter against `oms-config.json`. You MUST pass the `model` parameter on every Agent call — the hook blocks calls without it.
+
+| Role | Config key | Default |
+|---|---|---|
+| router | `router` | `haiku` |
+| path-diversity | `path_diversity` | `sonnet` |
+| pre-facilitator, ceo-gate | `facilitator_pre` | `haiku` |
+| facilitator (full) | `facilitator_full` | `sonnet` |
+| synthesizer | `synthesizer` | `sonnet` |
+| synthesizer (escalation) | `synthesizer_escalation` | `opus` |
+| trainer, executive-briefing | `facilitator_full` | `sonnet` |
+| context-optimizer | `validator` | `haiku` |
+| elaboration | `elaboration` | `sonnet` |
+| elaboration (cross-functional) | `elaboration_complex` | `opus` |
+| discussion agents | `oms` | `sonnet` |
+
+**Synthesizer Opus escalation** — the hook allows `model: "opus"` for Synthesizer when escalation is warranted:
+1. Facilitator output contains `livelock_signal: "cycling"` or `"deadlock"`
+2. 5+ activated agents AND round 2+ with no convergence
+Log escalation: `[model-routing] Synthesizer escalated to Opus — reason: [trigger]`
+
+**To change a model:** edit `oms-config.json` → `model_overrides`. The hook reads it on every call. No persona or SKILL.md edits needed.
+
+---
+
 ## Agent Registry
 
 ### Engine Roles
-| Role | File | Lessons | Model | When |
-|---|---|---|---|---|
-| router | `~/.claude/agents/router/persona.md` | `router/lessons.md` | Haiku | Step 1 |
-| path-diversity | `~/.claude/agents/path-diversity/persona.md` | `path-diversity/lessons.md` | Haiku | Step 1.5 (Tier 2+) |
-| pre-facilitator | *(inline — no persona file)* | — | Haiku | Before full Facilitator each round (Tier 2+) |
-| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | Sonnet | After each round (Tier 2+, when pre-facilitator requires it) |
-| verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | Sonnet | On-demand |
-| ceo-gate | `~/.claude/agents/ceo-gate/persona.md` | — | Haiku | Step 3.5 (Tier 1+) — always a quick pass, escalates on match |
-| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | Sonnet (Opus: livelock confirmed, or 5+ agents round 2+ no convergence) | Step 4 (Tier 2+) |
-| trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | Sonnet | Step 6 — always |
-| executive-briefing-agent | `~/.claude/agents/executive-briefing-agent/persona.md` | `executive-briefing-agent/lessons.md` | Sonnet | Terminal — fires once after every workflow completes. Reads `.claude/oms-briefing.md`. Never participates in discussion rounds. |
+Models enforced by `enforce-oms-model.sh` hook — see §Model Routing above. To change a model, edit `oms-config.json` → `model_overrides`.
+
+| Role | File | Lessons | When |
+|---|---|---|---|
+| router | `~/.claude/agents/router/persona.md` | `router/lessons.md` | Step 1 |
+| path-diversity | `~/.claude/agents/path-diversity/persona.md` | `path-diversity/lessons.md` | Step 1.5 (Tier 2+) |
+| pre-facilitator | *(inline — no persona file)* | — | Before full Facilitator each round (Tier 2+) |
+| facilitator | `~/.claude/agents/facilitator/persona.md` | `facilitator/lessons.md` | After each round (Tier 2+, when pre-facilitator requires it) |
+| verification | `~/.claude/agents/verification/persona.md` | `verification/lessons.md` | On-demand |
+| ceo-gate | `~/.claude/agents/ceo-gate/persona.md` | — | Step 3.5 (Tier 1+) |
+| synthesizer | `~/.claude/agents/synthesizer/persona.md` | `synthesizer/lessons.md` | Step 4 (Tier 2+) |
+| trainer | `~/.claude/agents/trainer/persona.md` | `trainer/lessons.md` | Step 6 — always |
+| executive-briefing-agent | `~/.claude/agents/executive-briefing-agent/persona.md` | `executive-briefing-agent/lessons.md` | Terminal — fires once after every workflow |
 
 ### Discussion Roster (V1)
 
@@ -329,7 +361,7 @@ The goal is decomposition — cataloging what a feature involves across domains.
 
 **Decomp pipeline (per FEATURE)**:
 
-**D1 — Router (Haiku)**
+**D1 — Router** (model enforced by hook)
 - Input: feature block (`Departments[]`, `Exec-decision`, `Why`, `Context-hints`) + project ctx files + codemap
 - Output: `activated_agents` (hard-capped to declared roster + `Departments[]`), `expertise_gaps[]` (agents NOT in roster that would be useful — do not activate them), `tier`
 - **Pipeline branch**:
@@ -353,20 +385,22 @@ The goal is decomposition — cataloging what a feature involves across domains.
 - OMS resolves cross-team Depends: ensure every `Produces` from one agent's tasks aligns with `Depends` in another agent's tasks, after D2.5 amendments
 - If a contract gap remains (team A needs X but no team produces X): flag as `cto-stop` on the relevant task, not a roster change
 
-**D4 — OpenSpec Write**
+**D4 — Pre-Write Validation (Trainer + quality gate)**
+- Trainer (model enforced by hook) evaluates BEFORE queue write: roster restraint, `Departments[]` hard cap respected, interface contracts resolved, no scope creep beyond `Exec-decision`, cross-field coherence (Spec↔Scenarios↔Verify alignment per task)
+- Does NOT run full SBI eval — this is not a strategic discussion
+- **If Trainer flags issues**: OMS resolves inline (adjust task, re-split, fix interface). Max 1 rework pass. If unresolvable: flag in CEO summary as risk, write anyway with warning annotation in task log
+- Run `validate-queue.py` on the proposed task blocks BEFORE writing (dry-run validation). If structural violations found: fix them before write. Never write a task that fails the queue validator.
+
+**D5 — OpenSpec Write**
 - Merge all agent task proposals into OpenSpec TASK-NNN blocks
 - Apply scaffold artifact rules: if any `Spec:` contains "initialize", "scaffold", "create project", "pnpm install", or "npm install" → `.gitignore` MUST appear in `Artifacts:`. Missing it is a spec defect; fix before writing.
 - Replace the FEATURE block in `cleared-queue.md` with elaborated TASK-NNN blocks (`Status: queued`)
 - Output: "FEATURE-NNN → [N] tasks queued" and continue
 
-**D5 — Trainer (Router + decomp accuracy only)**
-- Evaluates: roster restraint, `Departments[]` hard cap respected, interface contracts resolved, no scope creep beyond `Exec-decision`
-- Does NOT run full SBI eval — this is not a strategic discussion
-
 **Execution**:
 1. Read `cleared-queue.md` — collect all `Status: draft` FEATURE blocks
 2. If none: output "No draft features found. Run /oms-exec to generate features first." and stop.
-3. For each FEATURE (in order, one at a time): run D1 → D2 → D3 → D4 → D5
+3. For each FEATURE (in order, one at a time): run D1 → D2 → D2.5 → D3 → D4 (validate) → D5 (write)
 4. After all features elaborated: output the queue summary (format below), then the CEO Product Summary roll-up (see Output Discipline section), then "**Next: run /oms-work to begin execution.**"
 
    **CEO Product Summary roll-up for `/oms all`** — after queue summary, output one consolidated block:
@@ -395,8 +429,17 @@ The goal is decomposition — cataloging what a feature involves across domains.
    Wait for CEO response on each gap before proceeding. Only output "**Next: run /oms-work**" once all gaps are acknowledged.
    If no expertise gaps: output "**Next: run /oms-work to begin execution.**" immediately after the CEO summary.
 
-Features with `Research-gate: true` are elaborated last.
-Never pause between features — run all sequentially without CEO input unless an actual escalation fires.
+Features with `Research-gate: true` are elaborated last (their findings may change engineering task scope — elaborate engineering first as drafts, then research, then update engineering Depends if needed).
+
+Never pause between Tier 0/1 features — run sequentially without CEO input. Tier 2+ features ALWAYS pause for CEO feedback at Step 8 before continuing.
+
+**D6 — Cross-Feature Coherence Pass (runs ONCE after ALL features elaborated, before CEO summary)**
+After all features are written to queue, validate cross-feature contracts:
+1. For each task with `Depends: TASK-NNN` where TASK-NNN is from a DIFFERENT feature: verify TASK-NNN's `Produces` field matches what the depending task's `Context` expects
+2. For each task with `Produces: X`: verify at least one downstream task has `Depends` pointing to it (orphan Produces = possible scope gap)
+3. Flag mismatches as warnings in the CEO summary — not as cto-stop (cross-feature mismatches need CEO judgment, not auto-block)
+
+This catches the class of errors where Feature A and Feature B are elaborated in isolation and their interfaces don't align.
 
 **Queue summary format** (Phase 3 output):
 ```
@@ -510,7 +553,7 @@ Log path: `.claude/logs/tasks/[task-id].md`
 ---
 
 ## Step 1 — Router
-Run Router (Haiku):
+Run Router (model enforced by hook):
 - Input: CEO intent + all shared context + codemap + project memory + ctx files
 - Output must include: `task_id`, `tier`, `activated_agents`, `domain_lead`, `primary_recommender`, `complexity`, `round_cap`, `triz_contradiction`, `premortem_failure_modes`, `agent_briefings`, `briefing_mode`, `why_chain` (if company context is real), `stage_gate`, `locked: true`
 
@@ -526,14 +569,14 @@ If `clarifying_questions`: present to CEO, collect answers, re-run Router.
 If `stage_gate: "failed"`: fix noted gap, re-run Router.
 
 ## Step 1.5 — Path Diversity *(Tier 2+ only)*
-Run Path Diversity (Haiku):
+Run Path Diversity (model enforced by hook):
 - Input: task description + `activated_agents` + `task_mode` + pre-mortem
 - Output: N structurally distinct paths, one per agent, each with a different `key_assumption`
 
 If `skip: true`: proceed without seeding. Otherwise inject each agent's path as a "Starting frame to consider" block in their Round 1 prompt. Log paths to task log under `## Path Diversity Seeds` — no CEO display.
 
 ## Step 2 — Round 1 (NGT Blind)
-Run activated agents **in parallel**. Each receives: persona + MEMORY + scoped shared context + agent_briefing + path seed (if Tier 2+) + pre-mortem block.
+Run activated agents **in parallel** (model enforced by hook). Each receives: persona + MEMORY + scoped shared context + agent_briefing + path seed (if Tier 2+) + pre-mortem block.
 
 **Briefing mode** (from Router `briefing_mode`):
 - `thin` (Tier 0): task_id + role + agent_briefing only — no pre-mortem, no why_chain
@@ -552,8 +595,8 @@ Instruction: "Post your Round 1 position. You have not seen other agents' positi
 - If agents disagree → escalate to Tier 2: run Facilitator, proceed as Tier 2
 
 **Tier 2/3**: Pre-Facilitator (Haiku), then full Facilitator only if needed:
-1. **Pre-Facilitator (Haiku)** — Input: all Round 1 agent outputs + current round number + `round_cap`. Check only: (a) all agents `position_delta.changed: false` with non-empty `why_held`, OR (b) hard cap reached. Output: `{short_circuit: bool, reason: string}`. If `short_circuit: true`: skip full Facilitator, jump directly to Step 4.
-2. **Full Facilitator (Sonnet)** — only when `short_circuit: false`. Input: Round 1 outputs + `domain_lead` + `primary_recommender`. Runs per `facilitator/persona.md`: Stage-Gate 2, position distribution (Delphi), DA check, epistemic act tracking, `targeted_injections`. Follow `proceed_to` into Step 3 or Step 4.
+1. **Pre-Facilitator** (model enforced by hook) — Input: all Round 1 agent outputs + current round number + `round_cap`. Check only: (a) all agents `position_delta.changed: false` with non-empty `why_held`, OR (b) hard cap reached. Output: `{short_circuit: bool, reason: string, full_facilitation_reason: string | null}`. **Log Pre-Facilitator output to task log under `## Pre-Facilitator [Round N]`** — this makes facilitation cost visible. If `short_circuit: true`: skip full Facilitator, jump directly to Step 4.
+2. **Full Facilitator** (model enforced by hook) — only when `short_circuit: false`. Input: Round 1 outputs + `domain_lead` + `primary_recommender`. Runs per `facilitator/persona.md`: Stage-Gate 2, position distribution (Delphi), DA check, epistemic act tracking, livelock detection (`livelock_signal`), `targeted_injections`. Follow `proceed_to` into Step 3 or Step 4.
 
 ## Step 3 — Rounds 2+ *(Tier 2+ only)*
 For each round:
@@ -576,8 +619,21 @@ Continue until `proceed_to: "synthesis"` or hard cap (5 rounds).
 Run CEO Gate per `ceo-gate/persona.md` — fires after all rounds complete, before Synthesizer. Tier 0 skips.
 
 - Input: all round outputs + `ceo-mandate.ctx.md` (project) or global default
-- Phase 1 (Haiku): classify against CEO-mandatory categories (1,2,4,9) and bufferable categories (3,5,6,7,8,10)
-- Phase 2: if triggered, 1-round C-suite blind NGT on the flagged decision
+- Phase 1 (Haiku): classify against 10 categories:
+  **CEO-mandatory** (always escalate):
+  1. Business model change — revenue/pricing structure alteration
+  2. Market pivot — target audience or positioning shift
+  4. Vision conflict — proposal contradicts stated company direction
+  9. Kill decision — stopping/removing an existing feature/product
+
+  **C-suite-bufferable** (C-suite tries 1 round; CEO only if split):
+  3. Strategic resource bet — significant time/money commitment
+  5. External commitment — partnership, public announcement, contract
+  6. Product direction — feature priority or roadmap change
+  7. Ethics deadlock — agents disagree on ethical implications
+  8. Legal boundary — CLO flags risk requiring explicit acceptance
+  10. C-suite irresolution — bufferable decision C-suite cannot resolve in 1 round
+- Phase 2: if triggered, 1-round C-suite blind NGT on the flagged decision. If `resolved: false` after 1 round → route to `ceo_brief` (do not force resolution)
 - Phase 3: surface Ratification Brief (mandatory + C-suite resolved) or Strategic Brief (C-suite split/hard_block)
 
 **Routes:**
@@ -586,7 +642,7 @@ Run CEO Gate per `ceo-gate/persona.md` — fires after all rounds complete, befo
 - `route: "ceo_brief"` → present brief to CEO inline; wait for response before Step 4. Log CEO response in task log under `## CEO Feedback` before proceeding.
 
 ## Step 4 — Synthesizer *(Tier 2+ only)*
-Run Synthesizer (Sonnet first; escalate to Opus only if: livelock confirmed by Facilitator, OR 5+ agents AND round 2+ with no convergence signal):
+Run Synthesizer (model enforced by hook — Opus escalation allowed when: Facilitator output contains `livelock_signal: "cycling"` or `"deadlock"`, OR 5+ agents AND round 2+ with no convergence):
 - Input: full log from disk (all rounds) + Router's `domain_lead` / `primary_recommender` / `activated_agents` + Facilitator `capitulation_flags` + per-agent `confidence_pct` per round
 - Instruction: "Synthesize. Cite agent + round for every rationale claim. Apply reversibility gate. Derive reopening conditions."
 
@@ -618,7 +674,7 @@ Decision: [one sentence]  Agents: [list]  Tier: N  Log: .claude/logs/tasks/[task
 ```
 
 ## Step 6 — Trainer
-Trainer always runs. Scope scales by tier:
+Trainer always runs (model enforced by hook). Scope scales by tier:
 
 | Tier | What trainer evaluates |
 |---|---|
@@ -651,6 +707,8 @@ If `meta_retrospective_due: true`: notify CEO — "Run `/compact-agent-memory [a
 After all trainer outputs are written, proceed to Step 7.
 
 ## Step 7 — Context Optimizer
+
+Model enforced by hook (lightweight efficiency check).
 
 Load `~/.claude/agents/context-optimizer/persona.md` and `~/.claude/agents/context-optimizer/metrics.md`.
 
@@ -712,26 +770,27 @@ Skip the Next line only when the pipeline is complete and there is genuinely not
 
 ## Auto-Proceed Rules
 
-**Never ask for confirmation before Step 8.5** — if synthesis is complete and there is no CEO escalation flag, write to `cleared-queue.md` immediately. Do not output "Confirm to proceed" or any equivalent prompt. The only gates that stop the pipeline are:
-- An actual CEO escalation (`escalation_required: true` from Synthesizer)
-- A `hard_block` from CEO Gate
-- A `cto-stop` written to the queue
+**Step 8 is always blocking** — CEO must see the synthesis and respond (confirm, adjust, or cancel) before Step 8.5 fires. This is non-negotiable: exec decisions and feature elaboration write to the queue, which triggers oms-work. CEO must acknowledge.
 
-Everything else proceeds automatically.
+**Step 8.5 auto-proceeds after Step 8 acknowledgment** — once CEO has responded at Step 8, do not ask "should I write to the queue?" Just write. The only additional gates that stop the pipeline AFTER CEO acknowledgment are:
+- `escalation_required: true` from Synthesizer (requires CEO decision between options)
+- A `hard_block` from CEO Gate (requires CEO override)
+- A `cto-stop` written to the queue (requires re-spec)
+
+**For `/oms all` nested escalation**: If a feature routes to Tier 2+ and triggers CEO Gate or Step 8 blocking, PAUSE the all-loop. Present synthesis to CEO. Wait for response. Then continue to the next feature. Never skip CEO acknowledgment even inside /oms all — the whole point of Tier 2+ routing is that the feature needs human judgment.
 
 ---
 
 ## LLM Model Selection Per OMS Command
 
-Every OMS command has an optimal model. This table governs which model runs the REPL session or subprocess.
+Every OMS command has an optimal model. **Source of truth: `oms-config.json` → `model_overrides`**. **Enforcement: `enforce-oms-model.sh` PreToolUse hook** — blocks Agent calls with wrong model (exit 2). See §Model Routing above.
 
 | Command | Model | Why |
 |---|---|---|
 | `/oms <task>` (Tier 0-1) | Sonnet | Default discussion, low complexity |
 | `/oms <task>` (Tier 2) | Sonnet | Multi-agent discussion, needs reliable synthesis |
 | `/oms <task>` (Tier 3) | Sonnet → Opus (Synthesizer only) | Complex reasoning at synthesis stage |
-| `/oms exec` | Sonnet | C-suite strategic discussion — Sonnet handles well |
-| `/oms exec` (complex: 4+ milestones, major pivot) | Opus | Deep strategic reasoning, catches edge cases in specs |
+| `/oms exec` | Opus | C-suite strategic discussion — spec quality is foundation, Opus catches edge cases |
 | `/oms all` | Sonnet | Sequential feature elaboration |
 | `/oms think [fw]` | Sonnet | Single-agent, low overhead |
 | `/oms-start` | Sonnet | Project bootstrap, agent creation |
@@ -817,9 +876,9 @@ Full discussion transcript, trainer output, and efficiency check results are wri
 ---
 
 ## Error Handling
-- Invalid JSON from agent → re-run with schema reminder
-- Stage-Gate 2 failure → re-run failing agent before Round 2
+- Invalid JSON from agent → re-run with schema reminder. **Max 2 retries per agent.** 3rd failure → escalate to CEO: "agent [X] cannot produce valid output — possible persona mismatch or context overflow"
+- Stage-Gate 2 failure → re-run failing agent before Round 2. **Max 2 retries.** 3rd failure → proceed without that agent's input, note in task log
 - Router cannot route → ask CEO for more context
-- Stage-Gate 4 failure → re-run Synthesizer with traceability instruction
+- Stage-Gate 4 failure → re-run Synthesizer with traceability instruction. **Max 1 retry.** 2nd failure → output with `stage_gate: "failed"` and note uncited claims for CEO review
 - Hard cap hit → synthesize from best available; escalate if unresolved disagreement is consequential
 - Memory write fails → log skip, continue (non-blocking)

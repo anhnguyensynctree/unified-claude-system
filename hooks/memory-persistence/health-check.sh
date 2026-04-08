@@ -132,16 +132,41 @@ PYEOF
 fi
 
 # ── 4. Shell scripts — syntax and permissions ─────────────────────────────────
-for script in "$HOOKS_DIR"/*.sh; do
-  [ -f "$script" ] || continue
-  name=$(basename "$script")
-  if ! bash -n "$script" 2>/dev/null; then
-    warn "$name has bash syntax errors"
-  else
-    ok
-  fi
-  if [ ! -x "$script" ]; then
-    warn "$name is not executable (run: chmod +x $script)"
+for dir in "$HOOKS_DIR" "$CLAUDE_DIR/hooks"; do
+  for script in "$dir"/*.sh; do
+    [ -f "$script" ] || continue
+    name=$(basename "$script")
+    if ! bash -n "$script" 2>/dev/null; then
+      warn "$name has bash syntax errors"
+    else
+      ok
+    fi
+    if [ ! -x "$script" ]; then
+      warn "$name is not executable (run: chmod +x $script)"
+    else
+      ok
+    fi
+  done
+done
+
+# ── 4b. Enforcement hooks — verify required hooks are registered ──────────────
+REQUIRED_HOOKS=(
+  "enforce-bare-model.sh"
+  "enforce-commit-format.sh"
+  "block-coauthor.sh"
+  "enforce-llms-read.sh"
+  "enforce-test-exists.sh"
+  "enforce-plan-mode.sh"
+  "smart-grep-route.sh"
+  "warn-file-size.sh"
+  "block-console-log.sh"
+)
+for hook in "${REQUIRED_HOOKS[@]}"; do
+  HOOK_PATH="$CLAUDE_DIR/hooks/$hook"
+  if [ ! -f "$HOOK_PATH" ]; then
+    warn "Required enforcement hook missing: $hook"
+  elif ! grep -q "$hook" "$SETTINGS" 2>/dev/null; then
+    warn "Hook exists but not registered in settings.json: $hook"
   else
     ok
   fi
@@ -415,6 +440,40 @@ elif [ ! -s "$STITCH_KEY_FILE" ]; then
   warn "Google Stitch API key file is empty at $STITCH_KEY_FILE — get your key at stitch.withgoogle.com → Settings → API Keys"
 else
   ok
+fi
+
+# ── 14. OMS model routing — every oms-config.json key reachable by hook ───────
+OMS_CONFIG="$HOME/.claude/oms-config.json"
+OMS_HOOK="$HOME/.claude/hooks/enforce-oms-model.sh"
+if [ -f "$OMS_CONFIG" ] && [ -f "$OMS_HOOK" ]; then
+  python3 - "$OMS_CONFIG" "$OMS_HOOK" <<'PYEOF' 2>&1 | while IFS= read -r line; do warn "$line"; done
+import json, sys, re
+
+config_path, hook_path = sys.argv[1], sys.argv[2]
+overrides = json.load(open(config_path)).get("model_overrides", {})
+hook = open(hook_path).read()
+
+# Keys that are intentionally indirect (resolved via a different mechanism at runtime)
+# oms-work: model comes from task spec model-hint, not the hook
+# synthesizer_escalation, elaboration_complex: looked up as fallback inside their parent role
+INDIRECT = {"synthesizer_escalation", "elaboration_complex", "oms-work"}
+
+dead_keys = []
+for key in overrides:
+    if key in INDIRECT:
+        continue
+    # Accept hyphen or underscore variants in the hook
+    pattern = re.compile(re.escape(key).replace(r"\-", r"[\-_]"), re.IGNORECASE)
+    if not pattern.search(hook):
+        dead_keys.append(key)
+
+for key in dead_keys:
+    print(f"oms-config key '{key}' has no detection branch in enforce-oms-model.sh — model routing silently dead for this role")
+    print(f"  Fix: add a detection pattern that sets OMS_ROLE=\"{key}\"")
+PYEOF
+else
+  [ ! -f "$OMS_CONFIG" ] && warn "oms-config.json not found at $OMS_CONFIG"
+  [ ! -f "$OMS_HOOK" ]   && warn "enforce-oms-model.sh not found at $OMS_HOOK"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────

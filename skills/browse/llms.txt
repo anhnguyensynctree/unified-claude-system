@@ -15,6 +15,8 @@ Videos: `~/.claude/skills/browse/.videos/`
 - Checking console errors or network failures on a running app
 - Any task that says "verify", "check", "test", "QA" against a real URL
 - OMS Evidence QA (Step 2.5) — always drive browse for each acceptance criterion
+- **Web search** — use `search <query>` for keyword web searches (replaces WebSearch tool)
+- **Content extraction** — use `fetch <url>` for reading web pages as clean text (replaces WebFetch tool)
 
 **Default for QA: video.** Use `record:start` / `record:stop` for any multi-step flow. Screenshots only for single-state checks (does element exist? layout check).
 
@@ -75,6 +77,7 @@ curl -s -X POST http://127.0.0.1:$PORT/command \
 | `screenshot:full` | full-page PNG |
 | `text` | all visible text |
 | `html [selector]` | HTML (capped 5000 chars) |
+| `search <query>` | keyword web search via DuckDuckGo → `{ results: [{ title, url, snippet }], count }` — ephemeral context, returns top 10 results, never pollutes active session |
 | `fetch <url>` | load URL in ephemeral isolated context → `{ url, title, text }` — strips nav/header/footer, handles JS, never pollutes active session |
 | `console-errors` | flush buffered console errors/warnings |
 | `network-errors` | flush buffered 4xx/5xx + failed requests |
@@ -115,6 +118,11 @@ Use Read tool with returned screenshot path to display inline.
 ## Common patterns
 
 ```json
+// Web search → fetch top result
+{"command": "search Claude Code hooks documentation"}
+// then fetch a specific result URL:
+{"command": "fetch https://docs.anthropic.com/en/docs/claude-code/hooks"}
+
 // Page load check
 {"commands": ["go localhost:3000", "console-errors", "screenshot"]}
 

@@ -76,28 +76,37 @@ Replace MILESTONE, TASK-ID, TITLE with actual values. Use `get_or_create_thread`
 
 **IMPORTANT: Prefer `!work` from Discord over `/oms-work` in REPL.** Discord runs `oms-work.py` which routes all free models via `llm-route.sh` natively. The REPL skill path below is a fallback only.
 
-**Route 1 — Bash → llm-route.sh (ALL task types with free model hints):**
-Both impl and research tasks use Bash → llm-route.sh when Model-hint is a free model:
-```bash
-printf '%s' "<full exec prompt>" | ~/.claude/bin/llm-route.sh <model-hint>
-```
-- Free model hints: `qwen-coder`, `qwen`, `llama`, `gpt-oss`, `nemotron`, `gemma`, `stepfun`
-- llm-route.sh handles fallback chains automatically (model unavailable → next in chain)
-- For impl tasks: llm-route.sh generates code → you write the files using Edit/Write tools → run tests
-- For research tasks: capture stdout as task output directly
-- If exit code non-zero or empty output → retry once with next model in chain, then fall back to Agent tool with `model: "haiku"`
+**Unified Agent Loop — all models use `_agent_loop()`:**
 
-**Route 2 — Agent tool (subscription models only):**
-- `Model-hint: sonnet` → Agent tool with `model: "sonnet"` (gate tasks, infra-critical)
-- `Model-hint: haiku` → Agent tool with `model: "haiku"`
-- `Model-hint: missing` → use Bash → `llm-route.sh qwen` (defensive — validation should prevent this)
+All task execution (free and subscription) goes through a single `_agent_loop()` orchestrator in `oms-work.py`. The LLM proposes WRITE/RUN/DONE actions, oms-work.py executes them in the worktree.
 
-**Route 3 — Validation (pass/fail judges):**
-- All validators: Bash → `llm-route.sh gemma` first (fastest free, ~70s)
-- Fallback to subscription haiku only if gemma fails or returns empty output
+- **Agent-capable** (multi-step WRITE/RUN/DONE): `qwen`, `qwen-coder`, `gpt-oss`, `nemotron`, `sonnet`, `haiku` → iterative loop with feedback
+- **One-shot only** (too small for structured protocol): `gemma`, `llama`, `stepfun` → single LLM call + `_extract_and_write_files()`, zero wasted calls
+- Subscription hints: `sonnet`, `haiku` → text-only via `claude --print --bare` (no `--dangerously-skip-permissions`)
+- `Model-hint: missing` → defaults to `qwen` (defensive)
+
+**How the agent loop works:**
+1. Send task prompt to LLM (text-only, no tool access)
+2. LLM responds with WRITE/RUN/DONE actions
+3. `oms-work.py` executes actions: writes files to worktree, runs shell commands
+4. Results fed back to LLM for next step
+5. Loop continues until DONE or max 15 steps
+6. Fallback: if LLM can't follow WRITE/RUN/DONE format after 2 tries, falls back to one-shot file extraction via `_extract_and_write_files()`
+
+**All enforcement is in `oms-work.py` (not the LLM):**
+- File writes: only to worktree directory, with mkdir -p
+- Shell commands: run in worktree with zshrc sourced, 120s timeout per command
+- Quality checks: `_run_quality_checks()` after loop completes
+- Verify commands: `_run_verify_commands()` runs the task's Verify field
+- TDD phases: RED (tests fail) → GREEN (tests pass) — orchestrated by Python
+
+**Validation (pass/fail judges) — separate from agent loop:**
+- Haiku first via `run_claude()` text-only (~10s, fastest reliable judge)
+- Fallback to free models (gemma → stepfun → llama) only if haiku is rate-limited
+- Validators are one-shot pass/fail — no agent loop, just code + scenarios in prompt
 
 **CRO research failure retry:**
-- Retry with `llm-route.sh qwen` (free, 1M context). If qwen also fails → escalate to sonnet as last resort.
+- Retry with `_agent_loop('qwen')` (free, 1M context). If qwen also fails → escalate to sonnet via agent loop.
 
 **Optional task flags** — check before routing:
 

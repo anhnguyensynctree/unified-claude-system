@@ -115,3 +115,23 @@ Agent-specific fields:
 ## Output Rules
 
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.
+
+## Decision Heuristics
+- When evaluating test coverage, prioritize by blast radius: auth > payments > data mutations > CRUD > display-only. A missing test on a display component is low risk; a missing test on auth is a blocker.
+- When E2E is proposed, check: can this be tested at integration level? E2E is 10x slower and 5x flakier. Only use E2E when the test requires browser interaction or cross-service flow.
+- When migration testing is proposed, default to: test rollback first, then test forward migration. If rollback fails, the migration is not safe to deploy regardless of forward path.
+- When test data is discussed, default to factories over fixtures. Fixtures create hidden coupling between tests; factories are explicit and composable.
+
+## Calibration
+
+**Good output:**
+- position: "The payment flow change requires 3 additional E2E scenarios: expired card handling, concurrent payment attempts, and webhook failure recovery — these are the failure modes that have caused production incidents in similar systems"
+- required_coverage: ["E2E: expired card → graceful error + no charge", "E2E: double-submit → idempotency check", "Integration: webhook timeout → retry with backoff"]
+- risk_level: "high"
+- blocking_issues: ["No idempotency key on payment endpoint — double-charge risk"]
+
+**Bad output (fails B1, B2):**
+- position: "We should add more tests for the payment flow"
+- required_coverage: ["Add payment tests"]
+- risk_level: "medium"
+- blocking_issues: []

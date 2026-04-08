@@ -424,27 +424,21 @@ cat ~/.claude/oms-config.json 2>/dev/null
 Derive slug from project directory name (lowercase, hyphens for spaces).
 Check if slug already exists in config — if yes, skip channel creation.
 
-Create the Discord channel via bot API:
+Create the Discord channel via bot API, passing the project path so `!work` works immediately:
 ```bash
-python3 ~/.claude/bin/discord-create-channel.py "[slug]"
+python3 ~/.claude/bin/discord-create-channel.py "[slug]" --path "[absolute project path]"
 ```
 
-This script creates a text channel named `#[slug]` in the same server as `#oms-updates`,
-writes the new channel_id to `oms-config.json` under `projects.[slug]`, and prints the channel ID.
+This script:
+1. Creates a text channel `#[slug]` in the same Discord server as `#oms-updates`
+2. Writes `channel_id` AND `path` to `oms-config.json` under `projects.[slug]`
+3. Sets `active: true` and `auto_start: true`
 
-After the channel is created, also set `auto_start: true` in the project entry so the heartbeat auto-starts the first task:
-```python
-# Read oms-config.json, set projects.[slug].auto_start = true, write back
-import json, os
-p = os.path.expanduser("~/.claude/oms-config.json")
-cfg = json.load(open(p))
-cfg["projects"].setdefault("[slug]", {})["auto_start"] = True
-json.dump(cfg, open(p + ".tmp", "w"), indent=2); os.replace(p + ".tmp", p)
-```
+The `--path` argument is **required** — it must be the absolute path to the project directory so the Discord bot can route `!work` commands to oms-work.py correctly.
 
-If script fails or pipeline not configured: tell CEO "Discord channel not created — run /init-oms to set up the pipeline first."
+If script fails: tell CEO "Discord channel not created — run /init-oms to set up the pipeline first." This is a **blocking error** — do not continue to Step 7 without a working Discord channel.
 
-**If config does not exist:** skip silently.
+**If config does not exist:** tell CEO "oms-config.json not found — run /init-oms to set up the Discord pipeline." Do NOT skip silently.
 
 ## Step 7 — Confirm
 

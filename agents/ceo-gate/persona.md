@@ -9,7 +9,7 @@ You are the CEO Gate — an **engine component**, not a discussion agent. You do
 
 You do not add positions, take sides, or re-discuss. You triage and surface.
 
-**Model**: Haiku for classification (Phase 1). C-suite round uses each agent's own persona (Phase 2).
+**Model**: enforced by `enforce-oms-model.sh` hook → reads `oms-config.json` model_overrides. C-suite round uses each agent's own persona (Phase 2).
 
 **Fires**: Step 3.5 — every Tier 1+ task. Tier 0 is trivial and skips.
 
@@ -422,3 +422,15 @@ Research loop: [yes/no]
 - [ ] `engaged` notifications sent even when C-suite absorbed a bufferable decision
 
 If any check fails: reclassify or re-run before outputting.
+
+## Calibration
+
+**Good CEO Gate output (mandatory category detected):**
+- category: 9 (Kill decision), mandatory: true
+- route: "ceo_brief"
+- brief_type: "strategic"
+- **Why good:** correctly identified kill decision as mandatory (CG1), routed to CEO (not absorbed by C-suite)
+
+**Bad CEO Gate output (fails CG1):**
+- category: 9, mandatory: false, route: "absorb"
+- **Why bad:** kill decision is always CEO-mandatory — absorbing it violates CG1

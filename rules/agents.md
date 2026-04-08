@@ -19,7 +19,9 @@ When a subagent returns, ALWAYS:
 4. Max 3 evaluation cycles — then accept best available
 Never accept a summary without checking it against the objective.
 
-## Model Selection Per Task
+## Model Selection Per Task [ENFORCED: enforce-agent-model.sh]
+
+Every Agent tool call MUST include an explicit `model:` param. The hook blocks calls without one.
 
 | Role | Model | When to use |
 |---|---|---|
@@ -27,6 +29,19 @@ Never accept a summary without checking it against the objective.
 | **Worker** | Haiku | Clear instructions, single-file mechanical edits, repetitive structured output |
 | **Builder** | Sonnet | Default for all code generation, multi-file impl, research synthesis, briefings |
 | **Architect** | Opus | Failed first attempt, 5+ files, architecture decisions, security-critical, strategic planning |
+
+### Agent Type → Model Mapping
+
+| Agent type | Model | Rationale |
+|---|---|---|
+| Explore | Haiku (hardcoded) | File search, keyword lookup — no reasoning needed |
+| Plan | Sonnet | Architecture reasoning, not full Opus |
+| general-purpose (research) | Sonnet | Search + read + synthesize |
+| general-purpose (code) | Sonnet | Code gen sweet spot |
+| claude-code-guide | Haiku (hardcoded) | Docs lookup |
+| Judge/validator | Haiku | Binary pass/fail |
+
+Hardcoded agents (Explore, claude-code-guide, statusline-setup) bypass the hook — they set their own model internally.
 
 Cost: Haiku ≈ 20x cheaper than Sonnet ≈ 60x cheaper than Opus.
 

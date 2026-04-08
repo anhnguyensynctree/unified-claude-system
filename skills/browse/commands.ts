@@ -371,6 +371,36 @@ export async function executeCommand(
       }
 
       // ── Content extraction ────────────────────────────────────────────────
+      case "search": {
+        // search <query> [max] — keyword web search via ddgs Python library
+        // Shells out to ~/.claude/bin/web-search.py. No browser, no captcha.
+        // Returns top results with title, URL, snippet. Does NOT affect active session.
+        const query = args.join(" ");
+        if (!query) return { ok: false, error: "search requires a query" };
+
+        const maxResults = "10";
+        const searchScript = `${process.env.HOME}/.claude/bin/web-search.py`;
+
+        try {
+          const proc = Bun.spawnSync(
+            ["python3", searchScript, query, maxResults],
+            {
+              timeout: 15000,
+            },
+          );
+          const output = proc.stdout.toString().trim();
+          if (!output) {
+            return {
+              ok: false,
+              error: `Search script returned no output. stderr: ${proc.stderr.toString().slice(0, 200)}`,
+            };
+          }
+          return JSON.parse(output);
+        } catch (e: any) {
+          return { ok: false, query, error: e.message, results: [], count: 0 };
+        }
+      }
+
       case "fetch": {
         // fetch <url> — load URL in ephemeral isolated context, return clean text
         // Does NOT affect the active browse session or any existing context.
@@ -426,7 +456,7 @@ export async function executeCommand(
       default:
         return {
           ok: false,
-          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, fetch, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, record:start, record:stop, status, eval`,
+          error: `Unknown command: '${cmd}'. Run 'status' for current state. Available: go, reload, back, forward, click, fill, select, hover, key, scroll, screenshot, screenshot:full, text, html, search, fetch, console-errors, network-errors, exists, visible, value, attr, count, viewport, new-tab, switch-tab, close-tab, tabs, ctx:create, ctx:list, ctx:switch, ctx:destroy, record:start, record:stop, status, eval`,
         };
     }
   } catch (e) {

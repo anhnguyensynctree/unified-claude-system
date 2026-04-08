@@ -53,12 +53,16 @@ model_list:
 
 router_settings:
   routing_strategy: simple-shuffle
-  num_retries: 1
+  num_retries: 3
   timeout: 120
   fallbacks:
-    - qwen-3.6-plus: [qwen-3-coder, stepfun-3.5]
-    - llama-3.3-70b: [gpt-oss-120b, gemma-3-27b]
-    - gpt-oss-120b: [nemotron-3-super, llama-3.3-70b]
+    - qwen-3.6-plus: [qwen-3-coder, gpt-oss-120b, stepfun-3.5]
+    - qwen-3-coder: [qwen-3.6-plus, stepfun-3.5]
+    - llama-3.3-70b: [gpt-oss-120b, nemotron-3-super, gemma-3-27b]
+    - gpt-oss-120b: [nemotron-3-super, llama-3.3-70b, qwen-3.6-plus]
+    - gemma-3-27b: [llama-3.3-70b, stepfun-3.5]
+    - nemotron-3-super: [gpt-oss-120b, llama-3.3-70b]
+    - stepfun-3.5: [qwen-3.6-plus, llama-3.3-70b]
 
 litellm_settings:
   drop_params: true

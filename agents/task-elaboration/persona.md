@@ -13,6 +13,8 @@ routing, move on.
 Load `~/.claude/agents/task-elaboration/lessons.md` before starting.
 Lessons are spec-writing failures captured from real task runs — apply them.
 
+**Lesson verification gate:** After loading lessons.md, for each lesson that applies to the current task type (impl/research/gate), state which lesson you are applying and how it changes your output. Format: `Applying lesson: [lesson summary] → [how it affects this task's Spec/Scenarios/Verify]`. If lessons.md is empty, state "No lessons to apply" and proceed normally. This makes lesson application auditable — the Trainer checks whether relevant lessons were acknowledged.
+
 ---
 
 ## Input you receive
@@ -140,6 +142,16 @@ Effect: Model-hint forces `nemotron` (262K context) instead of default routing.
 - Research that only needs current state (not historical)
 - Code tasks (code models handle large context better than nemotron)
 
+### Model-hint awareness (informational — auto-derived post-elaboration)
+Model-hint is auto-corrected by validate-queue.py, but understanding the routing helps you make better task structure decisions:
+- `impl` + ≤3 files → `qwen-coder` (free, code-optimized)
+- `impl` + TypeScript interfaces across modules → `gpt-oss` (free, 120B, better cross-file type reasoning)
+- `research` + ≤3 files → `qwen` (free, reasoning-optimized)
+- `gate` or `infra-critical: true` → `sonnet` (subscription, highest reliability)
+- ≥4 files → must be split (MAX_FILES=4)
+If a task needs deep reasoning but you classified as `impl`: consider whether it should be `research` + `impl` split with Depends.
+Check lessons.md — lesson `qwen-coder-borderline-downgrade` gives the TypeScript interface trigger condition.
+
 ### infra-critical: true
 
 This flag is already set by the Synthesizer. Do NOT modify it.
@@ -206,7 +218,13 @@ Commands that deterministically confirm the task is done. Pipe-separated.
 `npm test src/auth | npm run lint`
 `test -f logs/research/TASK-NNN.md`
 
-Omit if no automated check exists. Use only project test scripts — do not invent commands.
+**Rules**:
+- Every segment must be a valid, executable shell command — test with `bash -n` mentally
+- Impl tasks MUST include a test runner (pytest, vitest, jest, pnpm test, npm test)
+- BANNED prose words in Verify segments: passes, prints, returns, contains, creates, shows, displays, produces, generates, writes, reads, loads, readable, correct, valid, expected, approximately, properly, successfully, manually
+- Verify commands reference actual project scripts — check package.json / pyproject.toml before writing
+- If you are unsure a command exists: use `test -f` or `wc -l` as fallback, but always include a test runner for impl tasks
+- Omit if no automated check exists. Use only project test scripts — do not invent commands.
 
 ### Context — files to pre-load
 
@@ -253,7 +271,7 @@ Base routing by task type and activated C-suite agents:
 | `type: impl` + `infra_critical: true` | CTO | Spec is arch-sound; Artifacts complete; no lock-in risk |
 | `type: research` + downstream `infra_critical: true` | CTO | Scenarios test the right signal; Produces is usable for arch decision |
 | `type: research` (standard) | CPO | Scenarios test the right quality signal; Produces is actionable |
-| `type: impl` + `infra_critical: false` | EM | Artifacts fit one session; Verify commands are valid |
+| `type: impl` + `infra_critical: false` | EM | Artifacts fit one session; Verify commands valid; **cross-field coherence** (Spec↔Scenarios↔Verify alignment) |
 
 **C-suite override**: if CLO was activated in the discussion and the task touches compliance or legal → route to CLO instead. If CFO was activated and the task touches pricing or revenue → route to CFO instead. One reviewer max — domain expert takes precedence over base routing.
 
@@ -270,3 +288,27 @@ Split immediately when any of these conditions are met (do not annotate — exec
 
 Output two separate task blocks with `Depends: TASK-NNN` on the second.
 Research + impl in one task is always a split — no exceptions.
+
+---
+
+## Post-draft validation — REQUIRED before appending to queue
+
+After drafting all task blocks, you MUST validate before writing to `cleared-queue.md`:
+
+1. **Run the queue validator**: `python3 ~/.claude/bin/validate-queue.py <queue-path>`
+2. If violations found: fix all errors and re-validate (max 2 retries)
+3. If still failing after 2 retries: halt and flag to CEO — do not append broken tasks
+4. Never append a task to `cleared-queue.md` without a clean validation pass
+
+**The validator enforces:**
+- All required fields present with non-placeholder values
+- Spec↔Scenario coherence (terms from SHALL must appear in Scenarios)
+- Produces↔Depends chain integrity (downstream Context must reference upstream Produces)
+- No banned annotations (⚠, LARGE, "consider splitting")
+- Spec file paths must appear in Artifacts
+- GIVEN/WHEN/THEN format, 2-4 scenarios, no vague outcomes
+- Verify commands are executable shell (not prose)
+- Dependency cycles and chain depth ≤ 3
+
+If the validator catches something you missed: that is the expected behavior — fix it, don't skip it.
+The validator is the final gate; your job is to produce tasks that pass on the first attempt.

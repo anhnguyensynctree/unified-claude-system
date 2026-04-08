@@ -483,12 +483,83 @@ These invert or replace the engineering convergence criteria (C1–C4) for `rese
 
 ---
 
+## Concern 44 — Lock-In Gate
+
+**LK1** (Lock-In Gate): When CTO flags a third-party dependency failing the 30-day replacement test, Synthesizer MUST generate a `direction_selection` research action_item for CEO sign-off AND the impl action_item MUST `depends_on` the research item. Producing a single impl action_item without the lock-in gate fails LK1.
+
+---
+
+## Concern 45 — Produces Format
+
+**PV1** (Produces Format): Produces field must be a file path (contains `/` or `.`) or `none`. Prose descriptions are blocked by queue validator at write time.
+
+---
+
+## Concern 46 — Queue Gate Enforcement
+
+**QG1** (Queue Gate): Every structural violation (missing fields, prose Produces, vague Scenarios, broken Verify syntax, non-existent Depends, circular deps, chain depth > 3) MUST be caught by validate-queue.py at write time. A task reaching `Status: queued` with any structural violation fails QG1.
+
+**QG2** (Impl Verify Test Execution): Every `type: impl` task Verify field must contain at least one test runner command (`pytest`, `python -m pytest`, `vitest`, `jest`, `pnpm test`, `npm test`, `cargo test`, `go test`). A Verify containing only setup commands (`pip install`, `npm install`), structural checks (`test -f`, `ls`, `echo`), or type checks (`tsc --noEmit`) with no test runner fails QG2 — enforced by validate-queue.py at write time.
+
+---
+
+## Concern 47 — Cross-Field Coherence
+
+**XC1** (Spec↔Scenarios Coherence): Scenarios must test behaviors stated in the Spec's SHALL sentence. EM reviewer owns this check; validate-queue.py provides automated key-term warning.
+
+---
+
+## Concern 48 — Elaboration Lesson Application
+
+**LA1** (Lesson Acknowledgment): When `lessons.md` is non-empty, the Elaboration Agent's output MUST include at least one `Applying lesson:` statement for each applicable lesson. An elaboration output that does not cite any lesson when lessons.md contains entries relevant to the task type (impl/research) fails LA1.
+
+**LA2** (Lesson Effect): Each `Applying lesson:` citation must name a concrete change to the task output (Spec wording, Scenario added, Verify command strengthened). A citation that acknowledges a lesson but produces no observable change in the task fields fails LA2 — the lesson was read but not applied.
+
+---
+
+## Concern 49 — EM Coherence Gate Execution
+
+**CG9** (Coherence Gate Applied): EM's output on any task elaboration review MUST include explicit Spec↔Scenario mapping (which Scenario tests which Spec behavior). An EM approval that does not name the mapping for every Scenario fails CG9 — the coherence gate was skipped, not passed.
+
+**CG10** (Verify↔Artifact Mapping): EM's output MUST confirm that Verify commands reference test files that test Artifact code. An EM approval where Verify runs `test_utils.py` but Artifacts lists `auth/tokens.ts` with no connection fails CG10.
+
+---
+
+## Concern 50 — Model Routing Compliance
+
+**MR1** (Engine Model Selection): Trainer checks the task log for model usage. Router, Path-Diversity, Pre-Facilitator, CEO-Gate Phase 1, and Context-Optimizer MUST run on Haiku. Full Facilitator, Synthesizer, Trainer, and discussion agents MUST run on Sonnet. A task log showing Router on Sonnet or Opus fails MR1 — the model routing instructions were not followed.
+
+**MR2** (Escalation Logging): When Synthesizer escalates to Opus, the task log MUST contain `[model-routing] Synthesizer escalated to Opus — reason: [trigger]`. An Opus Synthesizer run without this log entry fails MR2 — the escalation was not documented.
+
+---
+
+## Concern 51 — Stage-Gate Structural Checks
+
+**SG1** (Stage-Gate 1 Agent Count): Stage-Gate 1 cross-checks `len(activated_agents)` against the tier cap. If count exceeds cap: gate fails with note `"Agent count [N] exceeds Tier [T] cap of [M]. Remove least-critical agent(s)."` Router re-runs with constraint. Caps: Tier 0 max 1, Tier 1 max 2, Tier 2 max 3, Tier 3 max 5. Stage-Gate 1 passing with an over-count fails SG1. (*Note: Router persona also enforces this rule directly — SG1 tests the Stage-Gate enforcement mechanism as a separate check layer.*)
+
+---
+
+## Concern 52 — CEO Gate Bufferable Resolution Path
+
+**CB1** (Bufferable Resolution Routing): When a bufferable category (3, 5, 6, 7, 8, 10) triggers and the C-suite buffer round returns `resolved: false`, CEO Gate Phase 3 MUST route to `ceo_brief` with a Strategic Brief — NOT to `synthesize`. Routing bufferable + unresolved to `synthesize` fails CB1 — the CEO is silently excluded from a decision that C-suite could not resolve.
+*Note: `resolved: false` conditions: 2-2 split, any `hard_block: true`, or ≥2 agents with `confidence_pct < 60`.*
+
+**CB2** (Strategic Brief Options): Every Strategic Brief generated for an unresolved bufferable decision MUST present ≥2 named options with concrete tradeoffs. A Strategic Brief with only one option, or with options named generically ("proceed" vs "don't proceed"), fails CB2 — the CEO cannot make an informed directional decision without real options.
+
+---
+
 ## Criteria Gap Log
 *Trainer appends here when behavior is observed that no criterion covers.*
 <!-- Format: [date] Gap: [description] Suggested criterion: [draft wording] -->
+<!-- 2026-04-07 Gap: Scenario 068 (cto-lockin-gate) uses criterion ID "S4" (Stage-Gate 4 traceability) and "D1" (dissent preservation) — neither ID exists. S4 → correct ID is SY1 (rationale cites agent+round). D1 → correct ID is SY2 (dissent preservation). Scenario 068 needs criterion ID correction in its frontmatter. RESOLVED: scenario file updated this session. -->
+<!-- 2026-04-07 Gap: Scenario 069 (router-agent-count-cap) references SG1 (Stage-Gate 1 agent count check) which was not defined. RESOLVED: added as Concern 51 this session. -->
+<!-- 2026-04-07 Gap: Scenario 070 (ceo-gate-bufferable-unresolved) defines its own CG1/CG2 conflicting with existing CG1/CG2. RESOLVED: added CB1/CB2 as Concern 52; scenario 070 criteria updated to CB1/CB2/ES2. -->
+<!-- 2026-04-07 Gap: Scenario 072 (elaboration-verify-portability) — verify.py's `weak_only` check only fired on ls/echo/cat/wc. RESOLVED: removed weak_only gating entirely; verify.py now fires QG2 whenever impl task Verify has no test runner. Added `python -m pytest` and `cargo test`/`go test` to test_cmds. QG2 added as Concern 46. -->
+<!-- 2026-04-07 Gap: Scenario 073 (elaboration-model-hint-timeout) — MR1 covers engine model routing, not task queue model-hints. No criterion currently tests "Elaboration correctly selects model-hint based on lessons." LA1/LA2 cover the lesson-application behavior. The model-hint SELECTION quality (choosing qwen vs sonnet based on past failures) is covered by LA2 when lessons.md has a relevant lesson. No new criterion needed — LA2 covers it. -->
 <!-- 2026-03-25 Gap: Scenario 055 maps empty action_items to SY1 failure, but SY1 is defined as rationale traceability — every rationale[] entry cites agent+round. In the seeded output, rationale[] IS correctly cited (PM Round 1, CTO Round 2), so SY1 passes. The actionability/completeness concern is fully covered by FC1 (action_items[] is a blocking Stage 4 required field) and C4 (named owners required). Scenario 055 updated to remove SY1 from criteria_tested. No new criterion needed — FC1 + C4 cover the seam. -->
 
 <!-- 2026-03-15 Gap: E1 (Round 2+ cross-agent engagement) cannot be evaluated in Tier 1 scenarios where agents agree in Round 1 — the inline synthesis path skips Round 2 per oms.md spec. Scenario 001 lists E1 as tested but it is only triggerable on disagreement. Suggested criterion: E1 scope note — "E1 only applies when Round 2+ exists; Tier 1 inline synthesis path is exempt." -->
 <!-- 2026-03-17 Gap: Scenario 033 (tier3-golden-path) expects an 'architect' and 'tech-lead' agent that do not exist in the current roster (confirmed: ls agents/ shows no architect dir). Router correctly identified the gap in coverage_gap field and substituted CTO. R7 partial failure is a scenario expectation mismatch, not a Router failure. Suggested action: (A) Create architect and tech-lead agent personas, OR (B) Update scenario 033 expected behavior to use 'cto' as architecture authority and remove architect/tech-lead from expected activated_agents. Suggested R7 note: "If an expected domain agent is absent from the roster, Router coverage_gap identification + closest available agent substitution is accepted behavior — flag as roster gap, not Router failure." -->
 <!-- 2026-03-17 Gap: Scenario 046 (cto-problem-frame-challenge) — CTO frame_challenge is a structurally important output for PF2 scenarios but is not defined in the CTO output schema. When CTO invokes PF1/PF2 reasoning, the frame_challenge field (original_frame, frame_problem, restated_question) should be formally available as an optional output field. Suggested schema addition: add optional frame_challenge object to CTO agent-specific output extensions in discussion-schema.md. Suggested criterion addition: PF2 pass requires frame_challenge field present in CTO position output with all three subfields populated. -->
+<!-- 2026-04-08 Gap: Scenarios 072/073 (LA1/LA2) — task-elaboration/lessons.md contained raw machine-extracted failure logs (word-frequency patterns, raw CTO-STOP text) that the Elaboration agent cannot cite in "Applying lesson:" format. LA1/LA2 would systematically fail for any lesson that was auto-extracted without human reformatting. RESOLVED: lessons.md rewritten this session with structured entries (Lesson name, When, Do instead, Correct/Wrong patterns, Source, Affected). Future auto-extraction must produce structured lesson entries or be held for human reformatting before appending. Suggested criterion addition: LA0 — when auto-extraction appends to lessons.md, the entry must contain at minimum: lesson name, When condition, Do instead action. Raw word-frequency patterns fail LA0. -->
 <!-- 2026-03-17 Gap: No security-reviewer agent persona exists in the roster. Scenario 031 expects security-reviewer to be activated and produce token invalidation spec. Decision: same treatment as architect — CTO substitutes as security domain authority when task_mode=security. Defer persona creation unless a real OMS task shows CTO missing security-specific concerns (token lifecycle, enumeration prevention, threat modeling) that CTO persona does not currently cover. R7 scope note already covers roster-gap + CTO substitution = pass. -->

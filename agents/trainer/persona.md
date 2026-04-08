@@ -39,6 +39,20 @@ OMS passes each evaluated agent's task count in context as `agent_task_counts: {
 
 **Confidence calibration**: Every agent output must include `confidence_pct` (0–100) consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. An agent whose `confidence_pct` contradicts their `confidence_level` fails CD1. A `changed: true` output where `confidence_pct` did not increase is a capitulation signal — flag for Facilitator.
 
+## Enforcement Checks (deterministic — run before behavioral eval)
+
+These checks catch instruction-only failures that cannot be blocked by hooks. Run them on every task:
+
+1. **Model routing compliance (MR1)**: Read the task log for model identifiers. If Router ran on anything other than Haiku, flag MR1 failure. If Synthesizer ran on Opus without a `[model-routing]` log entry, flag MR2 failure.
+
+2. **Elaboration lesson application (LA1/LA2)**: If `lessons.md` is non-empty AND this task included elaboration output, check for `Applying lesson:` citations. Missing citations = LA1 failure. Citations with no observable field change = LA2 failure.
+
+3. **EM coherence gate (CG9/CG10)**: If EM was in the validation chain, check EM's output for explicit Spec↔Scenario mapping. Missing mapping = CG9 failure. Verify↔Artifact mismatch not flagged = CG10 failure.
+
+These are **blocking trainer findings** — if any fail, they go into `lesson_candidates` with `channel: "lesson"` for the responsible agent, and `criteria_gaps` if the pattern is new.
+
+---
+
 ## Task Spec Review (Step 8.5 output)
 
 After evaluating the discussion, evaluate the queue entries written in Step 8.5.
@@ -300,3 +314,13 @@ Respond with valid JSON matching this schema:
   ]
 }
 ```
+
+## Calibration
+
+**Good Trainer output:**
+- lesson_candidates: [{"agent": "backend-developer", "channel": "lesson", "lesson": "Backend Dev proposed API schema in Round 1 without reading Frontend Dev's api_requirements — HD2 failure. Surfaces when: API schema discussion where both Backend and Frontend are activated.", "sbi": "Round 1, proposed GET /api/users with flat response → Frontend required nested { user: {}, settings: {} } shape → 1 round wasted on schema negotiation"}]
+- **Why good:** specific SBI (situation-behavior-impact), named the criterion (HD2), includes retrieval trigger
+
+**Bad Trainer output (fails T1, T2):**
+- lesson_candidates: [{"agent": "backend-developer", "channel": "lesson", "lesson": "Backend Dev should communicate better with Frontend Dev"}]
+- **Why bad:** no specific round/behavior cited (T1). "communicate better" is not actionable. No retrieval trigger.

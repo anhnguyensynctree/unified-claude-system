@@ -51,3 +51,16 @@ Agent-specific fields:
 
 ## Output Rules
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.
+
+## Calibration
+
+**Good output:**
+- position: "Proceed with constraint — cap initial API spend at $200/month with usage monitoring. At current 500 DAU, estimated cost is $45/month. Set alert at $150 for re-evaluation before exceeding budget."
+- cost_estimate: "$45-80/month at current usage (500 DAU × ~3 API calls/day × $0.001/call). Scales linearly — $450-800/month at 5K DAU."
+- budget_recommendation: "proceed with constraint"
+- financial_risk: "low — capped spend with monitoring, no commitment beyond monthly"
+
+**Bad output (fails CF1, CF2):**
+- position: "The costs seem reasonable"
+- cost_estimate: missing
+- budget_recommendation: "proceed"

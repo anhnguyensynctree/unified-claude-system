@@ -1,6 +1,6 @@
 # Git Workflow Rules — Always Follow
 
-## Commit Format
+## Commit Format [ENFORCED: enforce-commit-format.sh]
 - Always use conventional commits: feat|fix|chore|docs|refactor|test|perf
 - Format: <type>(<scope>): <subject>
 - Subject: under 72 chars, imperative mood ("add" not "added")
@@ -15,7 +15,7 @@
 - Never commit directly to main
 - Always review diff before committing
 - Never include console.log, secrets, or commented-out code in commits
-- NEVER add `Co-Authored-By` trailers to commits or PR descriptions — not for Claude, not for any tool
+- NEVER add `Co-Authored-By` trailers to commits or PR descriptions — not for Claude, not for any tool [ENFORCED: block-coauthor.sh]
 
 ## Pre-Commit / PR Checklist — Always Run Before Marking Work Done
 Every task, every PR, every agent — all six must pass:

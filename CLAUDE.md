@@ -87,10 +87,11 @@ Every data interface must have a schema definition before implementation, regard
 ## Default Operating Mode
 Unless told otherwise:
 - Prioritize working, tested code over speed
-- Keep files under 300 lines
-- Run tests before considering a task done
-- Check for console.log before finishing
+- Keep files under 300 lines [ENFORCED: warn-file-size.sh]
+- Run tests before considering a task done — test files MUST exist before editing implementation [ENFORCED: enforce-test-exists.sh]
+- Check for console.log before finishing [ENFORCED: block-console-log.sh]
 - Never modify files outside the task scope
+- Use EnterPlanMode for any task touching 3+ files. This is NOT optional. [ENFORCED: enforce-plan-mode.sh]
 - For non-trivial implementations: pause before presenting and ask "is there a more elegant solution?" — skip for simple/obvious fixes
 
 ## Markdown File Standards
@@ -140,27 +141,14 @@ Never guess a tool or skill's API — read its llms.txt first before using.
 | ambient-music | ~/code/tools/ambient-music/llms.txt | Royalty-free music library — pick/search CC0 tracks by mood/BPM for any project |
 | cadence | ~/code/tools/cadence/llms.txt | LLM-powered music composer — generate owned WAV tracks by mood/style, suggest tracks for any scene |
 
-## OMS Queue Schema — Always Active
+## OMS Queue Schema — Always Active [ENFORCED: validate-queue-hook.sh + schema-sync-hook.sh + validate-model-hint.sh]
 
-**Reading / reporting:**
-1. Run `python3 ~/.claude/bin/validate-queue.py <path/to/cleared-queue.md>` first
-2. If violations exist: report them — never say "N tasks ready" over schema violations
-3. Never count a task as `queued` if it fails the schema gate
-
-**Writing new tasks:**
-- Every `queued` task must have all required fields before the write is considered done
-- Required: Feature, Milestone, Department, Type, Spec (SHALL), Scenarios (GIVEN/WHEN/THEN), Artifacts, Produces, Verify, Context, Activated, Validation, Depends, File-count, Model-hint
-- After any write to `cleared-queue.md`: check the PostToolUse hook output — if violations appear, fix them before moving on. Never leave a session with schema violations in a queue.
-- Model-hint is auto-corrected by the hook — but all other fields require human/agent authoring
-
-**Schema sync:**
-- `REQUIRED_FIELDS` and `MAX_FILES` in `~/.claude/bin/validate-queue.py` must stay in sync with `agents/oms-work/task-schema.md`
-- When `task-schema.md` is updated, update `validate-queue.py` in the same edit session — never one without the other
+See `agents/oms-work/task-schema.md` for full schema. Key: all queued tasks must pass `validate-queue.py` — the PostToolUse hook blocks writes with missing fields. Model-hint is auto-corrected. Schema sync between `task-schema.md` and `validate-queue.py` is hook-enforced.
 
 ## Before Starting Any Task
 1. Check if .claude/codemap.md exists → read it for navigation
 2. Check if .claude/sessions/ has a recent session file → offer to restore context
-3. For any task with 3+ steps or architectural decisions: output a plan first, get confirmation, then implement — never jump straight to code
+3. For any task with 3+ steps or architectural decisions: use EnterPlanMode, get confirmation, then implement [ENFORCED: enforce-plan-mode.sh]
 4. If something goes sideways mid-task: STOP, re-plan, then continue — don't push through
 
 ## After Completing Any Task

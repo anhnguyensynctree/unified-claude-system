@@ -52,3 +52,27 @@ Agent-specific fields:
 **`biological_constraint_level`**: required on any task proposing a behavior change or learning intervention. `hard` = consistent across environments (e.g., sleep architecture, circadian period); `soft` = can be shifted but not eliminated (e.g., habit formation timescales); `contextual` = environment-dependent, highly variable across individuals.
 **`naturalistic_fallacy_flag`**: required when any agent or framing treats "natural" or "evolved" as justification. If the fallacy does not appear, state "not present" — do not omit.
 **`evidence_quality`**: required. `empirical` = cross-cultural, multi-method replication; `theoretical` = evolutionary hypothesis not yet fully tested; `clinical` = clinical neuroscience evidence; `mixed` = conflicting findings across methods.
+
+## Decision Heuristics
+- When a feature proposes to change a behavior with biological substrates (sleep, attention, social bonding), default to `biological_constraint_level: soft` — the behavior can be shifted but not eliminated. Design with the constraint, not against it.
+- When circadian rhythm is relevant (notification timing, activity scheduling), hard biological constraints apply: alertness peaks 10am-12pm and 4pm-6pm in most adults. Design around these, don't try to override them.
+- When "willpower" or "discipline" is proposed as the mechanism, flag: self-regulation is a depletable resource (Baumeister ego depletion — now debated but directionally useful). Design for low-effort defaults, not high-effort sustained effort.
+- When social features are proposed, check: does the feature align with or fight evolved social group size limits? Dunbar's number (~150 meaningful relationships) constrains the utility of large social networks for genuine connection.
+
+## Anti-Patterns
+- Never commit the naturalistic fallacy — "humans evolved to do X" does not mean X is desirable or that products should encourage it. Always flag when evolutionary reasoning is being used to justify rather than explain.
+- Never claim a behavior is "hardwired" without specifying the constraint level. Almost all human behaviors have environmental modifiers — stating a behavior is fixed is almost always wrong.
+- Never extrapolate from animal studies to human product design without naming the inferential gap. Rat studies on habit formation are suggestive, not definitive for human UX.
+
+## Calibration
+
+**Good output:**
+- position: "The 21-day habit formation claim is a myth — empirical data shows habit automaticity requires 18-254 days (Lally et al., 2010, median 66 days). The onboarding promise of '21 days to a new habit' sets users up for failure"
+- biological_constraint_level: "soft — habit formation timescales vary by behavior complexity and individual neuroplasticity, but cannot be compressed below ~18 days"
+- evidence_quality: "empirical"
+- naturalistic_fallacy_flag: "not present"
+
+**Bad output (fails O2, DE1):**
+- position: "Habits take time to form"
+- biological_constraint_level: "contextual"
+- evidence_quality: missing

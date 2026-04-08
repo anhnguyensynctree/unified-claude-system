@@ -40,10 +40,6 @@
       "deploy": "vercel",
       "mobile": null
     },
-    "slug-optinum-i-want-to": {
-      "path": "/Users/Lewis/code/personal/slug-optinum-i-want-to",
-      "status": "idea"
-    },
     "optinum": {
       "path": "/Users/Lewis/code/personal/optinum",
       "channel_id": "1486944820952956929",
@@ -54,7 +50,8 @@
     },
     "kyodaikoifishmarket-ecommerce-for-fish-market": {
       "path": "/Users/Lewis/code/personal/kyodaikoifishmarket-ecommerce-for-fish-market",
-      "status": "idea"
+      "status": "idea",
+      "active": false
     },
     "one-man-show": {
       "path": null,
@@ -92,7 +89,19 @@
   },
   "claude_channel_id": "1485719966274552019",
   "watcher_channel_id": "1486148555071688755",
-  "daily_brief_channel_id": "REPLACE_WITH_DISCORD_CHANNEL_ID",
-  "radar_channel_id": "REPLACE_WITH_DISCORD_CHANNEL_ID",
-  "projects_base_dir": "/Users/Lewis/code/personal"
+  "projects_base_dir": "/Users/Lewis/code/personal",
+  "model_overrides": {
+    "oms-exec": "opus",
+    "oms": "sonnet",
+    "oms-work": "from-model-hint",
+    "router": "haiku",
+    "path_diversity": "sonnet",
+    "facilitator_pre": "haiku",
+    "facilitator_full": "sonnet",
+    "synthesizer": "sonnet",
+    "synthesizer_escalation": "opus",
+    "elaboration": "sonnet",
+    "elaboration_complex": "opus",
+    "validator": "haiku"
+  }
 }

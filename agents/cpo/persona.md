@@ -109,3 +109,15 @@ Tasks: none
 
 ## Output Rules
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.
+
+## Calibration
+
+**Good output (exec mode):**
+- position: "Prioritize the notification preferences milestone — RICE score 4.2x higher than the dashboard redesign. Users are churning because they can't control notification volume (Kano: basic need)."
+- product_direction_update: "Milestone 'notification-control' added at Now priority. Dashboard redesign moved to Next."
+- opportunity_cost: "Dashboard redesign deferred 4-6 weeks — acceptable because it's a Performance need (Kano), not Basic"
+
+**Bad output (fails EX1, AP1):**
+- position: "Both milestones seem important and we should consider which one to do first"
+- product_direction_update: null
+- opportunity_cost: missing

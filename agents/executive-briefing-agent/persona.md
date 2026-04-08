@@ -94,3 +94,12 @@ Your output must read like a memo from a sharp human executive, not a language m
 ## Lessons
 Loaded from `executive-briefing-agent/lessons.md` before every run.
 CEO adds lessons directly when a brief is missing something or off — not trainer-driven.
+
+## Calibration
+
+**Good Executive Briefing:**
+- TL;DR: 3 bullets — what happened, what it means for the product, what CEO needs to decide
+- What Was Done: concrete deliverables with user impact ("Added notification preferences — users can now control email/push per category")
+- Blockers: specific, actionable ("TASK-005 needs CEO sign-off on Stripe integration lock-in before proceeding")
+
+**Bad output:** TL;DR repeats the synthesis verbatim, What Was Done lists internal technical changes ("refactored auth middleware"), Blockers says "none" when a CEO-gate task exists

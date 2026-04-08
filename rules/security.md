@@ -49,7 +49,7 @@ State the project name, why `claude -p` subprocess is insufficient, expected cal
 ### Approved projects (grows only with explicit approval)
 - **trend-pulse** — approved by Lewis. Uses `AsyncAnthropic` SDK for Haiku classifier (`fetcher/classifier.py`) and briefing generator (`notifier/briefing.py`). Loads key from `ANTHROPIC_API_KEY` env var, not from `~/.config/anthropic/key`.
 
-### Enforcement — Claude Code + OMS
+### Enforcement — Claude Code + OMS [ENFORCED: PreToolUse Write|Edit|MultiEdit hook in settings.json]
 - When writing or editing any file: if the change introduces `ANTHROPIC_API_KEY`, `anthropic.Anthropic(`, `new Anthropic(`, `AsyncAnthropic(`, or reads `~/.config/anthropic/key` — **STOP. Do not write the code. Ask Lewis for approval first.**
 - This applies globally: all projects, all OMS work, all agents, all scripts, all CI pipelines.
 - OMS agents may not wire up the Anthropic SDK or set `ANTHROPIC_API_KEY` in any artifact they produce (code, .env, CI config).
@@ -64,7 +64,7 @@ The configuration becomes an immune system that remembers every threat encounter
 ## Incident: daily-cosmos — 2026-04-04
 `claude --print` subprocesses (blinded-judge, contrastive-judge, synthesize-calibration) were firing SessionEnd hooks (mem0-extract.sh) on every call — each hook made another Claude call to extract facts from a 2-line conversation. A 21-profile calibration run burned 2x the tokens needed and hit the Max subscription limit.
 
-**Rule: ALL `claude -p` / `claude --print` subprocess calls in ALL projects MUST include `--bare`.**
+**Rule: ALL `claude -p` / `claude --print` subprocess calls in ALL projects MUST include `--bare`.** [ENFORCED: enforce-bare-model.sh + shim auto-injection]
 
 `--bare` skips hooks, LSP, plugin sync, attribution, auto-memory, and background prefetches. Subprocesses are one-shot LLM calls — they don't need any of that.
 

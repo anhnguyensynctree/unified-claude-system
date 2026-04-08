@@ -38,7 +38,8 @@ def _request(method: str, path: str, body: dict | None = None) -> dict | None:
     except urllib.error.HTTPError as e:
         print(f'[discord] {method} {path} → {e.code}: {e.read()[:120]}', flush=True)
         return None
-    except Exception:
+    except Exception as e:
+        print(f'[discord] {method} {path} → error: {e}', flush=True)
         return None
 
 
@@ -71,8 +72,8 @@ def get_or_create_thread(channel_id: str, threads_file: Path, milestone: str) ->
     if threads_file.exists():
         try:
             threads = json.loads(threads_file.read_text())
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[discord] corrupt threads file {threads_file}: {e}', flush=True)
 
     if milestone in threads:
         # Verify thread is still alive by trying to post (Discord archives threads after 7 days)
@@ -103,8 +104,8 @@ def post_to_thread_or_recreate(channel_id: str, threads_file: Path,
             if threads_file.exists():
                 try:
                     threads = json.loads(threads_file.read_text())
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f'[discord] corrupt threads file during recreate: {e}', flush=True)
             threads[milestone] = new_id
             threads_file.write_text(json.dumps(threads, indent=2))
             post_to_thread(new_id, content)

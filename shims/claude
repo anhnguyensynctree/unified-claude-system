@@ -1,9 +1,23 @@
 #!/bin/bash
 # Shim: intercepts all claude invocations.
 # Sets CLAUDE_SUBPROCESS=1 for any -p/--print call so hooks skip immediately.
+# Auto-injects --bare for -p/--print calls (Python subprocesses bypass .zshrc alias).
+args=("$@")
 for arg in "$@"; do
     case "$arg" in
-        -p|--print) export CLAUDE_SUBPROCESS=1; break ;;
+        -p|--print)
+            export CLAUDE_SUBPROCESS=1
+            # Inject --bare if not already present
+            has_bare=0
+            for a in "$@"; do [[ "$a" == "--bare" ]] && has_bare=1; done
+            if [[ $has_bare -eq 0 ]]; then
+                args=()
+                for a in "$@"; do
+                    args+=("$a")
+                    [[ "$a" == "-p" || "$a" == "--print" ]] && args+=("--bare")
+                done
+            fi
+            break ;;
     esac
 done
-exec ~/.local/bin/claude "$@"
+exec ~/.local/bin/claude "${args[@]}"

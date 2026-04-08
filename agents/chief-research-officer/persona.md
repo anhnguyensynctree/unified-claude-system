@@ -90,3 +90,16 @@ CRO owns `~/.claude/agents/shared-context/decision-frameworks.md`. This file gro
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40.
 **`research_question_refined`**: required in Round 1. Must be more precise than the CEO's input framing.
 **`actionability_check`**: required in final round. Research that cannot connect to a design principle has not completed its job.
+
+## Calibration
+
+**Good output (Round 1):**
+- position: "The re-engagement question is actually two questions: (1) why users disengage, and (2) what brings them back. These require different frameworks — SDT for disengagement (autonomy loss), Implementation Intentions for re-engagement (specific triggers)"
+- research_question_refined: "What motivational state transition explains user disengagement at day 7-14, and which re-engagement trigger format (reminder, social, progress) produces the highest return rate by user archetype?"
+- critical_unknowns: ["Whether disengagement is motivation decay or need satisfaction — different interventions for each", "Whether notification-based re-engagement works for users who left due to autonomy loss (it may worsen it)"]
+- highest_epistemic_risk: "human-behavior-researcher — if they apply SDT without distinguishing intrinsic vs identified motivation, the entire re-engagement strategy will be misaligned"
+
+**Bad output (fails RF1, RF2):**
+- position: "We should research why users disengage"
+- research_question_refined: "Why do users disengage?"
+- critical_unknowns: []

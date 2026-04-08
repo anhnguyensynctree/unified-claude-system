@@ -147,7 +147,29 @@ Gate tasks are not authored through the OMS feature discussion. They are auto-ap
 
 **Produces** — downstream contract. Feeds into dependent tasks' `Context:` verbatim. Write `none` if nothing consumed downstream.
 
-**Verify** — shell commands, deterministic pass/fail. Pipe-separated. oms-work.py runs these locally in the worktree via `_run_verify_commands()`. They are the primary quality gate — if tests fail, the LLM retries with error feedback.
+**Verify** — shell commands, deterministic pass/fail. Pipe-separated. oms-work.py runs each segment as a literal shell command via `subprocess.run()`. They are the primary quality gate — if tests fail, the LLM retries with error feedback.
+
+**CRITICAL RULE: every pipe segment must be a valid, executable shell command.** No prose, no descriptions, no natural language. oms-work.py runs these literally — prose words become invalid arguments.
+
+**GOOD Verify examples:**
+```
+pytest tests/test_auth.py -v
+pytest tests/test_auth.py -v | npx tsc --noEmit
+test -f docs/research.md | wc -l docs/research.md
+python -c "from auth import validate; assert validate('test')"
+pytest tests/test_runner.py -v | python -m bridge.run_backtest
+```
+
+**BAD Verify examples (NEVER write these):**
+```
+pytest tests/test_auth.py -v passes                    ← "passes" becomes a pytest argument
+pytest tests/test_auth.py -v | returns valid JSON      ← "returns valid JSON" is not a command
+test -f output.md | file contains required sections    ← prose, not a command
+manual smoke: run the app and check                    ← not executable
+BuyAndHold on SPY returns CAGR ~10%                    ← pure prose
+```
+
+**Banned words in Verify segments** (validate-queue.py blocks these): passes, prints, returns, contains, creates, shows, displays, produces, generates, writes, reads, loads, readable, correct, valid, expected, approximately, properly, successfully, manually.
 
 **Minimum Verify standards per task type:**
 
@@ -156,7 +178,7 @@ Gate tasks are not authored through the OMS feature discussion. They are auto-ap
 | impl (TypeScript) | `pnpm test <spec>` + `npx tsc --noEmit` |
 | impl (Python) | `pytest <test_file> -v` |
 | impl (UI page/component) | test command + `ls <artifact>` for each file |
-| research | `ls logs/research/<task-id>.md` + `wc -l logs/research/<task-id>.md` (minimum 20 lines) |
+| research | `test -f logs/research/<task-id>.md` + `wc -l logs/research/<task-id>.md` |
 | gate | `pnpm exec playwright test` |
 
 **Weak Verify commands that are NOT sufficient alone:**
@@ -164,7 +186,7 @@ Gate tasks are not authored through the OMS feature discussion. They are auto-ap
 - `echo` (no verification)
 - `cat` (prints but doesn't validate)
 
-Every impl task MUST have at least one test execution command (pytest, vitest, jest, pnpm test) in Verify. The elaboration agent is responsible for writing appropriate test Verify commands. If a task has no test framework available, Verify must include a smoke check that validates the output (e.g., `python -c "from module import func; assert func(input) == expected"`).
+Every impl task MUST have at least one test execution command (pytest, vitest, jest, pnpm test) in Verify. If a task has no test framework available, Verify must include a smoke check that validates the output (e.g., `python -c "from module import func; assert func(input) == expected"`).
 
 **Note:** oms-work.py runs Verify directly (no ctx-exec needed — it's local subprocess, not Claude Code tool). The ctx-exec wrapper is only needed in interactive REPL sessions.
 

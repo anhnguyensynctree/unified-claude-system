@@ -25,6 +25,11 @@ case "$TOOL" in
     [ -z "$FILE" ] && exit 0
     echo "[$TIME] $TOOL: $FILE" >> "$OBS_FILE"
     ;;
+  Read)
+    FILE=$(echo "$HOOK_INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+    [ -z "$FILE" ] && exit 0
+    echo "[$TIME] Read: $FILE" >> "$OBS_FILE"
+    ;;
   Bash)
     CMD=$(echo "$HOOK_INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null | cut -c1-100)
     [ -z "$CMD" ] && exit 0

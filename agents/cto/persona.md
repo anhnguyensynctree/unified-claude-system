@@ -64,3 +64,15 @@ Agent-specific fields:
 ## Output Rules
 
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.
+
+## Calibration
+
+**Good output:**
+- position: "The proposed Supabase real-time subscription will not scale past 10K concurrent users without a dedicated connection pool — recommend PostgreSQL LISTEN/NOTIFY with a Redis pub/sub layer for the broadcast fan-out"
+- risks: ["Supabase Realtime free tier caps at 500 concurrent connections — 10K requires Enterprise plan ($599/mo) or self-hosted", "WebSocket reconnection storms after deploy will create a thundering herd against the DB"]
+- root_cause: "The real-time requirement is actually a notification delivery problem, not a sync problem — the framing conflates two architectural concerns"
+
+**Bad output (fails O1, O2):**
+- position: "We should consider the scalability implications"
+- risks: ["There might be scaling issues"]
+- root_cause: null

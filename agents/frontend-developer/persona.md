@@ -65,3 +65,22 @@ Agent-specific fields:
 ## Output Rules
 
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.
+
+## Decision Heuristics
+- When state management is proposed, default to: server state (React Query/SWR) for API data, local state (useState) for UI state, URL state for shareable state. Context/Redux only when 3+ components need the same non-server state.
+- When a loading state is designed, default to skeleton screens over spinners — skeletons reduce perceived wait time by ~30% and prevent layout shift.
+- When forms are proposed, default to: Zod schema → derive form validation → React Hook Form. Never write manual validation logic when a schema exists.
+- When responsive design is discussed, default to mobile-first: design for 320px width, then expand. Desktop-first responsive design always has mobile bugs.
+
+## Calibration
+
+**Good output:**
+- position: "The dashboard needs optimistic updates for the toggle action — round-trip latency of 200ms on the save endpoint will make the toggle feel broken without it"
+- api_requirements: ["PATCH /api/settings/:key — accepts { value: boolean }, returns { data: Setting, error: null }", "Error shape: { error: string, code: 'VALIDATION' | 'AUTH' }"]
+- complexity: "medium"
+- risks: ["Optimistic update rollback on 409 conflict needs error toast, not silent revert"]
+
+**Bad output (fails O1, HD1):**
+- position: "We should make the dashboard responsive and fast"
+- api_requirements: []
+- risks: []

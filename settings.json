@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "CMD=$(jq -r '.tool_input.command'); echo \"$CMD\" | head -1 | grep -qE '^git push|&& git push|; git push|\\| git push' || exit 0; echo '[BLOCKED] git push requires review first. Run /review-pr before pushing.' >&2; exit 2"
+            "command": "CMD=$(jq -r '.tool_input.command'); echo \"$CMD\" | head -1 | grep -qE '^git push|&& git push|; git push|\\| git push' || exit 0; REMOTE=$(git remote get-url origin 2>/dev/null || echo ''); echo \"$REMOTE\" | grep -qE 'github\\.com[:/]anhnguyensynctree/' && exit 0; echo '[BLOCKED] git push to shared/org repo — run /review-pr first.' >&2; exit 2"
           }
         ]
       },
@@ -78,7 +78,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '[Hook] Blocked: use browse fetch <url> instead of WebFetch — isolated context, handles JS, strips noise. See ~/.claude/skills/browse/llms.txt' >&2 && exit 2"
+            "command": "echo '[Hook] Blocked: use browse fetch <url> for content extraction, or browse search <query> for web search. Start browse daemon first. See ~/.claude/skills/browse/llms.txt' >&2 && exit 2"
           }
         ]
       },
@@ -87,7 +87,74 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '[Hook] Blocked: use browse fetch <url> instead of WebSearch — isolated context, handles JS, strips noise. See ~/.claude/skills/browse/llms.txt' >&2 && exit 2"
+            "command": "echo '[Hook] Blocked: use browse search <query> for web search, or browse fetch <url> for URL content. Start browse daemon first. See ~/.claude/skills/browse/llms.txt' >&2 && exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-oms-model.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-agent-model.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/smart-grep-route.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-bare-model.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-commit-format.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/block-coauthor.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-llms-read.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-plan-mode.sh"
           }
         ]
       }
@@ -152,6 +219,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "~/.claude/hooks/test-discord.sh",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
             "command": "~/.claude/hooks/validate-queue-hook.sh"
           },
           {
@@ -165,7 +242,25 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|Bash",
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/warn-file-size.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-test-exists.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash|Read",
         "hooks": [
           {
             "type": "command",
@@ -249,5 +344,6 @@
   },
   "autoUpdatesChannel": "latest",
   "voiceEnabled": true,
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "model": "sonnet"
 }

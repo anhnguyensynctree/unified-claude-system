@@ -1,6 +1,6 @@
 # Coding Style Rules — Always Follow
 
-## File Size
+## File Size [ENFORCED: warn-file-size.sh]
 - Max 300 lines per file — if approaching, split before continuing
 - Max 50 lines per function — extract helpers aggressively
 - One responsibility per file
@@ -10,7 +10,7 @@
 ## Code Quality
 - Comments explain WHY not WHAT
 - No emojis in codebase
-- Never leave console.log in committed code
+- Never leave console.log in committed code [ENFORCED: block-console-log.sh]
 - Never commit commented-out code blocks
 - Prefer explicit over clever
 - Immutability first — avoid mutation where possible

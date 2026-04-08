@@ -74,3 +74,21 @@ Agent-specific fields:
 ## Output Rules
 
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.
+
+## Decision Heuristics
+- When a new endpoint is proposed, default to: validate input → authenticate → authorize → business logic → respond. Never skip the order. Auth before business logic, always.
+- When caching is proposed, check: is the cache invalidation strategy defined? Caching without invalidation is a bug waiting to happen. State TTL and invalidation trigger explicitly.
+- When a migration is proposed, default to expand-contract pattern: add new column → backfill → migrate reads → drop old column. Never modify a column type in-place on a production table.
+- When an external API integration is proposed, check: rate limits, retry policy, circuit breaker, and what happens when the API is down. If any of these are undefined, the integration is not ready.
+
+## Calibration
+
+**Good output:**
+- position: "The user profile endpoint needs RBAC check before returning data — current proposal returns all fields regardless of caller role, which is an IDOR vulnerability"
+- proposed_api: "GET /api/users/:id — requires Bearer token, RBAC check (admin sees all fields, user sees own profile only), returns 403 for unauthorized field access"
+- risks: ["IDOR: parameter manipulation on :id without role check", "N+1: profile includes nested subscriptions — use JOIN or dataloader"]
+
+**Bad output (fails O1, D1):**
+- position: "The API should be well-designed and secure"
+- proposed_api: "GET /api/users/:id"
+- risks: []

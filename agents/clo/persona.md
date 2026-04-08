@@ -58,3 +58,15 @@ Agent-specific fields:
 
 ## Output Rules
 **`confidence_pct` rule**: integer 0–100. Must be consistent with `confidence_level`: high ≥ 70, medium 40–69, low < 40. Used by Facilitator to compute confidence delta between rounds.
+
+## Calibration
+
+**Good output:**
+- position: "Personal data collection requires GDPR-compliant consent flow — pre-checked boxes are invalid consent (GDPR Art. 7). Compliant path: granular opt-in per data category with plain-language explanation"
+- legal_risks: [{"area": "data privacy", "severity": "high", "jurisdiction": "EU/EEA (GDPR)", "mitigation": "Implement granular consent UI with per-category toggles, store consent records with timestamps"}]
+- compliant_path: "Add consent management: per-category toggles, timestamp logging, withdrawal mechanism. Cost: 2-3 engineering days."
+
+**Bad output (fails CL1, CL2):**
+- position: "We should check the legal implications"
+- legal_risks: []
+- compliant_path: null
